@@ -400,6 +400,7 @@ class _BootstrapSplashState extends State<_BootstrapSplash>
       children: [
         FadeTransition(
           opacity: _markOpacity,
+          alwaysIncludeSemantics: true,
           child: ScaleTransition(
             scale: _markScale,
             child: const BrandLogo(size: 72, radius: 20),
@@ -408,6 +409,7 @@ class _BootstrapSplashState extends State<_BootstrapSplash>
         const SizedBox(height: 20),
         FadeTransition(
           opacity: _wordmarkOpacity,
+          alwaysIncludeSemantics: true,
           child: SlideTransition(
             position: _wordmarkOffset,
             child: const Text(
@@ -424,6 +426,7 @@ class _BootstrapSplashState extends State<_BootstrapSplash>
         const SizedBox(height: 28),
         FadeTransition(
           opacity: _indicatorOpacity,
+          alwaysIncludeSemantics: true,
           child: SizedBox(
             width: 96,
             child: LinearProgressIndicator(

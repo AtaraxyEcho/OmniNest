@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:ui' show ImageFilter;
 
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/gestures.dart' show PointerScrollEvent;
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/scheduler.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_np_style.dart';
@@ -73,6 +75,8 @@ class _DesktopNowPlayingLyricsState extends State<DesktopNowPlayingLyrics>
   int _activeIndex = -1;
   int? _hoveredIndex;
   bool _userScrolling = false;
+  bool _programmaticScrolling = false;
+  int _scrollToken = 0;
   Timer? _resumeFollowTimer;
 
   static bool _lyricLinesEqual(List<MusicLyricLine> a, List<MusicLyricLine> b) {
@@ -97,7 +101,11 @@ class _DesktopNowPlayingLyricsState extends State<DesktopNowPlayingLyrics>
     _sampleWatch.start();
     _ticker = createTicker(_onTick);
     _subscribeStream();
-    _syncPosition(_samplePosition, scrollIfChanged: false);
+    _syncPosition(
+      _samplePosition,
+      scrollIfChanged: false,
+      allowSetState: false,
+    );
     _syncTicker();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _activeIndex >= 0) {
@@ -121,10 +129,26 @@ class _DesktopNowPlayingLyricsState extends State<DesktopNowPlayingLyrics>
       _sampleWatch
         ..reset()
         ..start();
-      _syncPosition(_samplePosition, scrollIfChanged: false);
+      _syncPosition(
+        _samplePosition,
+        scrollIfChanged: false,
+        allowSetState: false,
+      );
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _activeIndex >= 0) {
+        if (!mounted) return;
+        if (widget.lines.isEmpty) {
+          if (_scrollController.hasClients) {
+            _scrollController.jumpTo(0);
+          }
+        } else if (_activeIndex >= 0) {
           _scrollToIndex(_activeIndex, animate: false);
+        }
+      });
+    } else if (widget.lines.isEmpty &&
+        !identical(oldWidget.plainLines, widget.plainLines)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _scrollController.hasClients) {
+          _scrollController.jumpTo(0);
         }
       });
     } else if (oldWidget.position != widget.position &&
@@ -134,7 +158,11 @@ class _DesktopNowPlayingLyricsState extends State<DesktopNowPlayingLyrics>
       _sampleWatch
         ..reset()
         ..start();
-      _syncPosition(_samplePosition, scrollIfChanged: true);
+      _syncPosition(
+        _samplePosition,
+        scrollIfChanged: true,
+        allowSetState: false,
+      );
     }
     if (oldWidget.playing != widget.playing) {
       _samplePosition = _currentInterpolatedPosition();
@@ -181,11 +209,19 @@ class _DesktopNowPlayingLyricsState extends State<DesktopNowPlayingLyrics>
     _syncPosition(_currentInterpolatedPosition(), scrollIfChanged: true);
   }
 
-  void _syncPosition(Duration pos, {required bool scrollIfChanged}) {
+  void _syncPosition(
+    Duration pos, {
+    required bool scrollIfChanged,
+    bool allowSetState = true,
+  }) {
     final lines = widget.lines;
     if (lines.isEmpty) {
       if (_activeIndex != -1) {
-        setState(() => _activeIndex = -1);
+        if (allowSetState && mounted) {
+          setState(() => _activeIndex = -1);
+        } else {
+          _activeIndex = -1;
+        }
       }
       _activeLineProgress.value = 0.0;
       return;
@@ -211,7 +247,11 @@ class _DesktopNowPlayingLyricsState extends State<DesktopNowPlayingLyrics>
     }
 
     if (index != _activeIndex) {
-      setState(() => _activeIndex = index);
+      if (allowSetState && mounted) {
+        setState(() => _activeIndex = index);
+      } else {
+        _activeIndex = index;
+      }
       if (scrollIfChanged && !_userScrolling && index >= 0) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && !_userScrolling && _activeIndex == index) {
@@ -263,21 +303,30 @@ class _DesktopNowPlayingLyricsState extends State<DesktopNowPlayingLyrics>
           _scrollController.position.minScrollExtent,
           _scrollController.position.maxScrollExtent,
         );
-    if (!animate) {
-      _scrollController.jumpTo(targetOffset);
-      return;
-    }
     final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    if (reduceMotion) {
-      _scrollController.jumpTo(targetOffset);
+    if (!animate || reduceMotion) {
+      _programmaticScrolling = true;
+      try {
+        _scrollController.jumpTo(targetOffset);
+      } finally {
+        _programmaticScrolling = false;
+      }
       return;
     }
+    final token = ++_scrollToken;
+    _programmaticScrolling = true;
     unawaited(
-      _scrollController.animateTo(
-        targetOffset,
-        duration: DesktopMotion.of(context, DesktopMotion.lyricsFollow),
-        curve: const Cubic(0.22, 0.7, 0.2, 1),
-      ),
+      _scrollController
+          .animateTo(
+            targetOffset,
+            duration: DesktopMotion.of(context, DesktopMotion.lyricsFollow),
+            curve: const Cubic(0.22, 0.7, 0.2, 1),
+          )
+          .whenComplete(() {
+            if (_scrollToken == token) {
+              _programmaticScrolling = false;
+            }
+          }),
     );
   }
 
@@ -401,55 +450,77 @@ class _DesktopNowPlayingLyricsState extends State<DesktopNowPlayingLyrics>
             },
           );
         } else {
-          listContent = NotificationListener<UserScrollNotification>(
-            onNotification: (notification) {
-              _onUserScroll();
-              return false;
+          listContent = Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerSignal: (event) {
+              if (event is PointerScrollEvent) {
+                _programmaticScrolling = false;
+                _onUserScroll();
+              }
             },
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: EdgeInsets.symmetric(vertical: padY),
-              itemCount: timed.length,
-              itemBuilder: (context, index) {
-                final line = timed[index];
-                final isCurrent = index == _activeIndex;
-                final isHovered = index == _hoveredIndex;
-                final distance =
-                    _activeIndex < 0 ? 0 : (index - _activeIndex).abs();
-                final lineKey = _lineKeys.putIfAbsent(index, GlobalKey.new);
-
-                return RepaintBoundary(
-                  key: lineKey,
-                  child: _LyricRowItem(
-                    line: line,
-                    isCurrent: isCurrent,
-                    isHovered: isHovered,
-                    distance: distance,
-                    lyricSize: lyricSize,
-                    style: style,
-                    fillPaint: fillPaint,
-                    baseOpacity: baseOp,
-                    showTranslation: widget.showTranslation,
-                    activeProgress: _activeLineProgress,
-                    onHoverChanged: (hovering) {
-                      if (hovering) {
-                        if (_hoveredIndex != index) {
-                          setState(() => _hoveredIndex = index);
-                        }
-                      } else if (_hoveredIndex == index) {
-                        setState(() => _hoveredIndex = null);
-                      }
-                    },
-                    onSeek: () {
-                      _resumeFollowTimer?.cancel();
-                      if (_userScrolling) {
-                        setState(() => _userScrolling = false);
-                      }
-                      widget.onSeek(line.position);
-                    },
-                  ),
-                );
+            child: NotificationListener<UserScrollNotification>(
+              onNotification: (notification) {
+                if (!_programmaticScrolling &&
+                    notification.direction != ScrollDirection.idle) {
+                  _onUserScroll();
+                }
+                return false;
               },
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                padding: EdgeInsets.symmetric(vertical: padY),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var index = 0; index < timed.length; index++)
+                      RepaintBoundary(
+                        key: _lineKeys.putIfAbsent(index, GlobalKey.new),
+                        child: _LyricRowItem(
+                          line: timed[index],
+                          isCurrent: index == _activeIndex,
+                          isHovered: index == _hoveredIndex,
+                          distance:
+                              _activeIndex < 0
+                                  ? 0
+                                  : (index - _activeIndex).abs(),
+                          lyricSize: lyricSize,
+                          style: style,
+                          fillPaint: fillPaint,
+                          baseOpacity: baseOp,
+                          showTranslation: widget.showTranslation,
+                          activeProgress: _activeLineProgress,
+                          onHoverChanged: (hovering) {
+                            if (hovering) {
+                              if (_hoveredIndex != index) {
+                                setState(() => _hoveredIndex = index);
+                              }
+                            } else if (_hoveredIndex == index) {
+                              setState(() => _hoveredIndex = null);
+                            }
+                          },
+                          onSeek: () {
+                            final targetPos = timed[index].position;
+                            _resumeFollowTimer?.cancel();
+                            if (_userScrolling) {
+                              setState(() => _userScrolling = false);
+                            }
+                            _samplePosition = targetPos;
+                            _sampleWatch
+                              ..reset()
+                              ..start();
+                            _syncPosition(targetPos, scrollIfChanged: false);
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (mounted) {
+                                _scrollToIndex(index, animate: true);
+                              }
+                            });
+                            widget.onSeek(targetPos);
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
           );
         }

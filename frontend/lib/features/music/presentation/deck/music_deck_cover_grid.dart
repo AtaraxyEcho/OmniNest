@@ -256,6 +256,7 @@ class _MusicDeckCoverTileState extends State<_MusicDeckCoverTile> {
                         child: AnimatedOpacity(
                           opacity: _hovered ? 1 : 0,
                           duration: const Duration(milliseconds: 150),
+                          alwaysIncludeSemantics: true,
                           child: DecoratedBox(
                             decoration: const BoxDecoration(
                               color: MusicChromeColors.goldBorder,
@@ -281,6 +282,7 @@ class _MusicDeckCoverTileState extends State<_MusicDeckCoverTile> {
                             child: AnimatedOpacity(
                               opacity: _hovered || _focused ? 1 : 0,
                               duration: const Duration(milliseconds: 140),
+                              alwaysIncludeSemantics: true,
                               child: _buildDesktopActions(context),
                             ),
                           ),

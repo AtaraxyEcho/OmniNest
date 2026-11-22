@@ -364,6 +364,7 @@ class _TrashTileState extends State<_TrashTile> {
                 children: [
                   Opacity(
                     opacity: 0.7,
+                    alwaysIncludeSemantics: true,
                     child:
                         photo.hasCover
                             ? PhotoThumbImage(
@@ -383,6 +384,7 @@ class _TrashTileState extends State<_TrashTile> {
                             MediaQuery.disableAnimationsOf(context)
                                 ? Duration.zero
                                 : const Duration(milliseconds: 150),
+                        alwaysIncludeSemantics: true,
                         child: ColoredBox(
                           color: Colors.black.withValues(alpha: 0.35),
                           child: Center(

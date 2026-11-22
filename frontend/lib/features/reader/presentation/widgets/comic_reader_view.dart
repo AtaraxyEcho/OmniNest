@@ -3,7 +3,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/gestures.dart'
-    show GestureBinding, PointerScrollEvent, PointerSignalEvent;
+    show
+        GestureBinding,
+        PointerScaleEvent,
+        PointerScrollEvent,
+        PointerSignalEvent;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -103,8 +107,8 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
   Offset? _lastDoubleTapLocalPosition;
   double _currentZoomScale = 1.0;
 
-  /// 客户端首帧解码实测像素尺寸缓存（用于无元数据宽图回填双页跨页槽位）。
-  final Map<int, Size> _resolvedPageSizes = {};
+  /// 客户端首帧解码实测像素尺寸缓存（按 page.id 索引，用于无元数据宽图回填双页跨页槽位）。
+  final Map<String, Size> _resolvedPageSizes = {};
 
   /// 按 `pageId` 记忆的单页旋转步数（0 / 1 / 2 / 3，顺时针 90° 步进）。
   final Map<String, int> _pageQuarterTurns = {};

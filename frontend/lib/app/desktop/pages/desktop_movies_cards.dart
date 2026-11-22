@@ -273,6 +273,7 @@ class _HoverCardPlay extends StatelessWidget {
           const Duration(milliseconds: 280),
         ),
         opacity: visible ? 1 : 0,
+        alwaysIncludeSemantics: true,
         child: AnimatedSlide(
           duration: MotionToken.reduced(context, DesktopMotion.cardSlide),
           curve: DesktopMotion.spring,
@@ -833,6 +834,7 @@ class _HistoryPosterState extends State<_HistoryPoster> {
                     child: AnimatedOpacity(
                       opacity: _hovered ? 1 : 0,
                       duration: DesktopMotion.fast,
+                      alwaysIncludeSemantics: true,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: skin.accent,

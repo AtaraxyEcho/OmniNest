@@ -115,7 +115,11 @@ class WorkstationBlurScrim extends StatelessWidget {
         child:
             animation == null
                 ? surface
-                : FadeTransition(opacity: animation!, child: surface),
+                : FadeTransition(
+                  opacity: animation!,
+                  alwaysIncludeSemantics: true,
+                  child: surface,
+                ),
       ),
     );
   }
@@ -159,6 +163,7 @@ Future<T?> showWorkstationGeneralDialog<T>({
           ) ??
           FadeTransition(
             opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+            alwaysIncludeSemantics: true,
             child: child,
           );
       return Stack(

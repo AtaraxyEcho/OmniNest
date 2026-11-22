@@ -39,6 +39,7 @@ class _FrameViewContent extends ConsumerWidget {
               : const Duration(milliseconds: 200),
       // 视图切换会整棵替换内容，退场子树排除语义。
       layoutBuilder: excludeExitingSemanticsStack,
+      transitionBuilder: semanticsSafeFadeTransition,
       child: switch (state.frameView) {
         FrameView.grid || FrameView.favorites => _buildGrid(context, ref),
         FrameView.timeline => _compactRefreshable(

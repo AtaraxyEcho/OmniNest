@@ -314,6 +314,7 @@ class _ToastItemState extends State<_ToastItem> with TickerProviderStateMixin {
           final scale = 0.92 + 0.08 * enter - 0.06 * leave;
           return Opacity(
             opacity: opacity,
+            alwaysIncludeSemantics: true,
             child: Transform.translate(
               offset: Offset(0, dy),
               child: Transform.scale(scale: scale, child: child),

@@ -512,6 +512,7 @@ class _FileViewSwitcher extends ConsumerWidget {
       transitionBuilder: (child, animation) {
         return FadeTransition(
           opacity: Tween(begin: 0.35, end: 1.0).animate(animation),
+          alwaysIncludeSemantics: true,
           child: SlideTransition(
             position: Tween<Offset>(
               begin: const Offset(0, 0.012),

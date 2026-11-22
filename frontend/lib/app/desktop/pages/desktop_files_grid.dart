@@ -344,6 +344,7 @@ class _FileTile extends StatelessWidget {
                             DesktopMotion.fast,
                           ),
                           opacity: hovered || selected ? 1 : 0,
+                          alwaysIncludeSemantics: true,
                           child: GestureDetector(
                             onTap: onToggleSelect,
                             behavior: HitTestBehavior.opaque,
@@ -361,6 +362,7 @@ class _FileTile extends StatelessWidget {
                       child: AnimatedOpacity(
                         duration: DesktopMotion.of(context, DesktopMotion.fast),
                         opacity: hovered || selected ? 1 : 0,
+                        alwaysIncludeSemantics: true,
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -439,7 +441,11 @@ class _FileTile extends StatelessWidget {
     return _AdaptiveFileDraggable(
       data: dragIds,
       feedback: _RowDragGhost(node: node, count: dragIds.length),
-      childWhenDragging: Opacity(opacity: 0.45, child: tile),
+      childWhenDragging: Opacity(
+        opacity: 0.45,
+        alwaysIncludeSemantics: true,
+        child: tile,
+      ),
       child: tile,
     );
   }

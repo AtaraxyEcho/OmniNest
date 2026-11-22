@@ -27,10 +27,10 @@ part 'photo_slideshow_page_chrome.dart';
 /// 幻灯片页面阶段：首图解码中 / 可播放 / 首图加载失败。
 enum SlideshowPhase { loading, ready, failed }
 
-const _slideshowInterval = Duration(seconds: 5);
-const _transitionDuration = Duration(milliseconds: 450);
+const _slideshowInterval = Duration(seconds: 6);
+const _transitionDuration = Duration(milliseconds: 900);
 const _idleHideDuration = Duration(seconds: 3);
-const _transitionCurve = Curves.easeOutCubic;
+const _transitionCurve = Curves.easeInOutCubic;
 
 /// 入场扩缩时长：轻微推近，内容本身不做压暗/淡入。
 const _entryDuration = Duration(milliseconds: 220);
@@ -275,12 +275,13 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   /// 交叉动画完成：清除离场层、背景跟进新图、窗口整理并预热邻居、
   /// 消化等待期间记录的最终导航目标。
   void _onTransitionCompleted() {
-    _transitionController.reset();
-
     setState(() {
       _leavingFrame = null;
       _transitioning = false;
     });
+    // 归零必须放在状态切换之后：控制器 notifier 会立即驱动图层重建，
+    // 若此时 _transitioning 仍为 true，入场层会以 opacity=0 渲染出一帧黑屏。
+    _transitionController.reset();
     _imageCache.updateWindow(_photos, _current);
     _preloadNeighbors();
     final pending = _pendingTarget;
@@ -708,6 +709,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
               children: [
                 FadeTransition(
                   opacity: _entryFade,
+                  alwaysIncludeSemantics: true,
                   child: ScaleTransition(
                     scale: _entryScale,
                     child: _buildStage(context, photo, showControls),

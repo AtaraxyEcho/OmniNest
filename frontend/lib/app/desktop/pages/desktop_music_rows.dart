@@ -237,6 +237,7 @@ class _TrackRowState extends ConsumerState<_TrackRow> {
                         AnimatedOpacity(
                           opacity: _hovered ? 0 : 1,
                           duration: DesktopMotion.fast,
+                          alwaysIncludeSemantics: true,
                           child:
                               widget.current && widget.playing
                                   ? DesktopEqualizer(
@@ -257,6 +258,7 @@ class _TrackRowState extends ConsumerState<_TrackRow> {
                             child: AnimatedOpacity(
                               opacity: _hovered ? 1 : 0,
                               duration: DesktopMotion.fast,
+                              alwaysIncludeSemantics: true,
                               child: GestureDetector(
                                 behavior: HitTestBehavior.opaque,
                                 onTap: _playFromRow,

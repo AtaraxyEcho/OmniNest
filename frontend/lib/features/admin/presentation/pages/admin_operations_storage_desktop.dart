@@ -278,6 +278,7 @@ class _DesktopStorageUsageState extends State<_DesktopStorageUsage> {
                               animationsDisabled
                                   ? Duration.zero
                                   : const Duration(milliseconds: 140),
+                          alwaysIncludeSemantics: true,
                           child: _StorageUsageCount(
                             label: _categoryLabel(l10n, breakdown[i].category),
                             amount: formatFileSize(breakdown[i].usedBytes),

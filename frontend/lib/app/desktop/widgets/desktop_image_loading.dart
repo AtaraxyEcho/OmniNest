@@ -85,6 +85,7 @@ class _ImageFadeInState extends State<_ImageFadeIn> {
       opacity: _shown ? 1 : 0,
       duration: DesktopMotion.of(context, DesktopMotion.imageFade),
       curve: DesktopMotion.ease,
+      alwaysIncludeSemantics: true,
       child: widget.child,
     );
   }

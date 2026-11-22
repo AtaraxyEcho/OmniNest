@@ -185,15 +185,18 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
                                 children: [
                                   SizedBox(
                                     width: trackCellWidth,
-                                    child: _TrackCell(
-                                      track: track,
-                                      playing: playing,
-                                      showArtist: !narrow,
-                                      onOpen:
-                                          () => desktopPush(
-                                            context,
-                                            DesktopRoutes.nowPlaying,
-                                          ),
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: _TrackCell(
+                                        track: track,
+                                        playing: playing,
+                                        showArtist: !narrow,
+                                        onOpen:
+                                            () => desktopPush(
+                                              context,
+                                              DesktopRoutes.nowPlaying,
+                                            ),
+                                      ),
                                     ),
                                   ),
                                   SizedBox(width: sectionGap),
@@ -537,17 +540,21 @@ class _TrackCell extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     _SpinningArt(track: track, playing: playing),
                     const SizedBox(width: 10),
-                    Expanded(
+                    Flexible(
+                      fit: FlexFit.loose,
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             track.title,
                             maxLines: 1,
+                            softWrap: false,
                             overflow: TextOverflow.ellipsis,
                             style: DesktopType.denseStrong(skin.text),
                           ),
@@ -556,6 +563,7 @@ class _TrackCell extends StatelessWidget {
                             Text(
                               track.artistName,
                               maxLines: 1,
+                              softWrap: false,
                               overflow: TextOverflow.ellipsis,
                               style: DesktopType.micro(skin.text3),
                             ),

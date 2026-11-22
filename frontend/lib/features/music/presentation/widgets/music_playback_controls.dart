@@ -174,6 +174,7 @@ class _MusicPlaybackButtonState extends State<MusicPlaybackButton> {
                       transitionBuilder:
                           (child, animation) => FadeTransition(
                             opacity: animation,
+                            alwaysIncludeSemantics: true,
                             child: ScaleTransition(
                               scale: Tween<double>(
                                 begin: 0.82,
@@ -406,6 +407,7 @@ class _MusicPlayModeButtonState extends State<MusicPlayModeButton> {
                 switchInCurve: Curves.easeOutCubic,
                 // 退场子树排除语义，避免与入场子树同批更新触发桥失败。
                 layoutBuilder: excludeExitingSemanticsStack,
+                transitionBuilder: semanticsSafeFadeTransition,
                 child: Icon(
                   MusicPlayModeButton.iconFor(widget.playMode),
                   key: ValueKey<MusicPlayMode>(widget.playMode),

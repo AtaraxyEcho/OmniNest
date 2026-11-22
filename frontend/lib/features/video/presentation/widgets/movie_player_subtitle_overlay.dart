@@ -41,6 +41,7 @@ class SubtitleOverlay extends StatelessWidget {
             final hasCue = index >= 0 && index < cues.length;
             return Opacity(
               opacity: hasCue ? 1.0 : 0.0,
+              alwaysIncludeSemantics: true,
               child: Center(
                 child: Container(
                   constraints: const BoxConstraints(maxWidth: 960),

@@ -257,6 +257,7 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
         const SizedBox(height: 10),
         Opacity(
           opacity: isPaged ? 1.0 : 0.45,
+          alwaysIncludeSemantics: true,
           child: IgnorePointer(
             ignoring: !isPaged,
             child: _ZoomControlRow(

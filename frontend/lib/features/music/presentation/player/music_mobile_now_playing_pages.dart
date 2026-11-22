@@ -260,6 +260,7 @@ class _MobileArtwork extends StatelessWidget {
             switchInCurve: Curves.easeOutCubic,
             // 退场子树排除语义，避免与入场子树同批更新触发桥失败。
             layoutBuilder: excludeExitingSemanticsStack,
+            transitionBuilder: semanticsSafeFadeTransition,
             child: SizedBox.square(
               key: ValueKey<String?>('mobile-cover-${track?.id}'),
               dimension: coverSize,

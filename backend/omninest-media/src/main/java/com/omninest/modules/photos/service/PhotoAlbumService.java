@@ -30,6 +30,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
@@ -227,6 +228,29 @@ public class PhotoAlbumService {
             reordered.get(index).setSortOrder(index);
         }
         albumItemRepository.saveAll(reordered);
+        recordAlbumEvent(ownerUserId, album, SyncAction.UPDATED);
+    }
+
+    /**
+     * 重置相册内照片的自定义排序，按加入相册时间（createdAt 升序、id 升序）恢复默认顺序。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void resetAlbumItemsOrder(UUID ownerUserId, UUID albumId) {
+        PhotoAlbum album = requireAlbum(ownerUserId, albumId);
+        List<PhotoAlbumItem> currentItems =
+                albumItemRepository.findByOwnerUserIdAndAlbumIdOrderBySortOrderAsc(ownerUserId, albumId);
+        if (currentItems.isEmpty()) {
+            return;
+        }
+        List<PhotoAlbumItem> sorted = new ArrayList<>(currentItems);
+        sorted.sort(Comparator.comparing(
+                        PhotoAlbumItem::getCreatedAt,
+                        Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(PhotoAlbumItem::getId, Comparator.nullsLast(Comparator.naturalOrder())));
+        for (int index = 0; index < sorted.size(); index++) {
+            sorted.get(index).setSortOrder(index);
+        }
+        albumItemRepository.saveAll(sorted);
         recordAlbumEvent(ownerUserId, album, SyncAction.UPDATED);
     }
 

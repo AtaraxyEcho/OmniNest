@@ -10,9 +10,9 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   const maxMotionMillis = 320;
   const allowedViolations = <String, String>{
-    // 幻灯转场时长属已挂起的设计决策（450ms 转场方向），等定稿再收。
-    'lib/features/photos/presentation/pages/photo_slideshow_page.dart 450':
-        '幻灯翻页转场时长待拍板',
+    // 幻灯转场已定稿为电影级 900ms 交叉淡入（v15 双端统一），不再是待拍板项。
+    'lib/features/photos/presentation/pages/photo_slideshow_page.dart 900':
+        '幻灯交叉淡入，双端统一电影级衔接',
     'lib/features/photos/presentation/widgets/photo_slideshow_chrome.dart 400':
         '幻灯 chrome 淡入淡出，随转场决策一并处理',
     'lib/features/photos/presentation/widgets/photo_slideshow_overlays.dart 400':
@@ -33,6 +33,9 @@ void main() {
         '波形点击扩散涟漪，对齐样例 .wave-rip',
     'lib/app/desktop/pages/desktop_now_playing_deck.dart 900':
         '播放头邻域亮度脉动，对齐样例 .wbeat',
+    // 环境光双缓冲交叉淡入（v15）：切侧边栏模块时保持旧帧稳定可见，
+    // 属场景转场而非交互反馈，与幻灯转场同档。
+    'lib/app/desktop/desktop_ambient.dart 720': '环境光场景帧 720ms 交叉淡入',
   };
 
   test('动画时长不得新增硬编码超预算值', () {

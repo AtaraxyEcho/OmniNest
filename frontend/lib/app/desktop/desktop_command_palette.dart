@@ -410,6 +410,7 @@ class _DesktopCommandPaletteState extends ConsumerState<DesktopCommandPalette> {
                   builder:
                       (context, t, child) => Opacity(
                         opacity: t.clamp(0.0, 1.0),
+                        alwaysIncludeSemantics: true,
                         child: Transform.translate(
                           offset: Offset(0, (1 - t) * 14),
                           child: Transform.scale(

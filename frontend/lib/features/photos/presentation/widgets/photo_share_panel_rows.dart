@@ -164,6 +164,7 @@ class _ShareToggleRow extends StatelessWidget {
         onTap: enabled ? () => onChanged(!value) : null,
         child: Opacity(
           opacity: enabled ? 1 : 0.55,
+          alwaysIncludeSemantics: true,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             decoration: BoxDecoration(

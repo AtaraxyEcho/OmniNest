@@ -116,6 +116,8 @@ class DesktopReaderPopover extends StatelessWidget {
                                               previous,
                                               alignment: Alignment.centerLeft,
                                             ),
+                                    transitionBuilder:
+                                        semanticsSafeFadeTransition,
                                     child: Text(
                                       eyebrow,
                                       key: ValueKey(eyebrow),
@@ -159,6 +161,7 @@ class DesktopReaderPopover extends StatelessWidget {
                               switchInCurve: Curves.easeOutCubic,
                               switchOutCurve: Curves.easeInCubic,
                               layoutBuilder: excludeExitingSemanticsStack,
+                              transitionBuilder: semanticsSafeFadeTransition,
                               child: child,
                             ),
                           ),

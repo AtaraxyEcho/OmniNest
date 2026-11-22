@@ -21,3 +21,12 @@ Stack excludeExitingSemanticsStack(
     ],
   );
 }
+
+/// AnimatedSwitcher 淡入淡出过渡回调：保留语义树节点，避免 Windows
+/// 辅助功能桥在 opacity 经过 0 时触发 `ui::AXTree` 断链。
+Widget semanticsSafeFadeTransition(Widget child, Animation<double> animation) =>
+    FadeTransition(
+      opacity: animation,
+      alwaysIncludeSemantics: true,
+      child: child,
+    );

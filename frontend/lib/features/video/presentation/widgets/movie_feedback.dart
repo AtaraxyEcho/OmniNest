@@ -155,6 +155,7 @@ class _MovieAsyncButtonState extends State<MovieAsyncButton> {
                 const Duration(milliseconds: 160),
               ),
               opacity: widget.enabled ? 1.0 : 0.68,
+              alwaysIncludeSemantics: true,
               child: SizedBox(height: 44, child: button),
             ),
           ),

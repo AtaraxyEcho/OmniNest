@@ -112,6 +112,7 @@ class _ProfileMobileViewState extends ConsumerState<ProfileMobileView> {
                           transitionBuilder:
                               (child, animation) => FadeTransition(
                                 opacity: animation,
+                                alwaysIncludeSemantics: true,
                                 child: SlideTransition(
                                   position: Tween<Offset>(
                                     begin: const Offset(0.12, 0),

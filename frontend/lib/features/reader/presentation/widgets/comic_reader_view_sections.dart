@@ -27,15 +27,15 @@ extension _ComicReaderViewSections on ComicReaderViewState {
   void _onPageIntrinsicSizeResolved(int pageIndex, Size size) {
     if (!mounted || pageIndex < 0 || pageIndex >= _totalPages) return;
     if (size.width <= 0 || size.height <= 0) return;
-    final prev = _resolvedPageSizes[pageIndex];
+    final page = _pages[pageIndex];
+    final prev = _resolvedPageSizes[page.id];
     if (prev != null &&
         (prev.width - size.width).abs() < 1.0 &&
         (prev.height - size.height).abs() < 1.0) {
       return;
     }
-    final page = _pages[pageIndex];
     final wasWide = _isWideSpreadPage(page);
-    _resolvedPageSizes[pageIndex] = size;
+    _resolvedPageSizes[page.id] = size;
     final nowWide = _isWideSpreadPage(page);
     if (wasWide != nowWide) {
       _update(() {});
@@ -43,7 +43,7 @@ extension _ComicReaderViewSections on ComicReaderViewState {
   }
 
   bool _isWideSpreadPage(ComicPage page) {
-    final resolved = _resolvedPageSizes[page.pageIndex];
+    final resolved = _resolvedPageSizes[page.id];
     final rawW = resolved?.width ?? page.width?.toDouble();
     final rawH = resolved?.height ?? page.height?.toDouble();
     if (rawW == null || rawH == null || rawW <= 0 || rawH <= 0) {

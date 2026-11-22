@@ -691,7 +691,9 @@ class _DesktopModalSurfaceState extends State<_DesktopModalSurface>
         drawer ? DesktopMotion.drawerScrim : DesktopMotion.scrim,
       ),
       curve: DesktopMotion.ease,
-      builder: (context, t, child) => Opacity(opacity: t, child: child),
+      builder:
+          (context, t, child) =>
+              Opacity(opacity: t, alwaysIncludeSemantics: true, child: child),
       child: _scrim(),
     );
     final scrim =
@@ -701,6 +703,7 @@ class _DesktopModalSurfaceState extends State<_DesktopModalSurface>
               builder:
                   (context, child) => Opacity(
                     opacity: 1 - _exit.value,
+                    alwaysIncludeSemantics: true,
                     child: IgnorePointer(ignoring: _closing, child: child),
                   ),
               child: scrimIn,

@@ -169,6 +169,7 @@ class MoviePlayerBottomBar extends StatelessWidget {
                     switchOutCurve: Curves.easeInCubic,
                     // 密度切换会整棵替换控制条，退场子树排除语义。
                     layoutBuilder: excludeExitingSemanticsStack,
+                    transitionBuilder: semanticsSafeFadeTransition,
                     child: switch (density) {
                       _MoviePlayerControlDensity.compact =>
                         _buildCompactControls(context),

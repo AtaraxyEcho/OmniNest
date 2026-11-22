@@ -212,7 +212,11 @@ class _AdminShellBody extends StatelessWidget {
       // 分区切换会整棵替换内容，退场子树排除语义。
       layoutBuilder: excludeExitingSemanticsStack,
       transitionBuilder: (child, animation) {
-        return FadeTransition(opacity: animation, child: child);
+        return FadeTransition(
+          opacity: animation,
+          alwaysIncludeSemantics: true,
+          child: child,
+        );
       },
       child: Align(
         key: ValueKey(section),

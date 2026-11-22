@@ -163,8 +163,16 @@ extension _ReaderPageViewRender on _ReaderPageViewState {
   Widget _buildFade(Widget? current, Widget? target, double t) {
     return Stack(
       children: [
-        Opacity(opacity: 1 - t, child: _constrainPage(current)),
-        Opacity(opacity: t, child: _constrainPage(target)),
+        Opacity(
+          opacity: 1 - t,
+          alwaysIncludeSemantics: true,
+          child: _constrainPage(current),
+        ),
+        Opacity(
+          opacity: t,
+          alwaysIncludeSemantics: true,
+          child: _constrainPage(target),
+        ),
       ],
     );
   }

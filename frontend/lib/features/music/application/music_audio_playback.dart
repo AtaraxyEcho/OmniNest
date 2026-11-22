@@ -481,7 +481,7 @@ class MusicAudioPlayer implements MusicAudioPlayback {
             defaultTargetPlatform == TargetPlatform.linux);
     if (!_soLoud.isInitialized) {
       if (isDesktop) {
-        await _soLoud.init(bufferSize: 2048, lowLatency: false);
+        await _soLoud.init(bufferSize: 1024, lowLatency: false);
       } else {
         await _soLoud.init(bufferSize: 512, lowLatency: true);
       }
@@ -628,6 +628,7 @@ class MusicAudioPlayer implements MusicAudioPlayback {
     _handle = null;
     _source = null;
     _url = null;
+    _latestVisualization = null;
     _resetStallTracking(Duration.zero);
     _state = _state.copyWith(playing: false, position: Duration.zero);
     _spectrumMapper.reset();

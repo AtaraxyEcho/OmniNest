@@ -306,6 +306,7 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
               builder:
                   (context, t, child) => Opacity(
                     opacity: t,
+                    alwaysIncludeSemantics: true,
                     child: Transform.translate(
                       offset: Offset(0, (1 - t) * -4),
                       child: Transform.scale(

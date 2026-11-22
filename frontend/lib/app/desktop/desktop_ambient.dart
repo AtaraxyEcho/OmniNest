@@ -10,17 +10,68 @@ import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 
-/// 桌面环境光层（样例 `Shell.tsx` 的 `Ambient`）。
+/// 原子环境光场景帧：将 4×3 色网与可选右侧柔焦艺术面板打包为一个双缓冲单元。
+@immutable
+class _AmbientSceneFrame {
+  const _AmbientSceneFrame({
+    required this.id,
+    required this.imageUrl,
+    required this.showArt,
+    required this.artPreset,
+    required this.fallbackTone,
+    required this.meshGrid,
+  });
+
+  final int id;
+  final String? imageUrl;
+  final bool showArt;
+  final EditorialArtPreset artPreset;
+  final Color? fallbackTone;
+  final AmbientMeshGrid? meshGrid;
+
+  bool get hasCover => imageUrl != null && imageUrl!.isNotEmpty;
+  bool get hasMesh => hasCover || meshGrid != null || fallbackTone != null;
+  bool get hasArt => hasCover && showArt;
+
+  bool matchesSpec({
+    required String? imageUrl,
+    required bool showArt,
+    required EditorialArtPreset artPreset,
+    required Color? fallbackTone,
+  }) {
+    return this.imageUrl == imageUrl &&
+        this.showArt == showArt &&
+        this.artPreset == artPreset &&
+        this.fallbackTone == fallbackTone;
+  }
+
+  _AmbientSceneFrame copyWith({AmbientMeshGrid? meshGrid}) {
+    return _AmbientSceneFrame(
+      id: id,
+      imageUrl: imageUrl,
+      showArt: showArt,
+      artPreset: artPreset,
+      fallbackTone: fallbackTone,
+      meshGrid: meshGrid ?? this.meshGrid,
+    );
+  }
+}
+
+/// 桌面环境光层。
 ///
-/// 四层叠出「界面浮在环境里」：当前模块封面的 `4×3` 矢量色网（零马赛克、零 blur）、
-/// 可选的右侧 64% 高清编辑艺术面板（`showArt: true`）、三团缓慢漂移的色场、
-/// 以及把中心让给内容的暗纱。强度由外观设置的 ambient 控制，关闭减动效时漂移停在静帧。
+/// 四大独立重绘边界：
+/// - `ambient-cover`：4×3 矢量色网双缓冲层（彻底废除 40s `_drift`）；
+/// - `ambient-art`：右侧静态轻柔焦艺术面板双缓冲层（与色网同步 720ms 交叉淡入淡出）；
+/// - `ambient-blobs`：三团事件驱动 2.4s 缓动色场，落位后自动停表（稳态 0fps GPU 唤醒）；
+/// - `ambient-veil`：深浅色精细差异化暗纱与预烘焙 128×128 噪点瓦片。
 class DesktopAmbient extends StatefulWidget {
   const DesktopAmbient({
     required this.imageUrl,
     required this.intensity,
     required this.reduceMotion,
     this.showArt = false,
+    this.artPreset = EditorialArtPreset.landscape,
+    this.fallbackTone,
     super.key,
   });
 
@@ -30,8 +81,14 @@ class DesktopAmbient extends StatefulWidget {
   final double intensity;
   final bool reduceMotion;
 
-  /// Movies / Photos / Music / Reader 路由启用右侧 64% 高清艺术面板。
+  /// 是否启用右侧静态轻柔焦编辑艺术面板。
   final bool showArt;
+
+  /// 右侧艺术面板的构图与柔焦预设。
+  final EditorialArtPreset artPreset;
+
+  /// 无封面图时的兜底色调（如 Reader 无封面图书的纸色）。
+  final Color? fallbackTone;
 
   @override
   State<DesktopAmbient> createState() => _DesktopAmbientState();
@@ -41,6 +98,9 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     with TickerProviderStateMixin {
   /// 预烘焙噪点瓦片边长（128×128 离屏 ui.Image，进程级复用一次生成）。
   static const int _grainTileSize = 128;
+  static const Duration _blobSettleDuration = Duration(milliseconds: 2400);
+  static const Duration _sceneCrossfadeDuration = Duration(milliseconds: 720);
+
   static ui.Image? _grainImageCache;
   static Future<ui.Image>? _grainImageFuture;
 
@@ -60,8 +120,6 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     final canvas = Canvas(recorder);
     final random = math.Random(20261114);
     final paint = Paint()..color = DesktopPalette.grain;
-    // 与原先每 900px² 1 个噪点的稀疏密度一致（128×128 / 900 ≈ 18），
-    // 以 ImageShader(TileMode.repeated) 单次 drawRect 铺满视口。
     const dotCount = 18;
     for (var i = 0; i < dotCount; i++) {
       canvas.drawRect(
@@ -82,59 +140,55 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     }
   }
 
-  // 三团光各走自己的周期（样例 26s / 34s / 40s，`alternate`）：共用一个
-  // 控制器时三团永远同相，屏幕上会一起呼吸，像一整个色块在闪。
-  // 循环周期而非过渡时长，故不走 ≤320ms 档。
+  // 三团色场改为事件驱动 2.4s 缓动：挂载、切页或换封面时平滑推到新相位并自动停表，
+  // 稳态 0fps GPU 唤醒；窗口缩放时仅 stop() 保留当前相位不跳变。
   late final AnimationController _blobA = AnimationController(
-    duration: DesktopMotion.blobCycleFast,
+    duration: _blobSettleDuration,
+    value: 0.35,
     vsync: this,
   );
   late final AnimationController _blobB = AnimationController(
-    duration: DesktopMotion.blobCycleMid,
+    duration: _blobSettleDuration,
+    value: 0.62,
     vsync: this,
   );
   late final AnimationController _blobC = AnimationController(
-    duration: DesktopMotion.blobCycleSlow,
-    vsync: this,
-  );
-  // 样例 `.amb-img.in` 的 `drift 40s alternate`：色网自身也缓慢推拉。
-  // 变换挂在保留边界**之上**，边界内的画面只录一次，漂移走合成变换。
-  late final AnimationController _drift = AnimationController(
-    duration: DesktopMotion.blobCycleSlow,
+    duration: _blobSettleDuration,
+    value: 0.18,
     vsync: this,
   );
 
-  // 拖边/最大化期间停漂移：整屏色场每帧重画在拖边的每一帧上都是纯浪费，
-  // 而且 DWM 会把这一帧和上一帧混在一起看起来像残影。停手 220ms 后恢复。
+  // 双缓冲原子场景帧交叉淡入淡出控制器（720ms Curves.easeInOutCubic）。
+  late final AnimationController _crossfade = AnimationController(
+    duration: _sceneCrossfadeDuration,
+    value: 1.0,
+    vsync: this,
+  );
+  late final CurvedAnimation _crossfadeIn = CurvedAnimation(
+    parent: _crossfade,
+    curve: Curves.easeInOutCubic,
+  );
+  late final Animation<double> _crossfadeOut = Tween<double>(
+    begin: 1.0,
+    end: 0.0,
+  ).animate(_crossfadeIn);
+
   Size? _lastSize;
   Timer? _resizeSettle;
   bool _resizing = false;
-  int _coverSwapSeq = 0;
+  int _sceneSeq = 0;
+  int _prepareToken = 0;
+  int _blobStep = 0;
+  bool _initialScenePrepared = false;
+  _AmbientSceneFrame? _activeFrame;
+  _AmbientSceneFrame? _outgoingFrame;
   ui.Image? _grainImage = _grainImageCache;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final size = MediaQuery.sizeOf(context);
-    if (_lastSize != null && size != _lastSize) {
-      _resizing = true;
-      _syncMotion();
-      _resizeSettle?.cancel();
-      _resizeSettle = Timer(const Duration(milliseconds: 220), () {
-        if (mounted) {
-          setState(() => _resizing = false);
-          _syncMotion();
-        }
-      });
-    }
-    _lastSize = size;
-    _syncMotion();
-  }
 
   @override
   void initState() {
     super.initState();
-    _syncMotion();
+    _crossfade.addStatusListener(_handleCrossfadeStatus);
+    _seedInitialFrameSync();
     if (_grainImage == null) {
       unawaited(
         _ensureGrainImage().then((image) {
@@ -147,12 +201,61 @@ class _DesktopAmbientState extends State<DesktopAmbient>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final size = MediaQuery.sizeOf(context);
+    if (_lastSize != null && size != _lastSize) {
+      _resizing = true;
+      _pauseBlobsInPlace();
+      _resizeSettle?.cancel();
+      _resizeSettle = Timer(const Duration(milliseconds: 220), () {
+        if (!mounted) return;
+        setState(() => _resizing = false);
+      });
+    }
+    _lastSize = size;
+    if (!_initialScenePrepared) {
+      _initialScenePrepared = true;
+      _prepareScene(isInitial: true);
+      if (_canAnimate) {
+        _triggerBlobSettle();
+      }
+    }
+  }
+
+  @override
   void didUpdateWidget(DesktopAmbient oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.imageUrl != widget.imageUrl) {
-      _coverSwapSeq += 1;
+    final sceneChanged =
+        oldWidget.imageUrl != widget.imageUrl ||
+        oldWidget.showArt != widget.showArt ||
+        oldWidget.artPreset != widget.artPreset ||
+        oldWidget.fallbackTone != widget.fallbackTone;
+
+    if (!_canAnimate) {
+      _pauseBlobsInPlace();
+      if (_outgoingFrame != null || _crossfade.isAnimating) {
+        _crossfade
+          ..stop()
+          ..value = 1.0;
+        _outgoingFrame = null;
+      }
     }
-    _syncMotion();
+
+    if (sceneChanged) {
+      _prepareScene(isInitial: false);
+    } else if (!oldWidget.reduceMotion && widget.reduceMotion) {
+      _pauseBlobsInPlace();
+    } else if ((oldWidget.reduceMotion && !widget.reduceMotion) ||
+        (oldWidget.intensity <= 0 && widget.intensity > 0)) {
+      if (oldWidget.intensity <= 0 && widget.intensity > 0) {
+        // 强度从 0 恢复：补跑一次场景准备，把被跳过的色网与艺术层补上。
+        _prepareScene(isInitial: false);
+      }
+      if (_canAnimate) {
+        _triggerBlobSettle();
+      }
+    }
   }
 
   bool get _canAnimate =>
@@ -161,36 +264,218 @@ class _DesktopAmbientState extends State<DesktopAmbient>
       !MotionToken.prefersReducedOnPlatform() &&
       widget.intensity > 0;
 
-  void _syncMotion() {
-    if (_canAnimate) {
-      for (final controller in [_blobA, _blobB, _blobC, _drift]) {
-        if (!controller.isAnimating) {
-          controller.repeat(reverse: true);
-        }
-      }
-    } else {
-      // 静止时停在各自相位上，三团仍然错开，而不是叠成一团；封面回到
-      // 样例的起始变换（只有 112% 基础 overscan，无附加推拉）。
-      for (final (controller, rest) in [
-        (_blobA, 0.35),
-        (_blobB, 0.62),
-        (_blobC, 0.18),
-        (_drift, 0.0),
-      ]) {
-        controller
-          ..stop()
-          ..value = rest;
+  void _handleCrossfadeStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed &&
+        _outgoingFrame != null &&
+        mounted) {
+      setState(() {
+        _outgoingFrame = null;
+      });
+    }
+  }
+
+  /// 仅停止色场动画，严格保留当前相位不重置，避免缩放或停帧时突然跳回原点。
+  void _pauseBlobsInPlace() {
+    for (final controller in [_blobA, _blobB, _blobC]) {
+      if (controller.isAnimating) {
+        controller.stop();
       }
     }
+  }
+
+  /// 事件驱动 2.4s 缓动：每次挂载/切页/换封面推进三团色场到新相位后自动停表。
+  void _triggerBlobSettle() {
+    if (!_canAnimate) {
+      _pauseBlobsInPlace();
+      return;
+    }
+    _blobStep += 1;
+    final targets = <double>[
+      _nextBlobPhase(_blobA.value, 0.27 + (_blobStep % 3) * 0.04),
+      _nextBlobPhase(_blobB.value, 0.31 + ((_blobStep + 1) % 3) * 0.05),
+      _nextBlobPhase(_blobC.value, 0.23 + ((_blobStep + 2) % 3) * 0.04),
+    ];
+    final controllers = <AnimationController>[_blobA, _blobB, _blobC];
+    for (var i = 0; i < controllers.length; i++) {
+      unawaited(
+        controllers[i].animateTo(
+          targets[i],
+          duration: _blobSettleDuration,
+          curve: Curves.easeInOutCubic,
+        ),
+      );
+    }
+  }
+
+  static double _nextBlobPhase(double current, double delta) {
+    final shifted = (current - 0.08 + delta) % 0.84;
+    return (0.08 + shifted).clamp(0.08, 0.92);
+  }
+
+  /// 首帧同步建立初始 `_activeFrame`，确保首帧即挂载有效节点且无白闪。
+  void _seedInitialFrameSync() {
+    final source = widget.imageUrl;
+    final hasCover = source != null && source.isNotEmpty;
+    AmbientMeshGrid? grid;
+    if (hasCover) {
+      grid = DesktopAmbientMeshCache.instance.peek(source);
+    } else if (widget.fallbackTone != null) {
+      grid = AmbientMeshGrid.fromTone(widget.fallbackTone!);
+    }
+    _activeFrame = _AmbientSceneFrame(
+      id: ++_sceneSeq,
+      imageUrl: hasCover ? source : null,
+      showArt: widget.showArt,
+      artPreset: widget.artPreset,
+      fallbackTone: widget.fallbackTone,
+      meshGrid: grid,
+    );
+  }
+
+  /// 后台并行采样色网 + 预解码艺术面板（220ms 软超时），就绪后原子切换双缓冲。
+  void _prepareScene({required bool isInitial}) {
+    // 强度为 0 时整层不构建：跳过色网采样与艺术层预解码，避免无谓的网络请求。
+    if (widget.intensity <= 0) {
+      return;
+    }
+    final token = ++_prepareToken;
+    final rawUrl = widget.imageUrl;
+    final source = (rawUrl != null && rawUrl.isNotEmpty) ? rawUrl : null;
+    final showArt = widget.showArt;
+    final artPreset = widget.artPreset;
+    final fallbackTone = widget.fallbackTone;
+
+    // 纯纸色或无封面：同步落帧，不等待异步 I/O。
+    if (source == null) {
+      final grid =
+          fallbackTone != null ? AmbientMeshGrid.fromTone(fallbackTone) : null;
+      if (isInitial && _activeFrame != null) {
+        if (_activeFrame!.meshGrid != grid) {
+          setState(() => _activeFrame = _activeFrame!.copyWith(meshGrid: grid));
+        }
+        return;
+      }
+      _commitScene(
+        _AmbientSceneFrame(
+          id: ++_sceneSeq,
+          imageUrl: null,
+          showArt: false,
+          artPreset: artPreset,
+          fallbackTone: fallbackTone,
+          meshGrid: grid,
+        ),
+      );
+      return;
+    }
+
+    final cachedGrid = DesktopAmbientMeshCache.instance.peek(source);
+    if (isInitial) {
+      // 首帧已命中色网缓存且不需等艺术预热时直接完成；否则后台补齐色网不闪黑。
+      if (cachedGrid != null && !showArt) {
+        return;
+      }
+      unawaited(
+        resolveAmbientSceneAssets(
+          context: context,
+          source: source,
+          showArt: showArt,
+          artPreset: artPreset,
+          cachedGrid: cachedGrid,
+        ).then((grid) {
+          if (!mounted || token != _prepareToken) return;
+          final current = _activeFrame;
+          if (current == null ||
+              !current.matchesSpec(
+                imageUrl: source,
+                showArt: showArt,
+                artPreset: artPreset,
+                fallbackTone: fallbackTone,
+              )) {
+            return;
+          }
+          if (grid != null && current.meshGrid != grid) {
+            setState(() {
+              _activeFrame = current.copyWith(meshGrid: grid);
+            });
+          }
+        }),
+      );
+      return;
+    }
+
+    // 切页 / 换图：保持旧帧稳定可见，后台并行采样 + precacheImage（220ms 软超时）。
+    unawaited(
+      resolveAmbientSceneAssets(
+        context: context,
+        source: source,
+        showArt: showArt,
+        artPreset: artPreset,
+        cachedGrid: cachedGrid,
+      ).then((grid) {
+        if (!mounted || token != _prepareToken) return;
+        final effectiveGrid =
+            grid ??
+            DesktopAmbientMeshCache.instance.peek(source) ??
+            (fallbackTone != null
+                ? AmbientMeshGrid.fromTone(fallbackTone)
+                : null);
+        _commitScene(
+          _AmbientSceneFrame(
+            id: ++_sceneSeq,
+            imageUrl: source,
+            showArt: showArt,
+            artPreset: artPreset,
+            fallbackTone: fallbackTone,
+            meshGrid: effectiveGrid,
+          ),
+        );
+      }),
+    );
+  }
+
+  void _commitScene(_AmbientSceneFrame nextFrame) {
+    if (!mounted) return;
+    final previous = _activeFrame;
+    if (previous != null &&
+        previous.matchesSpec(
+          imageUrl: nextFrame.imageUrl,
+          showArt: nextFrame.showArt,
+          artPreset: nextFrame.artPreset,
+          fallbackTone: nextFrame.fallbackTone,
+        ) &&
+        previous.meshGrid == nextFrame.meshGrid) {
+      return;
+    }
+
+    if (!_canAnimate || previous == null) {
+      setState(() {
+        _outgoingFrame = null;
+        _activeFrame = nextFrame;
+        _crossfade
+          ..stop()
+          ..value = 1.0;
+      });
+      return;
+    }
+
+    setState(() {
+      // 严格最多 2 层双缓冲：新帧切入时丢弃更早的旧帧，彻底消灭连点堆叠。
+      _outgoingFrame = previous;
+      _activeFrame = nextFrame;
+    });
+    _crossfade.forward(from: 0.0);
+    _triggerBlobSettle();
   }
 
   @override
   void dispose() {
     _resizeSettle?.cancel();
+    _crossfade.removeStatusListener(_handleCrossfadeStatus);
+    _crossfadeIn.dispose();
+    _crossfade.dispose();
     _blobA.dispose();
     _blobB.dispose();
     _blobC.dispose();
-    _drift.dispose();
     super.dispose();
   }
 
@@ -200,15 +485,19 @@ class _DesktopAmbientState extends State<DesktopAmbient>
       return const SizedBox.shrink();
     }
     final skin = DesktopSkin.of(context);
+    final profile = AmbientThemeProfile.of(isDark: skin.isDark);
     final targetIntensity = (widget.intensity / 100).clamp(0.0, 1.0);
-    final hasCover = widget.imageUrl != null && widget.imageUrl!.isNotEmpty;
     final viewport = MediaQuery.sizeOf(context);
     final unit = math.max(viewport.width, viewport.height);
+    final activeFrame = _activeFrame;
+    final outgoingFrame = _outgoingFrame;
+    final showCoverLayer =
+        (activeFrame?.hasMesh ?? false) || (outgoingFrame?.hasMesh ?? false);
+    final showArtLayer =
+        (activeFrame?.hasArt ?? false) || (outgoingFrame?.hasArt ?? false);
+
     return ExcludeSemantics(
       child: IgnorePointer(
-        // 移除外层 AnimatedOpacity，避免 Windows Skia 每帧对整屏环境光执行
-        // 离屏 saveLayer；改为仅在 intensity 变化时用 TweenAnimationBuilder 补间，
-        // 并将系数直接乘入色网、艺术面板、三团色块与暗纱/噪点各自的 alpha。
         child: TweenAnimationBuilder<double>(
           tween: Tween<double>(end: targetIntensity),
           duration: DesktopMotion.ambientLayer,
@@ -217,64 +506,44 @@ class _DesktopAmbientState extends State<DesktopAmbient>
             if (intensityFactor <= 0.001) {
               return const SizedBox.shrink();
             }
-            final veilOpacity = ((skin.isDark ? 0.86 : 0.70) * intensityFactor)
-                .clamp(0.0, 1.0);
+            final veilOpacity = (profile.veilOpacity * intensityFactor).clamp(
+              0.0,
+              1.0,
+            );
             final veilColor = skin.veil.withValues(
               alpha: (skin.veil.a * veilOpacity).clamp(0.0, 1.0),
             );
-            // 对齐 desktop.css:170 `.amb-veil` 线性底色为 veil 70%。
             final linearVeilColor = veilColor.withValues(
-              alpha: (veilColor.a * 0.70).clamp(0.0, 1.0),
+              alpha: (veilColor.a * profile.linearFactor).clamp(0.0, 1.0),
             );
             return Stack(
               fit: StackFit.expand,
               children: [
-                // 静态层：4×3 矢量色网，只有换封面、改尺寸或调强度时重绘。
-                // drift 变换挂在边界之上，边界内画面保留，漂移不触发重录。
-                if (hasCover)
-                  AnimatedBuilder(
-                    animation: _drift,
-                    builder: (context, child) {
-                      final drift = Curves.easeInOut.transform(
-                        _drift.value.clamp(0.0, 1.0),
-                      );
-                      return Transform(
-                        transform:
-                            Matrix4.identity()
-                              ..translateByDouble(
-                                viewport.width * 0.02 * drift,
-                                -viewport.height * 0.02 * drift,
-                                0,
-                                1,
-                              )
-                              ..scaleByDouble(
-                                1.12 * (1 + 0.12 * drift),
-                                1.12 * (1 + 0.12 * drift),
-                                1.12 * (1 + 0.12 * drift),
-                                1,
-                              ),
-                        alignment: Alignment.center,
-                        child: child,
-                      );
-                    },
-                    child: RepaintBoundary(
-                      key: const ValueKey('ambient-cover'),
-                      child: _coverStack(skin, intensityFactor),
+                // 边界 1：4×3 矢量色网双缓冲层（彻底废除 40s _drift 晃动）。
+                if (showCoverLayer)
+                  RepaintBoundary(
+                    key: const ValueKey('ambient-cover'),
+                    child: _buildDualBufferMesh(
+                      skin: skin,
+                      profile: profile,
+                      intensityFactor: intensityFactor,
+                      active: activeFrame,
+                      outgoing: outgoingFrame,
                     ),
                   ),
-                // 右侧 64% 高清编辑艺术面板（独立 RepaintBoundary，不污染 ambient-cover）。
-                if (hasCover && widget.showArt)
+                // 边界 2：右侧静态轻柔焦艺术面板双缓冲层（与色网同步 720ms 过渡）。
+                if (showArtLayer)
                   RepaintBoundary(
                     key: const ValueKey('ambient-art'),
-                    child: EditorialArtPanel(
-                      source: widget.imageUrl!,
-                      isDark: skin.isDark,
+                    child: _buildDualBufferArt(
+                      skin: skin,
+                      profile: profile,
                       intensityFactor: intensityFactor,
-                      animate: _canAnimate,
+                      active: activeFrame,
+                      outgoing: outgoingFrame,
                     ),
                   ),
-                // 样例 `.blob` 是「光栅一次的径向渐变纹理 + 合成器 transform」。
-                // 这里同构：每团预录静态纹理成保留边界，相位只驱动其上的 Transform。
+                // 边界 3：三团事件驱动 2.4s 缓动色场，落位停表 0fps GPU 唤醒。
                 RepaintBoundary(
                   key: const ValueKey('ambient-blobs'),
                   child: Stack(
@@ -285,7 +554,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
                         base: Offset(viewport.width * 0.06, -unit * 0.12),
                         radius: unit * 0.52,
                         color: skin.accent,
-                        alpha: 0.25 * intensityFactor,
+                        alpha: (skin.isDark ? 0.25 : 0.16) * intensityFactor,
                         size: viewport,
                         unit: unit,
                       ),
@@ -297,7 +566,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
                         ),
                         radius: unit * 0.50,
                         color: skin.warm,
-                        alpha: 0.14 * intensityFactor,
+                        alpha: (skin.isDark ? 0.14 : 0.10) * intensityFactor,
                         size: viewport,
                         unit: unit,
                       ),
@@ -309,21 +578,19 @@ class _DesktopAmbientState extends State<DesktopAmbient>
                         ),
                         radius: unit * 0.34,
                         color: DesktopPalette.ambientCool,
-                        alpha: 0.12 * intensityFactor,
+                        alpha: (skin.isDark ? 0.12 : 0.08) * intensityFactor,
                         size: viewport,
                         unit: unit,
                       ),
                     ],
                   ),
                 ),
-                // 静态层：暗纱 alpha 直接折叠进绘制颜色，噪点用 128×128 离屏瓦片平铺，
-                // 彻底消除 Opacity saveLayer 与逐像素 drawRect。
+                // 边界 4：深浅色精细差异化暗纱 + 预烘焙 128×128 噪点瓦片。
                 RepaintBoundary(
                   key: const ValueKey('ambient-veil'),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      // CSS 先铺 70% 线性实色，再叠径向 10%→95% 透明到 veil 的渐变。
                       ColoredBox(color: linearVeilColor),
                       DecoratedBox(
                         decoration: BoxDecoration(
@@ -331,7 +598,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
                             center: Alignment.topCenter,
                             radius: 1.25,
                             colors: [Colors.transparent, veilColor],
-                            stops: const [0.10, 0.95],
+                            stops: profile.radialStops,
                           ),
                         ),
                       ),
@@ -352,48 +619,133 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     );
   }
 
-  /// 封面换页：样例 `Shell.tsx` 只留最多两层——旧层 `.out` 1.6s 淡出，
-  /// 新层 `.in` 1.6s 淡入。直接换图会在切路由时硬切一下。
-  Widget _coverStack(DesktopSkin skin, double intensityFactor) {
-    final source = widget.imageUrl;
-    if (source == null || source.isEmpty) {
+  Widget _buildDualBufferMesh({
+    required DesktopSkin skin,
+    required AmbientThemeProfile profile,
+    required double intensityFactor,
+    required _AmbientSceneFrame? active,
+    required _AmbientSceneFrame? outgoing,
+  }) {
+    final layers = <Widget>[];
+    if (outgoing != null && outgoing.hasMesh) {
+      layers.add(
+        FadeTransition(
+          key: ValueKey<int>(outgoing.id),
+          opacity: _crossfadeOut,
+          alwaysIncludeSemantics: true,
+          child: RepaintBoundary(
+            child: _meshFrameWidget(
+              skin: skin,
+              profile: profile,
+              intensityFactor: intensityFactor,
+              frame: outgoing,
+            ),
+          ),
+        ),
+      );
+    }
+    if (active != null && active.hasMesh) {
+      final child = RepaintBoundary(
+        child: _meshFrameWidget(
+          skin: skin,
+          profile: profile,
+          intensityFactor: intensityFactor,
+          frame: active,
+        ),
+      );
+      layers.add(
+        outgoing != null
+            ? FadeTransition(
+              key: ValueKey<int>(active.id),
+              opacity: _crossfadeIn,
+              alwaysIncludeSemantics: true,
+              child: child,
+            )
+            : KeyedSubtree(key: ValueKey<int>(active.id), child: child),
+      );
+    }
+    if (layers.isEmpty) {
       return const SizedBox.shrink();
     }
-    return AnimatedSwitcher(
-      duration: DesktopMotion.ambientCoverSwap,
-      switchInCurve: Curves.ease,
-      switchOutCurve: Curves.ease,
-      layoutBuilder:
-          (current, previous) => Stack(
-            fit: StackFit.expand,
-            children: [...previous, if (current != null) current],
-          ),
-      child: KeyedSubtree(
-        key: ValueKey<(int, String)>((_coverSwapSeq, source)),
-        child: _cover(skin, source, intensityFactor),
-      ),
-    );
+    if (layers.length == 1) {
+      return layers.first;
+    }
+    return Stack(fit: StackFit.expand, children: layers);
   }
 
-  /// 样例 `.amb-img.amb-mesh`：4×3 矢量色网 + `saturate(1.55) brightness(1.05)`，
-  /// 彻底移除 `_mushWidth = 64` 裸拉伸，任意分辨率 0 马赛克。
-  Widget _cover(DesktopSkin skin, String source, double intensityFactor) {
-    final meshAlpha = ((skin.isDark ? 0.85 : 0.55) * intensityFactor).clamp(
-      0.0,
-      1.0,
-    );
+  Widget _meshFrameWidget({
+    required DesktopSkin skin,
+    required AmbientThemeProfile profile,
+    required double intensityFactor,
+    required _AmbientSceneFrame frame,
+  }) {
+    final meshAlpha = (profile.meshAlpha * intensityFactor).clamp(0.0, 1.0);
     return DesktopAmbientMeshSurface(
-      source: source,
+      source: frame.imageUrl ?? '',
+      preloadedGrid: frame.meshGrid,
       opacity: meshAlpha,
-      saturation: 1.55,
-      brightness: 1.05,
+      saturation: profile.meshSat,
+      brightness: profile.meshBright,
+      fallbackColor:
+          frame.fallbackTone?.withValues(alpha: meshAlpha) ??
+          Colors.transparent,
+      washColor: profile.lightWash > 0 ? skin.bg : null,
+      washOpacity: profile.lightWash,
     );
   }
 
-  /// 单团色光：静态径向渐变纹理留在保留边界里只录一次；相位只驱动边界
-  /// 之上的 Transform。变换与原先逐帧 paint 的公式逐字等价：中心平移
-  /// `(a*unit*0.08, a*unit*0.06)`、半径 `unit*(r0+0.2a)` 即绕基中心缩放
-  /// `(r0+0.2a)/r0`，故像素中性。
+  Widget _buildDualBufferArt({
+    required DesktopSkin skin,
+    required AmbientThemeProfile profile,
+    required double intensityFactor,
+    required _AmbientSceneFrame? active,
+    required _AmbientSceneFrame? outgoing,
+  }) {
+    final layers = <Widget>[];
+    if (outgoing != null && outgoing.hasArt) {
+      layers.add(
+        FadeTransition(
+          key: ValueKey<int>(outgoing.id),
+          opacity: _crossfadeOut,
+          alwaysIncludeSemantics: true,
+          child: EditorialArtPanel(
+            source: outgoing.imageUrl!,
+            isDark: skin.isDark,
+            intensityFactor: intensityFactor,
+            preset: outgoing.artPreset,
+            profile: profile,
+          ),
+        ),
+      );
+    }
+    if (active != null && active.hasArt) {
+      final panel = EditorialArtPanel(
+        source: active.imageUrl!,
+        isDark: skin.isDark,
+        intensityFactor: intensityFactor,
+        preset: active.artPreset,
+        profile: profile,
+      );
+      layers.add(
+        outgoing != null
+            ? FadeTransition(
+              key: ValueKey<int>(active.id),
+              opacity: _crossfadeIn,
+              alwaysIncludeSemantics: true,
+              child: panel,
+            )
+            : KeyedSubtree(key: ValueKey<int>(active.id), child: panel),
+      );
+    }
+    if (layers.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    if (layers.length == 1) {
+      return layers.first;
+    }
+    return Stack(fit: StackFit.expand, children: layers);
+  }
+
   Widget _blobLayer({
     required AnimationController controller,
     required Offset base,
@@ -471,7 +823,7 @@ class _BlobBasePainter extends CustomPainter {
       oldDelegate.alpha != alpha;
 }
 
-/// 样例 `.grain`：预烘焙 128×128 离屏噪点瓦片 + ImageShader 平铺，单次 drawRect 完成绘制。
+/// 预烘焙 128×128 离屏噪点瓦片 + ImageShader 平铺，单次 drawRect 完成绘制。
 class _GrainPainter extends CustomPainter {
   const _GrainPainter({required this.image, required this.opacity});
 

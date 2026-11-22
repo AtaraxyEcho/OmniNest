@@ -1,35 +1,139 @@
 part of 'desktop_photos_page.dart';
 
-/// 按日期分组的照片墙与组头。
-///
-/// 独立成 part：主页面文件已经贴着源码行数棘轮，列表分组属于纯展示层，
-/// 搬出来不影响任何状态归属。
-class _PhotoGroups extends StatelessWidget {
-  const _PhotoGroups({
-    required this.photos,
-    required this.displayOrders,
-    required this.loading,
-    required this.onRetry,
-    this.error,
+/// 按拍摄日分组，同一天内保持服务端顺序。
+Map<DateTime?, List<PhotoItem>> _groupPhotosByDay(List<PhotoItem> items) {
+  final groups = <DateTime?, List<PhotoItem>>{};
+  for (final item in items) {
+    final taken = item.dateTaken ?? item.createdAt;
+    final key =
+        taken == null ? null : DateTime(taken.year, taken.month, taken.day);
+    groups.putIfAbsent(key, () => <PhotoItem>[]).add(item);
+  }
+  return groups;
+}
+
+/// 将照片库拆分为按日期组 + 按行虚拟化的 Sliver 列表（`SliverMainAxisGroup` +
+/// `SliverList.builder`），大幅降低百张以上照片的首屏构建与滚动开销。
+List<Widget> _buildPhotoGroupSlivers({
+  required BuildContext context,
+  required List<PhotoItem> photos,
+  required Map<String, List<String>> displayOrders,
+  required bool loading,
+  required VoidCallback onRetry,
+  String? error,
+  required double density,
+  required Set<String> selection,
+  bool selectionMode = false,
+  required void Function(PhotoItem photo, List<PhotoItem> photos) onActivate,
+  required ValueChanged<PhotoItem> onToggleSelect,
+  void Function(PhotoItem photo, List<PhotoItem> photos, Offset globalPosition)?
+  onSecondaryTap,
+  required ValueChanged<List<PhotoItem>> onSelectMany,
+  required _PhotoOrderChanged onOrderChanged,
+  required Future<void> Function(String contextKey) onResetOrder,
+}) {
+  final l10n = AppLocalizations.of(context);
+  if (error != null) {
+    return <Widget>[
+      SliverToBoxAdapter(
+        child: DesktopErrorView(message: error, onRetry: onRetry),
+      ),
+    ];
+  }
+  if (loading || photos.isEmpty) {
+    return <Widget>[
+      SliverToBoxAdapter(
+        child: DesktopSkeletonSwitcher(
+          regionId: 'photos-library',
+          hasData: photos.isNotEmpty,
+          loading: loading,
+          skeleton: DesktopSkeletonPhotoGrid(targetHeight: density),
+          child: DesktopEmpty(
+            icon: DesktopIcons.image,
+            message: l10n.desktopHomeEmptyPhotos,
+            description: l10n.desktopPhotosEmptyBody,
+            large: true,
+          ),
+        ),
+      ),
+    ];
+  }
+
+  final groups = _groupPhotosByDay(photos);
+  final browsePhotos = applyPhotoLibraryDisplayOrder(photos, displayOrders);
+  final selectionActive = selection.isNotEmpty || selectionMode;
+  final locale = Localizations.localeOf(context).toString();
+
+  return <Widget>[
+    for (final entry in groups.entries)
+      _PhotoDaySliverGroup(
+        key: ValueKey<String>(
+          'photo-day-${photoOrderContextForDay(entry.key)}',
+        ),
+        dayKey: entry.key,
+        label:
+            entry.key == null
+                ? '—'
+                : DateFormat.yMMMMd(locale).format(entry.key!),
+        dayPhotos: entry.value,
+        orderedDayPhotos: applyPhotoDisplayOrder(
+          entry.value,
+          displayOrders[photoOrderContextForDay(entry.key)],
+        ),
+        browsePhotos: browsePhotos,
+        contextKey: photoOrderContextForDay(entry.key),
+        hasCustomOrder: displayOrders.containsKey(
+          photoOrderContextForDay(entry.key),
+        ),
+        density: density,
+        selection: selection,
+        selectionMode: selectionMode,
+        selectionActive: selectionActive,
+        onActivate: onActivate,
+        onToggleSelect: onToggleSelect,
+        onSecondaryTap: onSecondaryTap,
+        onSelectMany: onSelectMany,
+        onOrderChanged: onOrderChanged,
+        onResetOrder: onResetOrder,
+      ),
+  ];
+}
+
+/// 单日照片虚拟化分组：使用 [SliverMainAxisGroup] 组合组头与按行虚拟化的
+/// [_SliverJustifiedPhotos]，仅在视口范围内构建可见行。
+class _PhotoDaySliverGroup extends StatefulWidget {
+  const _PhotoDaySliverGroup({
+    required this.dayKey,
+    required this.label,
+    required this.dayPhotos,
+    required this.orderedDayPhotos,
+    required this.browsePhotos,
+    required this.contextKey,
+    required this.hasCustomOrder,
     required this.density,
     required this.selection,
-    this.selectionMode = false,
+    required this.selectionMode,
+    required this.selectionActive,
     required this.onActivate,
     required this.onToggleSelect,
-    this.onSecondaryTap,
     required this.onSelectMany,
     required this.onOrderChanged,
     required this.onResetOrder,
+    this.onSecondaryTap,
+    super.key,
   });
 
-  final List<PhotoItem> photos;
-  final Map<String, List<String>> displayOrders;
-  final bool loading;
-  final String? error;
-  final VoidCallback onRetry;
+  final DateTime? dayKey;
+  final String label;
+  final List<PhotoItem> dayPhotos;
+  final List<PhotoItem> orderedDayPhotos;
+  final List<PhotoItem> browsePhotos;
+  final String contextKey;
+  final bool hasCustomOrder;
   final double density;
   final Set<String> selection;
   final bool selectionMode;
+  final bool selectionActive;
   final void Function(PhotoItem photo, List<PhotoItem> photos) onActivate;
   final ValueChanged<PhotoItem> onToggleSelect;
   final void Function(
@@ -43,109 +147,93 @@ class _PhotoGroups extends StatelessWidget {
   final Future<void> Function(String contextKey) onResetOrder;
 
   @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    if (error != null) {
-      return DesktopErrorView(message: error!, onRetry: onRetry);
-    }
+  State<_PhotoDaySliverGroup> createState() => _PhotoDaySliverGroupState();
+}
 
-    Widget content;
-    if (photos.isEmpty) {
-      content = DesktopEmpty(
-        icon: DesktopIcons.image,
-        message: l10n.desktopHomeEmptyPhotos,
-        description: l10n.desktopPhotosEmptyBody,
-        large: true,
-      );
-    } else {
-      final groups = _groupByDay(photos);
-      final browsePhotos = applyPhotoLibraryDisplayOrder(photos, displayOrders);
-      final selectionActive = selection.isNotEmpty || selectionMode;
-      content = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final entry in groups.entries)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 34),
-              child: DesktopHover(
-                cursor: SystemMouseCursors.basic,
-                builder: (context, hovered) {
-                  final selectedCount =
-                      entry.value
-                          .where((photo) => selection.contains(photo.id))
-                          .length;
-                  final contextKey = photoOrderContextForDay(entry.key);
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _GroupHead(
-                        label:
-                            entry.key == null
-                                ? '—'
-                                : DateFormat.yMMMMd(
-                                  Localizations.localeOf(context).toString(),
-                                ).format(entry.key!),
-                        count: entry.value.length,
-                        selectedCount: selectedCount,
-                        hovered: hovered,
-                        selectionActive: selectionActive,
-                        onToggleDay: () => onSelectMany(entry.value),
-                        onReset:
-                            displayOrders.containsKey(contextKey)
-                                ? () => onResetOrder(contextKey)
-                                : null,
-                      ),
-                      const SizedBox(height: 12),
-                      _JustifiedPhotos(
-                        photos: applyPhotoDisplayOrder(
-                          entry.value,
-                          displayOrders[contextKey],
-                        ),
-                        targetHeight: density,
-                        selection: selection,
-                        selectionMode: selectionMode,
-                        onActivate:
-                            (photo, _) => onActivate(photo, browsePhotos),
-                        onToggleSelect: onToggleSelect,
-                        onSecondaryTap:
-                            onSecondaryTap == null
-                                ? null
-                                : (photo, _, globalPos) => onSecondaryTap!(
-                                  photo,
-                                  browsePhotos,
-                                  globalPos,
-                                ),
-                        orderContext: contextKey,
-                        onOrderChanged: onOrderChanged,
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-        ],
-      );
-    }
+class _PhotoDaySliverGroupState extends State<_PhotoDaySliverGroup> {
+  final ValueNotifier<bool> _hovered = ValueNotifier<bool>(false);
+  int _hoverDepth = 0;
 
-    return DesktopSkeletonSwitcher(
-      regionId: 'photos-library',
-      hasData: photos.isNotEmpty,
-      loading: loading,
-      skeleton: DesktopSkeletonPhotoGrid(targetHeight: density),
-      child: content,
-    );
+  @override
+  void dispose() {
+    _hovered.dispose();
+    super.dispose();
   }
 
-  /// 按拍摄日分组，同一天内保持服务端顺序。
-  Map<DateTime?, List<PhotoItem>> _groupByDay(List<PhotoItem> items) {
-    final groups = <DateTime?, List<PhotoItem>>{};
-    for (final item in items) {
-      final taken = item.dateTaken ?? item.createdAt;
-      final key =
-          taken == null ? null : DateTime(taken.year, taken.month, taken.day);
-      groups.putIfAbsent(key, () => <PhotoItem>[]).add(item);
+  void _enter() {
+    _hoverDepth += 1;
+    if (!_hovered.value) {
+      _hovered.value = true;
     }
-    return groups;
+  }
+
+  void _exit() {
+    if (_hoverDepth > 0) {
+      _hoverDepth -= 1;
+    }
+    if (_hoverDepth == 0 && _hovered.value) {
+      _hovered.value = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedCount =
+        widget.dayPhotos
+            .where((photo) => widget.selection.contains(photo.id))
+            .length;
+    return SliverMainAxisGroup(
+      slivers: [
+        SliverToBoxAdapter(
+          child: MouseRegion(
+            cursor: SystemMouseCursors.basic,
+            onEnter: (_) => _enter(),
+            onExit: (_) => _exit(),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: ValueListenableBuilder<bool>(
+                valueListenable: _hovered,
+                builder:
+                    (context, hovered, _) => _GroupHead(
+                      label: widget.label,
+                      count: widget.dayPhotos.length,
+                      selectedCount: selectedCount,
+                      hovered: hovered,
+                      selectionActive: widget.selectionActive,
+                      onToggleDay: () => widget.onSelectMany(widget.dayPhotos),
+                      onReset:
+                          widget.hasCustomOrder
+                              ? () => widget.onResetOrder(widget.contextKey)
+                              : null,
+                    ),
+              ),
+            ),
+          ),
+        ),
+        _SliverJustifiedPhotos(
+          photos: widget.orderedDayPhotos,
+          targetHeight: widget.density,
+          selection: widget.selection,
+          selectionMode: widget.selectionMode,
+          onActivate:
+              (photo, _) => widget.onActivate(photo, widget.browsePhotos),
+          onToggleSelect: widget.onToggleSelect,
+          onSecondaryTap:
+              widget.onSecondaryTap == null
+                  ? null
+                  : (photo, _, globalPos) => widget.onSecondaryTap!(
+                    photo,
+                    widget.browsePhotos,
+                    globalPos,
+                  ),
+          orderContext: widget.contextKey,
+          onOrderChanged: widget.onOrderChanged,
+          onRowHoverEnter: _enter,
+          onRowHoverExit: _exit,
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 34)),
+      ],
+    );
   }
 }
 
@@ -184,6 +272,7 @@ class _GroupHead extends StatelessWidget {
         AnimatedOpacity(
           opacity: hovered || selectionActive ? 1 : 0,
           duration: DesktopMotion.fast,
+          alwaysIncludeSemantics: true,
           child: AnimatedScale(
             scale: hovered || selectionActive ? 1 : 0.8,
             duration: DesktopMotion.soft,
@@ -233,6 +322,7 @@ class _GroupHead extends StatelessWidget {
           AnimatedOpacity(
             opacity: hovered || selectionActive ? 1 : 0,
             duration: DesktopMotion.fast,
+            alwaysIncludeSemantics: true,
             child: DesktopLink(
               label: l10n.desktopPhotosResetOrder,
               onPressed: onReset,

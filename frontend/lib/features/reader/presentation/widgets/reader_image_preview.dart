@@ -32,6 +32,7 @@ class ReaderImagePreview extends ConsumerStatefulWidget {
         pageBuilder: (_, animation, _) {
           return FadeTransition(
             opacity: animation,
+            alwaysIncludeSemantics: true,
             child: ReaderImagePreview(
               block: block,
               itemId: itemId,

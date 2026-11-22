@@ -214,6 +214,7 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
                             const Duration(milliseconds: 300),
                           ),
                           opacity: _hovered ? 1 : 0,
+                          alwaysIncludeSemantics: true,
                           child: Container(
                             color: Colors.black.withValues(alpha: 0.55),
                             child: Center(

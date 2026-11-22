@@ -37,57 +37,64 @@ class DesktopContinueRail extends ConsumerWidget {
         minHeightFactor: 0.22,
       );
     }
-    if (dashboard == null && dashboardAsync.isLoading) {
-      return SizedBox(
-        height: 340 * 9 / 16 + 16,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.only(bottom: 12, top: 4),
-          itemCount: 4,
-          separatorBuilder:
-              (context, index) => const SizedBox(width: DesktopMetrics.railGap),
-          itemBuilder:
-              (context, index) => const SizedBox(
-                width: 340,
-                child: DesktopSkeletonBox(height: 191, radius: 16),
-              ),
-        ),
-      );
-    }
+    final skeleton = SizedBox(
+      height: 340 * 9 / 16 + 16,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.only(bottom: 12, top: 4),
+        itemCount: 4,
+        separatorBuilder:
+            (context, index) => const SizedBox(width: DesktopMetrics.railGap),
+        itemBuilder:
+            (context, index) => SizedBox(
+              width: 340,
+              child: DesktopSkeletonBox(height: 191, radius: 16, index: index),
+            ),
+      ),
+    );
     final resume =
         dashboard?.continueWatching ?? const <MovieContinueWatching>[];
     final fresh = dashboard?.recentlyAdded ?? const <MovieVideoItem>[];
+    final Widget content;
     if (resume.isEmpty && fresh.isEmpty) {
-      return DesktopEmpty(
+      content = DesktopEmpty(
         message: l10n.desktopHomeEmptyContinue,
         icon: DesktopIcons.film,
         actionLabel: l10n.desktopAllMovies,
         onAction: () => context.go(DesktopRoutes.movies),
       );
-    }
-    final freshItems = fresh.take(4).toList(growable: false);
-    // 样例 `.rail > *`：每张卡按 `--i * 55ms` 各自入场，不是整条轨道一起淡入。
-    final entries = <Widget>[
-      for (var i = 0; i < resume.length; i++)
-        DesktopStagger(index: i, child: _ResumeCard(item: resume[i])),
-      for (var i = 0; i < freshItems.length; i++)
-        DesktopStagger(
-          index: resume.length + i,
-          child: _FreshCard(item: freshItems[i]),
+    } else {
+      final freshItems = fresh.take(4).toList(growable: false);
+      // 样例 `.rail > *`：每张卡按 `--i * 55ms` 各自入场，不是整条轨道一起淡入。
+      final entries = <Widget>[
+        for (var i = 0; i < resume.length; i++)
+          DesktopStagger(index: i, child: _ResumeCard(item: resume[i])),
+        for (var i = 0; i < freshItems.length; i++)
+          DesktopStagger(
+            index: resume.length + i,
+            child: _FreshCard(item: freshItems[i]),
+          ),
+      ];
+      // 样例 `.wide-card`：`width:340 + aspect-ratio:16/9` → 191.25 高，
+      // 加上下留白 16 就是轨道高度。写死 214 会让卡片比设计稿高 22.75。
+      content = SizedBox(
+        height: 340 * 9 / 16 + 16,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.only(bottom: 12, top: 4),
+          itemCount: entries.length,
+          separatorBuilder:
+              (context, index) => const SizedBox(width: DesktopMetrics.railGap),
+          itemBuilder: (context, index) => entries[index],
         ),
-    ];
-    // 样例 `.wide-card`：`width:340 + aspect-ratio:16/9` → 191.25 高，
-    // 加上下留白 16 就是轨道高度。写死 214 会让卡片比设计稿高 22.75。
-    return SizedBox(
-      height: 340 * 9 / 16 + 16,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.only(bottom: 12, top: 4),
-        itemCount: entries.length,
-        separatorBuilder:
-            (context, index) => const SizedBox(width: DesktopMetrics.railGap),
-        itemBuilder: (context, index) => entries[index],
-      ),
+      );
+    }
+    return DesktopSkeletonSwitcher(
+      regionId: 'home-continue-rail',
+      hasData: dashboard != null,
+      loading: dashboard == null && dashboardAsync.isLoading,
+      skeleton: skeleton,
+      child: content,
     );
   }
 }
@@ -289,6 +296,7 @@ class _WideCard extends StatelessWidget {
                             ),
                             curve: MotionToken.curve,
                             opacity: hovered ? 1 : 0,
+                            alwaysIncludeSemantics: true,
                             child: DesktopHover(
                               builder:
                                   (context, playHovered) => GestureDetector(
@@ -363,61 +371,7 @@ class DesktopListeningRow extends ConsumerWidget {
         minHeightFactor: 0.22,
       );
     }
-    if (snapshot == null && snapshotAsync.isLoading) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          const gap = 16.0;
-          final count = constraints.maxWidth < 420 ? 3 : 4;
-          final side = (constraints.maxWidth - gap * (count - 1)) / count;
-          return Wrap(
-            spacing: gap,
-            runSpacing: gap,
-            children: [
-              for (var index = 0; index < count; index++)
-                SizedBox(
-                  width: side,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AspectRatio(
-                        aspectRatio: 1,
-                        child: DesktopSkeletonBox(radius: 14, index: index * 3),
-                      ),
-                      const SizedBox(height: 10),
-                      FractionallySizedBox(
-                        widthFactor: 0.72,
-                        alignment: Alignment.centerLeft,
-                        child: DesktopSkeletonBox(
-                          height: 12,
-                          index: index * 3 + 1,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      FractionallySizedBox(
-                        widthFactor: 0.48,
-                        alignment: Alignment.centerLeft,
-                        child: DesktopSkeletonBox(
-                          height: 10,
-                          index: index * 3 + 2,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          );
-        },
-      );
-    }
-    if (tracks.isEmpty) {
-      return DesktopEmpty(
-        message: l10n.desktopHomeEmptyMusic,
-        icon: DesktopIcons.music,
-        actionLabel: l10n.desktopOpenMusic,
-        onAction: () => context.go(DesktopRoutes.music),
-      );
-    }
-    return LayoutBuilder(
+    final skeleton = LayoutBuilder(
       builder: (context, constraints) {
         const gap = 16.0;
         final count = constraints.maxWidth < 420 ? 3 : 4;
@@ -426,82 +380,143 @@ class DesktopListeningRow extends ConsumerWidget {
           spacing: gap,
           runSpacing: gap,
           children: [
-            for (final track in tracks.take(count))
+            for (var index = 0; index < count; index++)
               SizedBox(
                 width: side,
-                child: DesktopHoverLift(
-                  onTap:
-                      () => ref
-                          .read(musicPortalActionsProvider)
-                          .playTrackById(track.id),
-                  onSecondaryTap:
-                      () => ref
-                          .read(desktopShellProvider.notifier)
-                          .showDetail(
-                            DesktopDetailData(
-                              kind: 'track',
-                              title: track.title,
-                              subtitle:
-                                  '${track.artistName} · ${track.albumTitle}',
-                              imageUrl: track.coverUrl,
-                              squareArt: true,
-                              primary: DesktopDetailAction(
-                                label: l10n.desktopPlay,
-                                icon: DesktopIcons.play,
-                                onPressed:
-                                    () => ref
-                                        .read(musicPortalActionsProvider)
-                                        .playTrackById(track.id),
-                              ),
-                            ),
-                          ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AspectRatio(
-                        aspectRatio: 1,
-                        child: Container(
-                          clipBehavior: Clip.antiAlias,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: [
-                              BoxShadow(
-                                color: skin.shadow.first.color,
-                                blurRadius: 30,
-                                offset: const Offset(0, 14),
-                                spreadRadius: -12,
-                              ),
-                            ],
-                          ),
-                          child: DesktopCover(
-                            url: track.listCoverUrl ?? track.coverUrl,
-                            kind: DesktopCoverKind.music,
-                            fallbackIcon: DesktopIcons.music,
-                            cacheKey: 'desktop-home-${track.id}',
-                          ),
-                        ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 1,
+                      child: DesktopSkeletonBox(radius: 14, index: index * 3),
+                    ),
+                    const SizedBox(height: 10),
+                    FractionallySizedBox(
+                      widthFactor: 0.72,
+                      alignment: Alignment.centerLeft,
+                      child: DesktopSkeletonBox(
+                        height: 12,
+                        index: index * 3 + 1,
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        track.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: DesktopType.denseStrong(skin.text),
+                    ),
+                    const SizedBox(height: 5),
+                    FractionallySizedBox(
+                      widthFactor: 0.48,
+                      alignment: Alignment.centerLeft,
+                      child: DesktopSkeletonBox(
+                        height: 10,
+                        index: index * 3 + 2,
                       ),
-                      Text(
-                        track.artistName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: DesktopType.caption(skin.text3),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
           ],
         );
       },
+    );
+    final content =
+        tracks.isEmpty
+            ? DesktopEmpty(
+              message: l10n.desktopHomeEmptyMusic,
+              icon: DesktopIcons.music,
+              actionLabel: l10n.desktopOpenMusic,
+              onAction: () => context.go(DesktopRoutes.music),
+            )
+            : LayoutBuilder(
+              builder: (context, constraints) {
+                const gap = 16.0;
+                final count = constraints.maxWidth < 420 ? 3 : 4;
+                final side = (constraints.maxWidth - gap * (count - 1)) / count;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: [
+                    for (final track in tracks.take(count))
+                      SizedBox(
+                        width: side,
+                        child: DesktopHoverLift(
+                          onTap:
+                              () => ref
+                                  .read(musicPortalActionsProvider)
+                                  .playTrackById(track.id),
+                          onSecondaryTap:
+                              () => ref
+                                  .read(desktopShellProvider.notifier)
+                                  .showDetail(
+                                    DesktopDetailData(
+                                      kind: 'track',
+                                      title: track.title,
+                                      subtitle:
+                                          '${track.artistName} · ${track.albumTitle}',
+                                      imageUrl: track.coverUrl,
+                                      squareArt: true,
+                                      primary: DesktopDetailAction(
+                                        label: l10n.desktopPlay,
+                                        icon: DesktopIcons.play,
+                                        onPressed:
+                                            () => ref
+                                                .read(
+                                                  musicPortalActionsProvider,
+                                                )
+                                                .playTrackById(track.id),
+                                      ),
+                                    ),
+                                  ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AspectRatio(
+                                aspectRatio: 1,
+                                child: Container(
+                                  clipBehavior: Clip.antiAlias,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(14),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: skin.shadow.first.color,
+                                        blurRadius: 30,
+                                        offset: const Offset(0, 14),
+                                        spreadRadius: -12,
+                                      ),
+                                    ],
+                                  ),
+                                  child: DesktopCover(
+                                    url: track.listCoverUrl ?? track.coverUrl,
+                                    kind: DesktopCoverKind.music,
+                                    fallbackIcon: DesktopIcons.music,
+                                    cacheKey: 'desktop-home-${track.id}',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                track.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: DesktopType.denseStrong(skin.text),
+                              ),
+                              Text(
+                                track.artistName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: DesktopType.caption(skin.text3),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            );
+    return DesktopSkeletonSwitcher(
+      regionId: 'home-listening-row',
+      hasData: snapshot != null,
+      loading: snapshot == null && snapshotAsync.isLoading,
+      skeleton: skeleton,
+      child: content,
     );
   }
 }
@@ -529,151 +544,160 @@ class DesktopReadingCard extends ConsumerWidget {
         minHeightFactor: 0.22,
       );
     }
-    if (book == null && dashboardAsync.isLoading) {
-      return Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: skin.panel,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: skin.line),
-        ),
-        child: Row(
-          children: [
-            const SizedBox(
-              width: 116,
-              child: AspectRatio(
-                aspectRatio: 2 / 3,
-                child: DesktopSkeletonBox(radius: 8),
-              ),
+    final skeleton = Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: skin.panel,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: skin.line),
+      ),
+      child: const Row(
+        children: [
+          SizedBox(
+            width: 116,
+            child: AspectRatio(
+              aspectRatio: 2 / 3,
+              child: DesktopSkeletonBox(radius: 8),
             ),
-            const SizedBox(width: 22),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const DesktopSkeletonBox(width: 120, height: 10),
-                  const SizedBox(height: 10),
-                  const DesktopSkeletonBox(width: 210, height: 22),
-                  const SizedBox(height: 8),
-                  const DesktopSkeletonBox(width: 130, height: 12),
-                  const SizedBox(height: 16),
-                  const DesktopSkeletonBox(height: 5, radius: 3),
-                  const SizedBox(height: 18),
-                  const DesktopSkeletonBox(width: 104, height: 34),
-                ],
-              ),
+          ),
+          SizedBox(width: 22),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DesktopSkeletonBox(width: 120, height: 10),
+                SizedBox(height: 10),
+                DesktopSkeletonBox(width: 210, height: 22),
+                SizedBox(height: 8),
+                DesktopSkeletonBox(width: 130, height: 12),
+                SizedBox(height: 16),
+                DesktopSkeletonBox(height: 5, radius: 3),
+                SizedBox(height: 18),
+                DesktopSkeletonBox(width: 104, height: 34),
+              ],
             ),
-          ],
-        ),
-      );
-    }
+          ),
+        ],
+      ),
+    );
+    final Widget content;
     if (book == null) {
-      return DesktopEmpty(
+      content = DesktopEmpty(
         message: l10n.desktopHomeEmptyBook,
         icon: DesktopIcons.book,
         actionLabel: l10n.desktopOpenReader,
         onAction: () => context.go(DesktopRoutes.reader),
       );
-    }
-    final progress = (book.progressPercent ?? 0) / 100;
-    final tone = DesktopPalette.bookToneFor(book.id);
-    return DesktopHover(
-      builder:
-          (context, hovered) => GestureDetector(
-            onTap: () => context.push(DesktopRoutes.bookDetail(book.id)),
-            behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: MotionToken.reduced(context, MotionToken.normal),
-              curve: MotionToken.curve,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: skin.panel,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: hovered ? skin.line2 : skin.line),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 116,
-                    child: AspectRatio(
-                      aspectRatio: 2 / 3,
-                      child:
-                          book.hasCover
-                              ? DesktopCover(
-                                url: book.coverUrl,
-                                kind: DesktopCoverKind.reader,
-                                readerItemId: book.id,
-                                fallbackIcon: DesktopIcons.book,
-                                borderRadius: const BorderRadius.horizontal(
-                                  left: Radius.circular(4),
-                                  right: Radius.circular(10),
+    } else {
+      final progress = (book.progressPercent ?? 0) / 100;
+      final tone = DesktopPalette.bookToneFor(book.id);
+      content = DesktopHover(
+        builder:
+            (context, hovered) => GestureDetector(
+              onTap: () => context.push(DesktopRoutes.bookDetail(book.id)),
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedContainer(
+                duration: MotionToken.reduced(context, MotionToken.normal),
+                curve: MotionToken.curve,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: skin.panel,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: hovered ? skin.line2 : skin.line),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 116,
+                      child: AspectRatio(
+                        aspectRatio: 2 / 3,
+                        child:
+                            book.hasCover
+                                ? DesktopCover(
+                                  url: book.coverUrl,
+                                  kind: DesktopCoverKind.reader,
+                                  readerItemId: book.id,
+                                  fallbackIcon: DesktopIcons.book,
+                                  borderRadius: const BorderRadius.horizontal(
+                                    left: Radius.circular(4),
+                                    right: Radius.circular(10),
+                                  ),
+                                )
+                                : DesktopPaperCover(
+                                  title: book.title,
+                                  author: book.authorName ?? '',
+                                  tone: tone.tone,
+                                  ink: tone.ink,
+                                  compact: true,
                                 ),
-                              )
-                              : DesktopPaperCover(
-                                title: book.title,
-                                author: book.authorName ?? '',
-                                tone: tone.tone,
-                                ink: tone.ink,
-                                compact: true,
-                              ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 22),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if ((book.currentChapterTitle ?? '').isNotEmpty)
-                          DesktopEyebrow(
-                            l10n.desktopChapterLabel(book.currentChapterTitle!),
-                          ),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Text(
-                            book.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: DesktopType.displaySm(skin.text),
-                          ),
-                        ),
-                        if ((book.authorName ?? '').isNotEmpty)
+                    const SizedBox(width: 22),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if ((book.currentChapterTitle ?? '').isNotEmpty)
+                            DesktopEyebrow(
+                              l10n.desktopChapterLabel(
+                                book.currentChapterTitle!,
+                              ),
+                            ),
                           Padding(
-                            padding: const EdgeInsets.only(top: 2),
+                            padding: const EdgeInsets.only(top: 6),
                             child: Text(
-                              book.authorName!,
-                              maxLines: 1,
+                              book.title,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: DesktopType.dense(skin.text2),
+                              style: DesktopType.displaySm(skin.text),
                             ),
                           ),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 14, bottom: 16),
-                          child: DesktopProgress(
-                            fraction: progress,
-                            label: l10n.desktopProgressPercent(
-                              (progress * 100).round(),
-                            ),
-                          ),
-                        ),
-                        DesktopButton(
-                          label: l10n.desktopContinue,
-                          icon: DesktopIcons.book,
-                          variant: DesktopButtonVariant.soft,
-                          onPressed:
-                              () => context.push(
-                                DesktopRoutes.bookDetail(book.id),
+                          if ((book.authorName ?? '').isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                book.authorName!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: DesktopType.dense(skin.text2),
                               ),
-                        ),
-                      ],
+                            ),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 14, bottom: 16),
+                            child: DesktopProgress(
+                              fraction: progress,
+                              label: l10n.desktopProgressPercent(
+                                (progress * 100).round(),
+                              ),
+                            ),
+                          ),
+                          DesktopButton(
+                            label: l10n.desktopContinue,
+                            icon: DesktopIcons.book,
+                            variant: DesktopButtonVariant.soft,
+                            onPressed:
+                                () => context.push(
+                                  DesktopRoutes.bookDetail(book.id),
+                                ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
+      );
+    }
+    return DesktopSkeletonSwitcher(
+      regionId: 'home-reading-card',
+      hasData: dashboard != null,
+      loading: book == null && dashboardAsync.isLoading,
+      skeleton: skeleton,
+      child: content,
     );
   }
 }

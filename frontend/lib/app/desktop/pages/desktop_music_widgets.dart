@@ -95,6 +95,7 @@ class _FocusHero extends StatelessWidget {
             child: IgnorePointer(
               child: Opacity(
                 opacity: 0.55,
+                alwaysIncludeSemantics: true,
                 child: DesktopVisualizer(
                   playing: playing,
                   color: Colors.white,

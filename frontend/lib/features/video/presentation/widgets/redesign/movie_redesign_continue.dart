@@ -194,6 +194,7 @@ class _MovieRedesignContinueCardState extends State<MovieRedesignContinueCard> {
                         const Duration(milliseconds: 300),
                       ),
                       opacity: _hovered ? 1 : 0,
+                      alwaysIncludeSemantics: true,
                       child: Container(
                         color: Colors.black.withValues(alpha: 0.40),
                         alignment: Alignment.center,

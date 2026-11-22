@@ -268,6 +268,7 @@ class _FilmstripState extends State<_Filmstrip> {
                               final active = item.id == widget.currentPhoto.id;
                               return Opacity(
                                 opacity: active ? 1 : 0.45,
+                                alwaysIncludeSemantics: true,
                                 child: GestureDetector(
                                   key: ValueKey<String>(
                                     'viewer-thumb-${item.id}',

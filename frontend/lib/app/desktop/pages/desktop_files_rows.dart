@@ -231,6 +231,7 @@ class _FileRow extends StatelessWidget {
                             DesktopMotion.fast,
                           ),
                           opacity: hovered || selected ? 1 : 0,
+                          alwaysIncludeSemantics: true,
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -313,7 +314,11 @@ class _FileRow extends StatelessWidget {
     return _AdaptiveFileDraggable(
       data: dragIds,
       feedback: _RowDragGhost(node: node, count: dragIds.length),
-      childWhenDragging: Opacity(opacity: 0.45, child: row),
+      childWhenDragging: Opacity(
+        opacity: 0.45,
+        alwaysIncludeSemantics: true,
+        child: row,
+      ),
       child: row,
     );
   }

@@ -291,6 +291,7 @@ class _DesktopSkeletonSwitcherState extends State<DesktopSkeletonSwitcher> {
             previousChildren,
             alignment: Alignment.topLeft,
           ),
+      transitionBuilder: semanticsSafeFadeTransition,
       child:
           showSkeleton
               ? KeyedSubtree(

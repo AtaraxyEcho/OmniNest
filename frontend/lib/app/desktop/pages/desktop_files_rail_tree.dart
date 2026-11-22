@@ -373,7 +373,11 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
     rowWithHover = _AdaptiveFileDraggable(
       data: <String>[folder.id],
       feedback: _RowDragGhost(node: folder, count: 1),
-      childWhenDragging: Opacity(opacity: 0.45, child: rowWithHover),
+      childWhenDragging: Opacity(
+        opacity: 0.45,
+        alwaysIncludeSemantics: true,
+        child: rowWithHover,
+      ),
       child: rowWithHover,
     );
 

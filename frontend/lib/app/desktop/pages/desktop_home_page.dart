@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -50,10 +52,43 @@ class DesktopHomePage extends ConsumerStatefulWidget {
 }
 
 class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
+  static const Duration _trunkGateTimeout = Duration(milliseconds: 500);
+
   final ScrollController _scroll = ScrollController();
+  Timer? _trunkGateTimer;
+  bool _trunkGateReleased = false;
+
+  bool _isAsyncSettled(AsyncValue<Object?> state) =>
+      !(state.isLoading && !state.hasValue);
+
+  bool _isCoreTrunkSettled() {
+    // 实时天气不阻塞首屏主干，仅等待 4 个核心媒体库概览 + 文件存储统计。
+    return _isAsyncSettled(ref.read(movieDashboardProvider)) &&
+        _isAsyncSettled(ref.read(photoDashboardProvider)) &&
+        _isAsyncSettled(ref.read(musicPortalSnapshotProvider)) &&
+        _isAsyncSettled(ref.read(readerDashboardProvider)) &&
+        _isAsyncSettled(ref.read(fileStorageStatsProvider));
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // 已有缓存时直出不闪；冷启动无缓存时启动 500ms 软超时门控。
+    if (_isCoreTrunkSettled()) {
+      _trunkGateReleased = true;
+    } else {
+      _trunkGateTimer = Timer(_trunkGateTimeout, () {
+        if (!mounted || _trunkGateReleased) {
+          return;
+        }
+        setState(() => _trunkGateReleased = true);
+      });
+    }
+  }
 
   @override
   void dispose() {
+    _trunkGateTimer?.cancel();
     _scroll.dispose();
     super.dispose();
   }
@@ -118,8 +153,16 @@ class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
         );
       }),
     );
-    final storageAsync = ref.watch(fileStorageStatsProvider);
-    final storage = storageAsync.asData?.value;
+    final storageSnapshot = ref.watch(
+      fileStorageStatsProvider.select((state) {
+        return (
+          storage: state.asData?.value,
+          loading: state.isLoading && !state.hasValue,
+          failed: state.hasError && !state.hasValue,
+        );
+      }),
+    );
+    final storage = storageSnapshot.storage;
     final musicSnapshot = ref.watch(
       musicPortalSnapshotProvider.select((state) {
         final music = state.asData?.value;
@@ -137,10 +180,13 @@ class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
         );
       }),
     );
+    // 实时天气不阻塞主干渲染，就绪后独立更新天气角标。
     final weather = ref.watch(
       realtimeWeatherProvider.select((state) => state.asData?.value),
     );
-    final reduceMotion = ref.watch(desktopAppearanceProvider).reduceMotion;
+    final reduceMotion = ref.watch(
+      desktopAppearanceProvider.select((a) => a.reduceMotion),
+    );
     // 壳层已经完成了背景素材、作用域与路由的统一判定；首页直接消费这
     // 一位，避免异步状态切换时 Hero 比壁纸层晚一帧或早一帧。
     final backdropActive =
@@ -180,6 +226,14 @@ class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
         musicSnapshot.failed ||
         readerSnapshot.failed;
 
+    final coreTrunkReady = !homeContentLoading && !storageSnapshot.loading;
+    if (coreTrunkReady && !_trunkGateReleased) {
+      _trunkGateReleased = true;
+      _trunkGateTimer?.cancel();
+      _trunkGateTimer = null;
+    }
+    final trunkLoading = !_trunkGateReleased;
+
     return Scrollbar(
       controller: _scroll,
       child: SingleChildScrollView(
@@ -189,110 +243,128 @@ class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
           // 样例只给 `.hero-sky` 与各列表条目挂入场动画，区块容器本身不动；
           // 交错覆盖在 `.stat`/`.rail`/`.mini-list`/`.timeline` 各自内部完成。
           children: [
-            DesktopRise(
-              duration: DesktopMotion.slow,
-              // 样例 `.bd-on .hero-sky .sky { display:none }`：自定义壁纸在场
-              // 时首页不再叠实时天象，否则两层天气画面互相打架。
-              child: _HeroSky(
-                showSky: !backdropActive,
-                // 样例眉标只到「周六，11 月 14 日」：年份在首页永不需要，
-                // 带上它会把这行从三格撑成四格，压掉右边天气卡的对齐。
-                dateLabel: DateFormat.MMMMEEEEd(locale).format(now),
-                greeting: l10n.desktopGreeting(greeting, name),
-                lead:
-                    homeContentFailed
-                        ? l10n.photosOperationFailed
-                        : movieSnapshot.resumeTitle == null
-                        ? l10n.desktopHomeLeadQuiet(libraryTotal)
-                        : l10n.desktopHomeLeadResume(
-                          libraryTotal,
-                          movieSnapshot.resumeTitle!,
-                        ),
-                hour: hour,
-                weather: weather,
-                contentLoading: homeContentLoading,
-                contentFailed: homeContentFailed,
-                retryLabel: l10n.commonRetry,
-                onRetryContent: () {
-                  ref.invalidate(movieDashboardProvider);
-                  ref.invalidate(photoDashboardProvider);
-                  ref.invalidate(musicPortalSnapshotProvider);
-                  ref.invalidate(readerDashboardProvider);
-                },
-                reduceMotion: reduceMotion,
-                backdropActive: backdropActive,
-                resumeLabel:
-                    movieSnapshot.resumeTitle == null
-                        ? null
-                        : l10n.desktopResumeTitle(movieSnapshot.resumeTitle!),
-                resumeTitle: movieSnapshot.resumeTitle,
-                resumeArtUrl: movieSnapshot.resumeArtUrl,
-                resumeProgress: movieSnapshot.resumeProgress,
-                listenLabel: listenLabel,
-                listenArtist:
-                    musicSnapshot.trackArtist ?? l10n.desktopStartListening,
-                listenArtUrl: musicSnapshot.trackCoverUrl,
-                onResume:
-                    movieSnapshot.resumeId == null
-                        ? null
-                        : () => context.push(
-                          DesktopRoutes.moviePlay(movieSnapshot.resumeId!),
-                        ),
-                onStartListening: () {
-                  final trackId = musicSnapshot.trackId;
-                  if (trackId == null) {
-                    context.go(DesktopRoutes.music);
-                    return;
-                  }
-                  ref.read(musicPortalActionsProvider).playTrackById(trackId);
-                  context.push(DesktopRoutes.nowPlaying);
-                },
+            DesktopSkeletonSwitcher(
+              regionId: 'home-trunk',
+              hasData: !trunkLoading,
+              loading: trunkLoading,
+              skeleton: const _HomeTrunkSkeleton(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  DesktopRise(
+                    duration: DesktopMotion.slow,
+                    // 样例 `.bd-on .hero-sky .sky { display:none }`：自定义壁纸在场
+                    // 时首页不再叠实时天象，否则两层天气画面互相打架。
+                    child: _HeroSky(
+                      showSky: !backdropActive,
+                      // 样例眉标只到「周六，11 月 14 日」：年份在首页永不需要，
+                      // 带上它会把这行从三格撑成四格，压掉右边天气卡的对齐。
+                      dateLabel: DateFormat.MMMMEEEEd(locale).format(now),
+                      greeting: l10n.desktopGreeting(greeting, name),
+                      lead:
+                          homeContentFailed
+                              ? l10n.photosOperationFailed
+                              : movieSnapshot.resumeTitle == null
+                              ? l10n.desktopHomeLeadQuiet(libraryTotal)
+                              : l10n.desktopHomeLeadResume(
+                                libraryTotal,
+                                movieSnapshot.resumeTitle!,
+                              ),
+                      hour: hour,
+                      weather: weather,
+                      contentLoading: homeContentLoading,
+                      contentFailed: homeContentFailed,
+                      retryLabel: l10n.commonRetry,
+                      onRetryContent: () {
+                        ref.invalidate(movieDashboardProvider);
+                        ref.invalidate(photoDashboardProvider);
+                        ref.invalidate(musicPortalSnapshotProvider);
+                        ref.invalidate(readerDashboardProvider);
+                      },
+                      reduceMotion: reduceMotion,
+                      backdropActive: backdropActive,
+                      resumeLabel:
+                          movieSnapshot.resumeTitle == null
+                              ? null
+                              : l10n.desktopResumeTitle(
+                                movieSnapshot.resumeTitle!,
+                              ),
+                      resumeTitle: movieSnapshot.resumeTitle,
+                      resumeArtUrl: movieSnapshot.resumeArtUrl,
+                      resumeProgress: movieSnapshot.resumeProgress,
+                      listenLabel: listenLabel,
+                      listenArtist:
+                          musicSnapshot.trackArtist ??
+                          l10n.desktopStartListening,
+                      listenArtUrl: musicSnapshot.trackCoverUrl,
+                      onResume:
+                          movieSnapshot.resumeId == null
+                              ? null
+                              : () => context.push(
+                                DesktopRoutes.moviePlay(
+                                  movieSnapshot.resumeId!,
+                                ),
+                              ),
+                      onStartListening: () {
+                        final trackId = musicSnapshot.trackId;
+                        if (trackId == null) {
+                          context.go(DesktopRoutes.music);
+                          return;
+                        }
+                        ref
+                            .read(musicPortalActionsProvider)
+                            .playTrackById(trackId);
+                        context.push(DesktopRoutes.nowPlaying);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  _StatsRow(
+                    libraryTotal: libraryTotal,
+                    libraryAddedToday: libraryAddedToday,
+                    listeningHours: musicSnapshot.listeningHours,
+                    readingStreak: readingStats.streak,
+                    longestReadingStreak: readingStats.longest,
+                    storage: storage,
+                    loading: [
+                      movieSnapshot.loading ||
+                          photoSnapshot.loading ||
+                          musicSnapshot.loading ||
+                          readerSnapshot.loading,
+                      musicSnapshot.loading,
+                      readingStats.loading,
+                      storageSnapshot.loading,
+                    ],
+                    failed: [
+                      movieSnapshot.failed ||
+                          photoSnapshot.failed ||
+                          musicSnapshot.failed ||
+                          readerSnapshot.failed,
+                      musicSnapshot.failed,
+                      readingStats.failed,
+                      storageSnapshot.failed,
+                    ],
+                    retry: [
+                      () {
+                        ref.invalidate(movieDashboardProvider);
+                        ref.invalidate(photoDashboardProvider);
+                        ref.invalidate(musicPortalSnapshotProvider);
+                        ref.invalidate(readerDashboardProvider);
+                      },
+                      () => ref.invalidate(musicPortalSnapshotProvider),
+                      () => ref.invalidate(readerStatsProvider),
+                      () => ref.invalidate(fileStorageStatsProvider),
+                    ],
+                  ),
+                  DesktopSection(
+                    eyebrow: l10n.desktopPickUpWhereYouLeft,
+                    title: l10n.desktopContinueWatching,
+                    actionLabel: l10n.desktopAllMovies,
+                    onAction: () => context.go(DesktopRoutes.movies),
+                    child: const DesktopContinueRail(),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 22),
-            _StatsRow(
-              libraryTotal: libraryTotal,
-              libraryAddedToday: libraryAddedToday,
-              listeningHours: musicSnapshot.listeningHours,
-              readingStreak: readingStats.streak,
-              longestReadingStreak: readingStats.longest,
-              storage: storage,
-              loading: [
-                movieSnapshot.loading ||
-                    photoSnapshot.loading ||
-                    musicSnapshot.loading ||
-                    readerSnapshot.loading,
-                musicSnapshot.loading,
-                readingStats.loading,
-                storageAsync.isLoading && !storageAsync.hasValue,
-              ],
-              failed: [
-                movieSnapshot.failed ||
-                    photoSnapshot.failed ||
-                    musicSnapshot.failed ||
-                    readerSnapshot.failed,
-                musicSnapshot.failed,
-                readingStats.failed,
-                storageAsync.hasError && !storageAsync.hasValue,
-              ],
-              retry: [
-                () {
-                  ref.invalidate(movieDashboardProvider);
-                  ref.invalidate(photoDashboardProvider);
-                  ref.invalidate(musicPortalSnapshotProvider);
-                  ref.invalidate(readerDashboardProvider);
-                },
-                () => ref.invalidate(musicPortalSnapshotProvider),
-                () => ref.invalidate(readerStatsProvider),
-                () => ref.invalidate(fileStorageStatsProvider),
-              ],
-            ),
-            DesktopSection(
-              eyebrow: l10n.desktopPickUpWhereYouLeft,
-              title: l10n.desktopContinueWatching,
-              actionLabel: l10n.desktopAllMovies,
-              onAction: () => context.go(DesktopRoutes.movies),
-              child: const DesktopContinueRail(),
             ),
             _TwoColumns(
               left: DesktopSection(
@@ -335,6 +407,154 @@ class _DesktopHomePageState extends ConsumerState<DesktopHomePage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 首屏主干联合骨架：严格对齐 Hero + 4 统计卡 + ContinueRail 高度，
+/// 在 4 媒体库概览 + 存储统计全就绪或达到 500ms 软超时后统一淡入。
+class _HomeTrunkSkeleton extends StatelessWidget {
+  const _HomeTrunkSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    final cardRadius = BorderRadius.circular(DesktopMetrics.radiusCard);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(32, 28, 32, 26),
+          decoration: BoxDecoration(
+            color: skin.panel,
+            borderRadius: BorderRadius.circular(DesktopMetrics.radiusHero),
+            border: Border.all(color: skin.line),
+          ),
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DesktopSkeletonBox(width: 148, height: 11, radius: 5, index: 0),
+              SizedBox(height: 14),
+              DesktopSkeletonBox(width: 300, height: 34, radius: 8, index: 1),
+              SizedBox(height: 12),
+              DesktopSkeletonBox(width: 360, height: 15, radius: 6, index: 2),
+              SizedBox(height: 24),
+              Row(
+                children: [
+                  DesktopSkeletonBox(
+                    width: 168,
+                    height: 42,
+                    radius: 12,
+                    index: 3,
+                  ),
+                  SizedBox(width: 12),
+                  DesktopSkeletonBox(
+                    width: 154,
+                    height: 42,
+                    radius: 12,
+                    index: 4,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 22),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 40),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth < 720 ? 2 : 4;
+              const gap = 14.0;
+              final width =
+                  (constraints.maxWidth - gap * (columns - 1)) / columns;
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (var i = 0; i < 4; i++)
+                    SizedBox(
+                      width: width,
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                        decoration: BoxDecoration(
+                          color: skin.panel,
+                          borderRadius: cardRadius,
+                          border: Border.all(color: skin.line),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            DesktopSkeletonBox(
+                              width: 30,
+                              height: 30,
+                              radius: 9,
+                              index: i * 4,
+                            ),
+                            const SizedBox(height: 14),
+                            DesktopSkeletonBox(
+                              width: 76,
+                              height: 11,
+                              radius: 5,
+                              index: i * 4 + 1,
+                            ),
+                            const SizedBox(height: 5),
+                            DesktopSkeletonBox(
+                              width: 104,
+                              height: 30,
+                              radius: 6,
+                              index: i * 4 + 2,
+                            ),
+                            const SizedBox(height: 4),
+                            DesktopSkeletonBox(
+                              width: 116,
+                              height: 11,
+                              radius: 5,
+                              index: i * 4 + 3,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+        const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DesktopSkeletonBox(width: 124, height: 10, radius: 5, index: 1),
+            SizedBox(height: 8),
+            DesktopSkeletonBox(width: 168, height: 22, radius: 6, index: 2),
+          ],
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 340 * 9 / 16 + 16,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.only(bottom: 12, top: 4),
+            itemCount: 4,
+            separatorBuilder:
+                (context, index) =>
+                    const SizedBox(width: DesktopMetrics.railGap),
+            itemBuilder:
+                (context, index) => SizedBox(
+                  width: 340,
+                  child: DesktopSkeletonBox(
+                    height: 191,
+                    radius: 16,
+                    index: index,
+                  ),
+                ),
+          ),
+        ),
+        const SizedBox(height: 36),
+      ],
     );
   }
 }

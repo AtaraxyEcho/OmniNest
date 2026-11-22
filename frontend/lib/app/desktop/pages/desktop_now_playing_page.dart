@@ -513,6 +513,7 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
                     builder: (context, t, child) {
                       return Opacity(
                         opacity: t.clamp(0.0, 1.0),
+                        alwaysIncludeSemantics: true,
                         child: Transform.translate(
                           offset: Offset(24 * (1 - t), 0),
                           child: child,

@@ -8,7 +8,6 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
-import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_chrome.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
 import 'package:omninest/app/theme/feature/photos_chrome_colors.dart';
 
@@ -59,6 +58,8 @@ class SlideshowBlurredCover extends StatelessWidget {
 }
 
 /// 背景双层模糊：与前景同一过渡控制器同步交叉（Apple Photos 式氛围同步）。
+///
+/// 纯装饰背景层外包 [ExcludeSemantics]，避免 Windows AXTree 桥接异常。
 class SlideshowBackdropLayers extends StatelessWidget {
   const SlideshowBackdropLayers({
     required this.transition,
@@ -75,39 +76,44 @@ class SlideshowBackdropLayers extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: transition,
-      builder: (context, _) {
-        final t = transition.value;
-        final leaving = transitioning ? leavingFrame : null;
-        final entering = enteringFrame;
-        if (entering == null) return const SizedBox.shrink();
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            if (leaving != null)
+    return ExcludeSemantics(
+      child: AnimatedBuilder(
+        animation: transition,
+        builder: (context, _) {
+          final t = transition.value;
+          final leaving = transitioning ? leavingFrame : null;
+          final entering = enteringFrame;
+          if (entering == null) return const SizedBox.shrink();
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              if (leaving != null)
+                Positioned.fill(
+                  child: Opacity(
+                    opacity: (1 - t).clamp(0.0, 1.0),
+                    alwaysIncludeSemantics: true,
+                    child: SlideshowBlurredCover(photo: leaving.photo),
+                  ),
+                ),
               Positioned.fill(
                 child: Opacity(
-                  opacity: (1 - t).clamp(0.0, 1.0),
-                  child: SlideshowBlurredCover(photo: leaving.photo),
+                  // 过渡控制器在静止态停在 0，入场层不透明度必须按过渡态门控，
+                  // 否则首图与切换完成后都会以 opacity 0 渲染成黑屏。
+                  opacity: transitioning ? t.clamp(0.0, 1.0) : 1.0,
+                  alwaysIncludeSemantics: true,
+                  child: SlideshowBlurredCover(photo: entering.photo),
                 ),
               ),
-            Positioned.fill(
-              child: Opacity(
-                // 过渡控制器在静止态停在 0，入场层不透明度必须按过渡态门控，
-                // 否则首图与切换完成后都会以 opacity 0 渲染成黑屏。
-                opacity: transitioning ? t.clamp(0.0, 1.0) : 1.0,
-                child: SlideshowBlurredCover(photo: entering.photo),
-              ),
-            ),
-          ],
-        );
-      },
+            ],
+          );
+        },
+      ),
     );
   }
 }
 
-/// 前景双层：离场位图淡出 + 当前位图淡入（微缩放，摄影应用式 motion）。
+/// 前景双层：离场位图淡出 + 当前位图淡入，每张均带 7.2s 匀速柔和电影级 Ken Burns
+/// （`1.015 → 1.070` + `±0.8%` 极轻平移，`Curves.linear`）。
 class SlideshowSlideLayers extends StatelessWidget {
   const SlideshowSlideLayers({
     required this.transition,
@@ -136,22 +142,142 @@ class SlideshowSlideLayers extends StatelessWidget {
           children: [
             if (leaving != null && leaving.image != null)
               Positioned.fill(
-                child: SlideshowSlideLayer(
-                  image: leaving.image,
-                  opacity: (1 - t).clamp(0.0, 1.0),
-                  scale: 1.0 - 0.005 * t,
+                key: ValueKey<String>('kb-slide-${leaving.photo.id}'),
+                child: ExcludeSemantics(
+                  child: _KenBurnsSlideLayer(
+                    photoId: leaving.photo.id,
+                    image: leaving.image,
+                    opacity: (1 - t).clamp(0.0, 1.0),
+                  ),
                 ),
               ),
             Positioned.fill(
-              child: SlideshowSlideLayer(
+              key: ValueKey<String>('kb-slide-${entering.photo.id}'),
+              child: _KenBurnsSlideLayer(
+                photoId: entering.photo.id,
                 image: entering.image,
-                // 过渡控制器在静止态停在 0：入场层不透明度与缩放必须按
-                // 过渡态门控，否则首图与切换完成后都会以 opacity 0 渲染成黑屏。
+                // 过渡控制器在静止态停在 0：入场层不透明度必须按过渡态门控，
+                // 否则首图与切换完成后都会以 opacity 0 渲染成黑屏。
                 opacity: transitioning ? t.clamp(0.0, 1.0) : 1.0,
-                scale: transitioning ? 1.015 - 0.015 * t : 1.0,
               ),
             ),
           ],
+        );
+      },
+    );
+  }
+}
+
+/// 单张满铺幻灯片 7.2s 匀速 Ken Burns 层：`1.015 → 1.070` + `±0.8%` 极轻平移。
+class _KenBurnsSlideLayer extends StatefulWidget {
+  const _KenBurnsSlideLayer({
+    required this.photoId,
+    required this.image,
+    required this.opacity,
+  });
+
+  final String photoId;
+  final ui.Image? image;
+  final double opacity;
+
+  @override
+  State<_KenBurnsSlideLayer> createState() => _KenBurnsSlideLayerState();
+}
+
+class _KenBurnsSlideLayerState extends State<_KenBurnsSlideLayer>
+    with SingleTickerProviderStateMixin {
+  static const Duration _kenBurnsDuration = Duration(milliseconds: 7200);
+  static const double _scaleStart = 1.015;
+  static const double _scaleDelta = 0.055; // 1.015 → 1.070
+  static const double _panFraction = 0.008; // ±0.8%
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: _kenBurnsDuration,
+  );
+  bool _disableAnimations = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final disabled = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    _disableAnimations = disabled;
+    if (disabled) {
+      _controller.stop();
+      _controller.value = 0;
+    } else if (!_controller.isAnimating && !_controller.isCompleted) {
+      _controller.forward();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _KenBurnsSlideLayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.photoId != widget.photoId) {
+      if (_disableAnimations) {
+        _controller.value = 0;
+      } else {
+        _controller.forward(from: 0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hash = widget.photoId.hashCode;
+    final dirX = hash.isEven ? 1.0 : -1.0;
+    final dirY = (hash >> 1).isEven ? 1.0 : -1.0;
+    final resolved =
+        widget.image != null
+            ? RawImage(
+              image: widget.image,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.medium,
+            )
+            : const ColoredBox(color: Colors.black);
+    final layerChild = RepaintBoundary(child: SizedBox.expand(child: resolved));
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width =
+            constraints.maxWidth.isFinite ? constraints.maxWidth : 0.0;
+        final height =
+            constraints.maxHeight.isFinite ? constraints.maxHeight : 0.0;
+        return AnimatedBuilder(
+          animation: _controller,
+          child: layerChild,
+          builder: (context, child) {
+            final t =
+                _disableAnimations
+                    ? 0.0
+                    : Curves.linear.transform(_controller.value);
+            final scale =
+                _disableAnimations ? 1.0 : _scaleStart + _scaleDelta * t;
+            final pan =
+                _disableAnimations ? 0.0 : (t * 2.0 - 1.0) * _panFraction;
+            final tx = dirX * pan * width;
+            final ty = dirY * pan * height;
+            final matrix =
+                Matrix4.identity()
+                  ..translateByDouble(tx, ty, 0.0, 1.0)
+                  ..scaleByDouble(scale, scale, 1.0, 1.0);
+            return Transform(
+              alignment: Alignment.center,
+              filterQuality: FilterQuality.medium,
+              transform: matrix,
+              child: Opacity(
+                opacity: widget.opacity.clamp(0.0, 1.0),
+                alwaysIncludeSemantics: true,
+                child: child,
+              ),
+            );
+          },
         );
       },
     );
@@ -193,6 +319,8 @@ class SlideshowLoadingStage extends StatelessWidget {
 }
 
 /// 上下渐变遮罩：控件隐藏时底部渐变减淡、顶部渐变收起。
+///
+/// 纯装饰暗纱外包 [ExcludeSemantics] 并补齐 [alwaysIncludeSemantics]。
 class SlideshowGradients extends StatelessWidget {
   const SlideshowGradients({required this.visible, super.key});
 
@@ -200,42 +328,46 @@ class SlideshowGradients extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          AnimatedOpacity(
-            opacity: visible ? 1 : 0.4,
-            duration: MotionToken.normal,
-            child: const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment(0, -0.4),
-                  colors: [
-                    PhotosChromeColors.scrimB8,
-                    PhotosChromeColors.scrim2E,
-                    Colors.transparent,
-                  ],
-                  stops: [0, 0.35, 0.6],
+    return ExcludeSemantics(
+      child: IgnorePointer(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            AnimatedOpacity(
+              opacity: visible ? 1 : 0.4,
+              duration: MotionToken.normal,
+              alwaysIncludeSemantics: true,
+              child: const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment(0, -0.4),
+                    colors: [
+                      PhotosChromeColors.scrimB8,
+                      PhotosChromeColors.scrim2E,
+                      Colors.transparent,
+                    ],
+                    stops: [0, 0.35, 0.6],
+                  ),
                 ),
               ),
             ),
-          ),
-          AnimatedOpacity(
-            opacity: visible ? 1 : 0,
-            duration: MotionToken.normal,
-            child: const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment(0, 0.3),
-                  colors: [PhotosChromeColors.scrim80, Colors.transparent],
+            AnimatedOpacity(
+              opacity: visible ? 1 : 0,
+              duration: MotionToken.normal,
+              alwaysIncludeSemantics: true,
+              child: const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment(0, 0.3),
+                    colors: [PhotosChromeColors.scrim80, Colors.transparent],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -646,6 +778,7 @@ class SlideshowThumbnailStrip extends StatelessWidget {
           final thumb = photo.coverUrl;
           return Opacity(
             opacity: selected ? 1 : 0.45,
+            alwaysIncludeSemantics: true,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => onTap(index),

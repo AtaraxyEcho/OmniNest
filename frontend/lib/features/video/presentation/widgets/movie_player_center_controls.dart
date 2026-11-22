@@ -208,6 +208,7 @@ class _MoviePlayerCenterFlashState extends State<MoviePlayerCenterFlash>
               final t = MotionToken.curve.transform(_controller.value);
               return Opacity(
                 opacity: 1 - t,
+                alwaysIncludeSemantics: true,
                 child: Transform.scale(
                   scale: 0.7 + 0.8 * t,
                   child: Center(

@@ -326,7 +326,11 @@ class _ReaderPanelEntrance extends StatelessWidget {
                 horizontal
                     ? Offset((1 - value) * 36, 0)
                     : Offset(0, (1 - value) * 36),
-            child: Opacity(opacity: value, child: child),
+            child: Opacity(
+              opacity: value,
+              alwaysIncludeSemantics: true,
+              child: child,
+            ),
           ),
       child: child,
     );

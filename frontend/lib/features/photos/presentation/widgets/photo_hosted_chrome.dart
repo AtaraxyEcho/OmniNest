@@ -240,6 +240,7 @@ class PhotoHostedSquareTile extends StatelessWidget {
         children: [
           Opacity(
             opacity: tileOpacity,
+            alwaysIncludeSemantics: true,
             child:
                 photo.hasCover
                     ? PhotoThumbImage(

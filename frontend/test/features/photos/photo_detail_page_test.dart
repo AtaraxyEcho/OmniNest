@@ -527,17 +527,17 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.text('01 / 03'), findsOneWidget);
-    // 先推一帧让进度 ticker 记下起点，再推满 5s 间隔触发完成回调，
-    // 最后消化 450ms 切换动画；否则完成点会落在测试时钟之外（差一帧）。
+    // 先推一帧让进度 ticker 记下起点，再推满 6s 停留间隔触发完成回调，
+    // 最后消化 900ms 交叉淡入；否则完成点会落在测试时钟之外（差一帧）。
     await tester.pump();
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pump(const Duration(milliseconds: 1000));
     expect(find.text('02 / 03'), findsOneWidget);
 
     // 清场：推时钟消化自动播放的后续切换 Timer 与 idle 计时器，
     // 避免测试结束时残留未触发 Timer（新状态机的就绪门控时序）。
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pump(const Duration(milliseconds: 1000));
     await tester.pump(const Duration(seconds: 3));
   });
 

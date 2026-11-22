@@ -414,6 +414,7 @@ class _HoverDimState extends State<_HoverDim> {
           const Duration(milliseconds: 150),
         ),
         opacity: _hovered ? 0.72 : 1,
+        alwaysIncludeSemantics: true,
         child: widget.child,
       ),
     );

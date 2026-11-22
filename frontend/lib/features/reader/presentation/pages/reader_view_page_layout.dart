@@ -121,6 +121,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
                   builder:
                       (context, t, child) => Opacity(
                         opacity: t,
+                        alwaysIncludeSemantics: true,
                         child: Transform.scale(
                           scale: 0.988 + 0.012 * t,
                           child: child,
@@ -232,6 +233,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
                           animationsDisabled
                               ? Duration.zero
                               : const Duration(milliseconds: 180),
+                      alwaysIncludeSemantics: true,
                       child: ValueListenableBuilder<int>(
                         valueListenable: pageCountNotifier,
                         builder:
@@ -263,6 +265,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
                   animationsDisabled
                       ? Duration.zero
                       : const Duration(milliseconds: 120),
+              alwaysIncludeSemantics: true,
               child: ColoredBox(
                 color: _settings.readerCanvasColor,
                 child: Center(

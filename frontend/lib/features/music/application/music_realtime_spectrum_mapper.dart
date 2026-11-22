@@ -485,9 +485,9 @@ class MusicRealtimeSpectrumMapper {
             dt,
           ).clamp(0.000001, math.max(0.000001, raw * 0.72)).toDouble();
       _bandNoiseFloors[index] = nextFloor;
-      final clean = math.max(0.0, raw - nextFloor * 1.10);
+      final clean = math.max(0.0, raw - nextFloor * 0.85);
       final nextPeak = math.max(
-        _bandPeaks[index] * math.pow(0.994, dt * 60),
+        _bandPeaks[index] * math.pow(0.985, dt * 60),
         math.max(clean, 0.008),
       );
       _bandPeaks[index] = nextPeak;
@@ -509,12 +509,12 @@ class MusicRealtimeSpectrumMapper {
           treble * highWeight * 0.24 +
           beat * lowWeight * 0.16;
       final target =
-          (normalized * 0.54 + musicalDrive).clamp(0.0, 1.0).toDouble();
+          (normalized * 0.82 + musicalDrive).clamp(0.0, 1.0).toDouble();
       return _follow(
         _smoothedBands[index],
         target,
         0.006,
-        0.072,
+        0.045,
         dt,
       ).clamp(0.0, 1.0).toDouble();
     }, growable: false);

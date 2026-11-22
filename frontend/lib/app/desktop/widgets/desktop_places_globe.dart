@@ -499,6 +499,7 @@ class _ZoomCapsuleButton extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         child: Opacity(
           opacity: enabled ? 1.0 : 0.35,
+          alwaysIncludeSemantics: true,
           child: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: horizontalPadding,
@@ -561,6 +562,7 @@ class _GlobePin extends StatelessWidget {
       height: 18,
       child: Opacity(
         opacity: pinOpacity,
+        alwaysIncludeSemantics: true,
         child: Stack(
           clipBehavior: Clip.none,
           alignment: Alignment.center,
@@ -582,6 +584,7 @@ class _GlobePin extends StatelessWidget {
                         final t = Curves.easeOut.transform(ping.value);
                         return Opacity(
                           opacity: (0.9 * (1.0 - t)).clamp(0.0, 1.0),
+                          alwaysIncludeSemantics: true,
                           child: Transform.scale(
                             scale: 0.5 + 1.7 * t,
                             child: DecoratedBox(
@@ -605,6 +608,7 @@ class _GlobePin extends StatelessWidget {
                   duration: DesktopMotion.of(context, DesktopMotion.soft),
                   curve: DesktopMotion.ease,
                   opacity: showCard ? 1.0 : 0.0,
+                  alwaysIncludeSemantics: true,
                   child: AnimatedSlide(
                     duration: DesktopMotion.of(context, DesktopMotion.soft),
                     curve: DesktopMotion.spring,

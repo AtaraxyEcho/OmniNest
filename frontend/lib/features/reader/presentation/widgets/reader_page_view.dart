@@ -133,6 +133,7 @@ class ReaderPageView extends StatefulWidget {
     this.reverse = false,
     this.dragEnabled = true,
     this.allowMouseDrag = false,
+    this.handlePointerSignal = true,
     super.key,
   });
 
@@ -194,6 +195,9 @@ class ReaderPageView extends StatefulWidget {
 
   /// Slide 模式下是否允许鼠标拖拽翻页（默认关闭，把正文区鼠标拖动留给选字；漫画可开启）。
   final bool allowMouseDrag;
+
+  /// 是否由组件自身处理桌面滚轮翻页信号；外层已统一接管滚轮时置为 false 避免双节流器冲突。
+  final bool handlePointerSignal;
 
   @override
   State<ReaderPageView> createState() => _ReaderPageViewState();

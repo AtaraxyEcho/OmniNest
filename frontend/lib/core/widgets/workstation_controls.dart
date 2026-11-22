@@ -524,6 +524,7 @@ class _WorkstationCheckMarkState extends State<WorkstationCheckMark> {
                             builder: (context, scale, child) {
                               return Opacity(
                                 opacity: scale.clamp(0.0, 1.0),
+                                alwaysIncludeSemantics: true,
                                 child: Transform.scale(
                                   scale: scale,
                                   child: child,
@@ -678,6 +679,7 @@ class WorkstationToggle extends StatelessWidget {
               onTap: interactive ? handleTap : null,
               child: Opacity(
                 opacity: interactive ? 1 : 0.45,
+                alwaysIncludeSemantics: true,
                 child: contentFor(focused),
               ),
             ),

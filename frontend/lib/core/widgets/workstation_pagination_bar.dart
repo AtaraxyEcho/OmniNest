@@ -176,7 +176,9 @@ class _WorkstationPaginationBarState extends State<WorkstationPaginationBar> {
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
       );
-      return enabled ? button : Opacity(opacity: 0.45, child: button);
+      return enabled
+          ? button
+          : Opacity(opacity: 0.45, alwaysIncludeSemantics: true, child: button);
     }
 
     // 强制满宽：Wrap 默认收缩为内容宽度，宿主 Column 若未显式

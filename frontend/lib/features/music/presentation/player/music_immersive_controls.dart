@@ -668,6 +668,7 @@ class _DockFavoriteButton extends StatelessWidget {
             ),
             // 退场子树排除语义，避免与入场子树同批更新触发桥失败。
             layoutBuilder: excludeExitingSemanticsStack,
+            transitionBuilder: semanticsSafeFadeTransition,
             child: Icon(
               favorited
                   ? Icons.favorite_rounded

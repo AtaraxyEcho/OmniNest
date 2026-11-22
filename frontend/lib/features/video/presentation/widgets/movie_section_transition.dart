@@ -53,6 +53,7 @@ class _MovieSectionTransitionState extends State<MovieSectionTransition> {
               widget.slideDistance * _direction * (isIncoming ? 1 : -0.65);
           return FadeTransition(
             opacity: animation,
+            alwaysIncludeSemantics: true,
             child: SlideTransition(
               position: Tween<Offset>(
                 begin: Offset(offset, 0),

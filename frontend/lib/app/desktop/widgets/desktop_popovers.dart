@@ -68,6 +68,7 @@ class _DesktopPopoverState extends State<DesktopPopover>
         final t = DesktopMotion.spring.transform(_controller.value);
         return Opacity(
           opacity: _controller.value.clamp(0.0, 1.0),
+          alwaysIncludeSemantics: true,
           child: Transform.translate(
             offset: Offset(0, -6 * (1 - t)),
             child: Transform.scale(
@@ -349,6 +350,7 @@ class DesktopMenuTile extends StatelessWidget {
             : skin.text;
     final tile = Opacity(
       opacity: disabled ? 0.4 : 1,
+      alwaysIncludeSemantics: true,
       child: DesktopHover(
         enabled: !disabled && onTap != null,
         builder:

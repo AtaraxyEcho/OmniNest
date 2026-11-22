@@ -229,6 +229,7 @@ class _PortalImmersiveTopBarRevealState
                     const Duration(milliseconds: 180),
                   ),
                   curve: Curves.easeOutCubic,
+                  alwaysIncludeSemantics: true,
                   child: widget.child,
                 ),
               ),

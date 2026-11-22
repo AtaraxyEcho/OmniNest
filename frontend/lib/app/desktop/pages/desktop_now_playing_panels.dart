@@ -598,6 +598,7 @@ class _NowPlayingAbout extends StatelessWidget {
           height: 90,
           child: Opacity(
             opacity: 0.85,
+            alwaysIncludeSemantics: true,
             child: DesktopVisualizer(
               playing: playing,
               color: color,

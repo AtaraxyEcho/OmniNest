@@ -140,6 +140,7 @@ class _CoverPanelState extends State<_CoverPanel> {
                       child: AnimatedOpacity(
                         opacity: _hovering ? 1 : 0,
                         duration: const Duration(milliseconds: 160),
+                        alwaysIncludeSemantics: true,
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),

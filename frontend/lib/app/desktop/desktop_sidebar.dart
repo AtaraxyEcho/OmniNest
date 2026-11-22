@@ -437,6 +437,7 @@ class _SidebarItem extends StatelessWidget {
                                       const SizedBox(width: 8),
                                       Opacity(
                                         opacity: hovered ? 0.8 : 0,
+                                        alwaysIncludeSemantics: true,
                                         child: Text(
                                           shortcut!,
                                           style: DesktopType.nano(skin.text3),

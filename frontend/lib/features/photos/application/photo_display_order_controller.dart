@@ -103,10 +103,13 @@ class PhotoDisplayOrderController extends Notifier<Map<String, List<String>>> {
   }
 
   Future<void> _syncDeleteRemote(String contextKey) async {
+    final api = ref.read(photoApiProvider);
     if (contextKey.startsWith(_albumContextPrefix)) {
+      final albumId = contextKey.substring(_albumContextPrefix.length);
+      if (albumId.isEmpty) return;
+      await api.resetAlbumItemsOrder(albumId: albumId);
       return;
     }
-    final api = ref.read(photoApiProvider);
     await api.deleteDisplayOrder(contextKey);
   }
 

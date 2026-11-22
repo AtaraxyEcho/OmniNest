@@ -441,6 +441,7 @@ Future<void> _showPlayerPanel({
             parent: animation,
             curve: Curves.easeOutCubic,
           ),
+          alwaysIncludeSemantics: true,
           child: ScaleTransition(
             scale: Tween<double>(begin: 0.96, end: 1.0).animate(
               CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),

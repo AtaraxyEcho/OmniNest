@@ -97,6 +97,7 @@ class _DigitalCoverDeckCard extends StatelessWidget {
           transformAlignment: Alignment.center,
           child: Opacity(
             opacity: spec.opacity,
+            alwaysIncludeSemantics: true,
             child:
                 blur > 0
                     ? ImageFiltered(

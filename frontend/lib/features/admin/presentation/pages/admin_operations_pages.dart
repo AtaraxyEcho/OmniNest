@@ -181,6 +181,7 @@ class _PageEntranceState extends State<_PageEntrance>
     );
     return FadeTransition(
       opacity: curve,
+      alwaysIncludeSemantics: true,
       child: SlideTransition(
         position: Tween<Offset>(
           begin: MotionToken.slideContent,

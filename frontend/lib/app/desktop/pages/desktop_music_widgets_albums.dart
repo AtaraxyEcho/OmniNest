@@ -127,6 +127,7 @@ class _AlbumCard extends ConsumerWidget {
                                         DesktopMotion.fast,
                                       ),
                                       opacity: hovered ? 1.0 : 0.0,
+                                      alwaysIncludeSemantics: true,
                                       child: _AlbumSlideVinyl(
                                         size: discSize,
                                         accent: skin.accent,
@@ -175,6 +176,7 @@ class _AlbumCard extends ConsumerWidget {
                                   const Duration(milliseconds: 220),
                                 ),
                                 opacity: hovered ? 1.0 : 0.0,
+                                alwaysIncludeSemantics: true,
                                 child: AnimatedScale(
                                   duration: DesktopMotion.of(
                                     context,

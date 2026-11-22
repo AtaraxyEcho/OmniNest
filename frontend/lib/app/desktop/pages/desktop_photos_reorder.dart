@@ -376,6 +376,7 @@ class _PhotoDragFeedback extends StatelessWidget {
                 child: AnimatedOpacity(
                   opacity: dropping ? 0 : 1,
                   duration: DesktopMotion.photoReorderFastFade,
+                  alwaysIncludeSemantics: true,
                   child: Container(
                     constraints: const BoxConstraints(minWidth: 28),
                     height: 28,
@@ -573,6 +574,7 @@ class _PhotoFanCardState extends State<_PhotoFanCard>
             final pose = _evaluatePose(_controller.value);
             return Opacity(
               opacity: pose.opacity,
+              alwaysIncludeSemantics: true,
               child: Transform.translate(
                 offset: pose.offset,
                 child: Transform.rotate(

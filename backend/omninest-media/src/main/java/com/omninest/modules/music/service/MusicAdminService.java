@@ -618,9 +618,7 @@ public class MusicAdminService {
         MusicMetadataService.captureOriginal(track);
         track.setLyricsRaw(lyrics);
         track.setLyricsTranslation(lyricsTranslation);
-        if (lyricsWords != null) {
-            track.setLyricsWords(lyricsWords.isBlank() ? null : lyricsWords);
-        }
+        track.setLyricsWords(lyricsWords == null || lyricsWords.isBlank() ? null : lyricsWords);
         track.setMetadataStatus(MetadataStatus.MANUAL.getValue());
         trackRepository.save(track);
         recordTrackUpdated(track.getOwnerUserId(), track);
@@ -731,12 +729,8 @@ public class MusicAdminService {
         track.setAlbumTitle(albumTitle);
         track.setGenre(metadata.genre());
         track.setLyricsRaw(lyricsRaw);
-        if (hasText(lyricsTranslation)) {
-            track.setLyricsTranslation(lyricsTranslation);
-        }
-        if (hasText(lyricsWords)) {
-            track.setLyricsWords(lyricsWords);
-        }
+        track.setLyricsTranslation(hasText(lyricsTranslation) ? lyricsTranslation : null);
+        track.setLyricsWords(hasText(lyricsWords) ? lyricsWords : null);
         track.setTrackNumber(parseNullableInt(metadata.trackNumber()));
         track.setDiscNumber(parseNullableInt(metadata.discNumber()));
         track.setBitrate(metadata.bitrate());
@@ -917,12 +911,8 @@ public class MusicAdminService {
         track.setAlbumTitle(albumTitle);
         track.setGenre(metadata.genre());
         track.setLyricsRaw(lyricsRaw);
-        if (hasText(lyricsTranslation)) {
-            track.setLyricsTranslation(lyricsTranslation);
-        }
-        if (hasText(lyricsWords)) {
-            track.setLyricsWords(lyricsWords);
-        }
+        track.setLyricsTranslation(hasText(lyricsTranslation) ? lyricsTranslation : null);
+        track.setLyricsWords(hasText(lyricsWords) ? lyricsWords : null);
         track.setTrackNumber(parseNullableInt(metadata.trackNumber()));
         track.setDiscNumber(parseNullableInt(metadata.discNumber()));
         track.setBitrate(metadata.bitrate());

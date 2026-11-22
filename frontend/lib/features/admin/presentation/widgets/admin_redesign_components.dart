@@ -71,6 +71,7 @@ class _AdminSectionEntranceState extends State<AdminSectionEntrance>
     );
     return FadeTransition(
       opacity: curve,
+      alwaysIncludeSemantics: true,
       child: SlideTransition(
         position: Tween<Offset>(
           begin: MotionToken.slideContent,

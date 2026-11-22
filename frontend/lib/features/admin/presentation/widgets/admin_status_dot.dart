@@ -94,6 +94,7 @@ class _AdminStatusDotState extends State<AdminStatusDot>
         opacity: Tween(begin: 0.35, end: 1.0).animate(
           CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
         ),
+        alwaysIncludeSemantics: true,
         child: dot,
       ),
     );

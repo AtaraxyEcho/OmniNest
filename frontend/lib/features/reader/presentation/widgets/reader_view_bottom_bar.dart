@@ -747,6 +747,7 @@ class _ReaderSampleFooterButton extends StatelessWidget {
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(15)),
             child: Opacity(
               opacity: onTap == null ? 0.3 : 1,
+              alwaysIncludeSemantics: true,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [

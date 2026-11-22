@@ -42,6 +42,8 @@ import 'package:omninest/features/music/presentation/widgets/music_platform_logi
 import 'package:omninest/features/music/presentation/player/music_immersive_overlay.dart';
 import 'package:omninest/features/music/presentation/player/music_playback_settings_dialog.dart';
 
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
+
 /// 自适应 Music Deck 主界面。
 class MusicDeckShell extends ConsumerStatefulWidget {
   const MusicDeckShell({super.key});
@@ -101,16 +103,10 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
       switchInCurve: MotionToken.curve,
       switchOutCurve: MotionToken.curveIn,
       layoutBuilder:
-          (currentChild, previousChildren) => Stack(
+          (currentChild, previousChildren) => excludeExitingSemanticsStack(
+            currentChild,
+            previousChildren,
             fit: StackFit.expand,
-            children: <Widget>[
-              // 退场子树已被替换、正在淡出后销毁：其语义节点与入场子树在同一批
-              // 更新中被移除，会让 Windows 辅助功能桥报 "will not be in the tree"。
-              // 这里只排除正在销毁的旧子树，当前子树的语义不受影响。
-              for (final child in previousChildren)
-                ExcludeSemantics(child: child),
-              if (currentChild != null) currentChild,
-            ],
           ),
       transitionBuilder: musicDeckImmersiveTransition,
       child:

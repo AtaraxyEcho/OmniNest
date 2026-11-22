@@ -12,6 +12,8 @@ import 'package:omninest/features/backdrop/presentation/bundled_wallpaper_poster
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/app/theme/backdrop_scrim_colors.dart';
 
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
+
 /// 应用级背景渲染层。
 ///
 /// 服务端图片素材走网络渲染;视频桌面/移动走 media_kit,Web 走 HTML video 适配器;
@@ -108,6 +110,8 @@ class _AppBackdropSurfaceState extends ConsumerState<AppBackdropSurface> {
               ),
               switchInCurve: MotionToken.curve,
               switchOutCurve: MotionToken.curveIn,
+              transitionBuilder: semanticsSafeFadeTransition,
+              layoutBuilder: excludeExitingSemanticsStack,
               child: KeyedSubtree(
                 key: ValueKey<(int, String)>((
                   _assetSwapSeq,

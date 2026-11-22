@@ -445,9 +445,10 @@ void main() {
       await tester.pump();
       _expectNoTransparentLayer(tester);
 
-      // 推进 5 秒触发自动切换。切换链路（缓存命中回调、过渡 ticker 启动、
-      // completed 状态回调）跨多帧推进：先泵到计数更新，再泵到离场层移除。
-      await tester.pump(const Duration(seconds: 5));
+      // 推进 6 秒触发自动切换（v15 统一停留时长）。切换链路（缓存命中回调、
+      // 过渡 ticker 启动、completed 状态回调）跨多帧推进：先泵到计数更新，
+      // 再泵满 900ms 交叉淡入让离场层移除。
+      await tester.pump(const Duration(seconds: 6));
       // 图片解码走的是真实异步：只泵假时间时，40 轮在满载机器上不到 100ms
       // 就烧完了，解码回调还没落地就断言失败（全量并跑时假红的成因）。
       // 每轮先让出真实事件循环再推进假时钟，总等待仍然有界。
@@ -466,14 +467,11 @@ void main() {
         findsOneWidget,
         reason: '等待 40 轮（真实 400ms + 假时间 2s）后计数仍未推进',
       );
-      bool transitionDone() =>
-          find.byType(SlideshowSlideLayer).evaluate().length <= 1;
-      for (var i = 0; i < 40 && !transitionDone(); i++) {
-        await advance();
-      }
+      // 交叉淡入固定 900ms（v15 电影级衔接）：旧版用 SlideshowSlideLayer
+      // 计数当过渡代理，图层重构后该类已不在页面树中，代理恒真，故直接推满时长。
+      await tester.pump(const Duration(milliseconds: 920));
       // 过渡完成回调里的 setState 需要一帧重建，清掉离场层后静止帧必须完全不透明。
       await tester.pump();
-      expect(transitionDone(), isTrue);
       _expectNoTransparentLayer(tester);
     });
   });

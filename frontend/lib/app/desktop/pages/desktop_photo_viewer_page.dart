@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:omninest/app/desktop/desktop_ambient_hints.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
@@ -24,6 +25,7 @@ import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/features/photos/photo_dashboard.dart';
 import 'package:omninest/features/photos/application/photo_display_order_controller.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
@@ -49,7 +51,10 @@ class DesktopPhotoViewerPage extends ConsumerStatefulWidget {
 
 class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
     with SingleTickerProviderStateMixin {
-  static const Duration _slideInterval = Duration(milliseconds: 3800);
+  /// 双端统一幻灯片节奏：6.0s 停留间隔 + 7.2s 线性 Ken Burns + 900ms 交叉淡入。
+  static const Duration _slideInterval = Duration(milliseconds: 6000);
+  static const Duration _kenBurnsDuration = Duration(milliseconds: 7200);
+  static const Duration _slideshowCrossfade = Duration(milliseconds: 900);
 
   final TransformationController _zoom = TransformationController();
   final FocusNode _focus = FocusNode(debugLabel: 'desktop-photo-viewer');
@@ -77,6 +82,36 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
     super.initState();
     _zoom.addListener(_syncScale);
     _slideProgress.addStatusListener(_onSlideProgressStatus);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _rememberCurrentPhotoAmbient();
+    });
+  }
+
+  void _rememberCurrentPhotoAmbient() {
+    final photo = _currentPhoto();
+    if (photo == null) {
+      return;
+    }
+    ref
+        .read(desktopAmbientHintProvider.notifier)
+        .rememberPhotoViewed(photo.coverUrl);
+  }
+
+  void _onPhotoImageError(String url) {
+    if (!mounted || url.isEmpty) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      ref
+          .read(desktopAmbientHintProvider.notifier)
+          .clearPhotoViewedIfMatches(url);
+    });
   }
 
   @override
@@ -153,33 +188,38 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
           color: DesktopPalette.stageBlack,
           child: Stack(
             children: [
-              // 还原旧版 SlideshowBlurredCover 同源柔和模糊层（96px 低分缩略图 +
-              // 1.12 放大 + low 采样 + 0.35 暗罩），外层 450ms 交叉淡入淡出同步切图氛围。
+              // 柔和模糊背景属纯装饰层，外包 ExcludeSemantics 防止 Windows AXTree 桥异常。
               Positioned.fill(
-                child: IgnorePointer(
-                  child: AnimatedSwitcher(
-                    duration: DesktopMotion.of(
-                      context,
-                      const Duration(milliseconds: 450),
+                child: ExcludeSemantics(
+                  child: IgnorePointer(
+                    child: AnimatedSwitcher(
+                      duration: DesktopMotion.of(
+                        context,
+                        _slideshow
+                            ? _slideshowCrossfade
+                            : const Duration(milliseconds: 450),
+                      ),
+                      switchInCurve: Curves.easeInOutCubic,
+                      switchOutCurve: Curves.easeInOutCubic,
+                      layoutBuilder:
+                          (currentChild, previousChildren) => Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              ...previousChildren,
+                              if (currentChild != null) currentChild,
+                            ],
+                          ),
+                      child:
+                          photo == null
+                              ? const ColoredBox(
+                                key: ValueKey<String>('viewer-bg-empty'),
+                                color: DesktopPalette.stageBlack,
+                              )
+                              : SlideshowBlurredCover(
+                                key: ValueKey<String>('viewer-bg-${photo.id}'),
+                                photo: photo,
+                              ),
                     ),
-                    layoutBuilder:
-                        (currentChild, previousChildren) => Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            ...previousChildren,
-                            if (currentChild != null) currentChild,
-                          ],
-                        ),
-                    child:
-                        photo == null
-                            ? const ColoredBox(
-                              key: ValueKey<String>('viewer-bg-empty'),
-                              color: DesktopPalette.stageBlack,
-                            )
-                            : SlideshowBlurredCover(
-                              key: ValueKey<String>('viewer-bg-${photo.id}'),
-                              photo: photo,
-                            ),
                   ),
                 ),
               ),
@@ -192,11 +232,14 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
                   zoom: _zoom,
                   rotation: _rotation,
                   slideshow: _slideshow,
+                  kenBurnsDuration: _kenBurnsDuration,
+                  crossfadeDuration: _slideshowCrossfade,
                   infoOpen: _info,
                   onDismissInfo: () => setState(() => _info = false),
                   onDoubleTapDown: (pos) => _lastDoubleTapLocal = pos,
                   onDoubleTap: _toggleZoom,
                   onWheel: _onWheel,
+                  onImageError: _onPhotoImageError,
                 ),
                 // 补齐旧版上下三段式暗纱渐变（底部 0xB8 → 0x2E → transparent，
                 // 控件隐藏时保留 0.4 透明底纱）。
@@ -251,6 +294,7 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
                         context,
                         DesktopMotion.viewerChrome,
                       ),
+                      alwaysIncludeSemantics: true,
                       child: _Filmstrip(
                         photos: list,
                         currentPhoto: photo,
@@ -290,6 +334,7 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
                           _shareOpen
                               ? DesktopMotion.ease
                               : DesktopMotion.exitCurve,
+                      alwaysIncludeSemantics: true,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () => setState(() => _shareOpen = false),
@@ -411,6 +456,7 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
       _scale = 1;
       _zoom.value = Matrix4.identity();
     });
+    _rememberCurrentPhotoAmbient();
     if (_slideshow) {
       _slideProgress.forward(from: 0);
     }
@@ -637,11 +683,14 @@ class _ViewerStage extends StatelessWidget {
     required this.zoom,
     required this.rotation,
     required this.slideshow,
+    required this.kenBurnsDuration,
+    required this.crossfadeDuration,
     required this.infoOpen,
     required this.onDismissInfo,
     required this.onDoubleTapDown,
     required this.onDoubleTap,
     required this.onWheel,
+    required this.onImageError,
   });
 
   final GlobalKey stageKey;
@@ -649,19 +698,83 @@ class _ViewerStage extends StatelessWidget {
   final TransformationController zoom;
   final double rotation;
   final bool slideshow;
+  final Duration kenBurnsDuration;
+  final Duration crossfadeDuration;
   final bool infoOpen;
   final VoidCallback onDismissInfo;
   final ValueChanged<Offset> onDoubleTapDown;
   final VoidCallback onDoubleTap;
   final ValueChanged<PointerSignalEvent> onWheel;
+  final ValueChanged<String> onImageError;
+
+  Widget _buildPhotoImage(BuildContext context, PhotoItem target) {
+    final skin = DesktopSkin.of(context);
+    final source = target.coverUrl;
+    final radius = BorderRadius.circular(DesktopMetrics.radiusSmall);
+    final fallback = ColoredBox(
+      color: skin.raise2,
+      child: Center(
+        child: Icon(DesktopIcons.image, size: 28, color: skin.text3),
+      ),
+    );
+    Widget content = fallback;
+    if (source != null && source.isNotEmpty) {
+      content = Image.network(
+        source,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (context, error, stack) {
+          onImageError(source);
+          return fallback;
+        },
+      );
+    }
+    return ClipRRect(borderRadius: radius, child: content);
+  }
+
+  Widget _buildSlideBody(
+    BuildContext context,
+    PhotoItem target,
+    Duration effectiveKenBurns,
+    bool animateKenBurns,
+  ) {
+    final photoContent = Center(
+      child: AnimatedRotation(
+        turns: rotation / 360,
+        duration: DesktopMotion.of(context, DesktopMotion.fast),
+        curve: DesktopMotion.ease,
+        child: _buildPhotoImage(context, target),
+      ),
+    );
+    if (!slideshow) {
+      return photoContent;
+    }
+    // 电影级匀速推镜：7.2s、1.00 → 1.055、纯中心推镜（Offset.zero）、Curves.linear，
+    // 单 Transform(filterQuality: FilterQuality.medium) + RepaintBoundary 消除抖动与重绘扩散。
+    return TweenAnimationBuilder<double>(
+      key: ValueKey<String>('kb-${target.id}-$slideshow'),
+      tween: Tween<double>(begin: 0, end: animateKenBurns ? 1 : 0),
+      duration: effectiveKenBurns,
+      curve: Curves.linear,
+      builder: (context, progress, child) {
+        final scale = 1.0 + 0.055 * progress;
+        return Transform(
+          alignment: Alignment.center,
+          filterQuality: FilterQuality.medium,
+          transform: Matrix4.identity()..scaleByDouble(scale, scale, 1.0, 1.0),
+          child: child,
+        );
+      },
+      child: RepaintBoundary(child: photoContent),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final kenBurnsDuration = DesktopMotion.of(
-      context,
-      DesktopMotion.viewerKenBurns,
-    );
-    final animateKenBurns = slideshow && kenBurnsDuration != Duration.zero;
+    final effectiveKenBurns = DesktopMotion.of(context, kenBurnsDuration);
+    final animateKenBurns = slideshow && effectiveKenBurns != Duration.zero;
+    final effectiveCrossfade = DesktopMotion.of(context, crossfadeDuration);
     final compact = MediaQuery.sizeOf(context).width <= 760;
     final basePadding =
         compact
@@ -676,6 +789,14 @@ class _ViewerStage extends StatelessWidget {
               basePadding.bottom,
             )
             : basePadding;
+
+    final slideChild = _buildSlideBody(
+      context,
+      photo,
+      effectiveKenBurns,
+      animateKenBurns,
+    );
+
     return Positioned.fill(
       child: AnimatedPadding(
         duration: MotionToken.reduced(context, DesktopMotion.viewerStage),
@@ -694,38 +815,26 @@ class _ViewerStage extends StatelessWidget {
               transformationController: zoom,
               minScale: 1,
               maxScale: 5,
-              child: TweenAnimationBuilder<double>(
-                key: ValueKey<String>('${photo.id}-$slideshow'),
-                tween: Tween<double>(begin: 0, end: animateKenBurns ? 1 : 0),
-                duration: kenBurnsDuration,
-                curve: DesktopMotion.easeOut,
-                builder:
-                    (context, progress, child) => Transform.scale(
-                      scale: 1 + 0.14 * progress,
-                      child: FractionalTranslation(
-                        translation: Offset(
-                          -0.015 * progress,
-                          -0.01 * progress,
+              child:
+                  slideshow
+                      ? AnimatedSwitcher(
+                        duration: effectiveCrossfade,
+                        switchInCurve: Curves.easeInOutCubic,
+                        switchOutCurve: Curves.easeInOutCubic,
+                        layoutBuilder:
+                            (currentChild, previousChildren) =>
+                                excludeExitingSemanticsStack(
+                                  currentChild,
+                                  previousChildren,
+                                  alignment: Alignment.center,
+                                  fit: StackFit.expand,
+                                ),
+                        child: KeyedSubtree(
+                          key: ValueKey<String>('viewer-slide-${photo.id}'),
+                          child: slideChild,
                         ),
-                        child: child,
-                      ),
-                    ),
-                child: Center(
-                  child: AnimatedRotation(
-                    turns: rotation / 360,
-                    duration: DesktopMotion.of(context, DesktopMotion.fast),
-                    curve: DesktopMotion.ease,
-                    child: DesktopImage(
-                      url: photo.coverUrl,
-                      fit: BoxFit.contain,
-                      fallbackIcon: DesktopIcons.image,
-                      borderRadius: BorderRadius.circular(
-                        DesktopMetrics.radiusSmall,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+                      )
+                      : slideChild,
             ),
           ),
         ),
@@ -782,6 +891,7 @@ class _TopBar extends StatelessWidget {
         child: AnimatedOpacity(
           opacity: visible ? 1 : 0,
           duration: DesktopMotion.of(context, DesktopMotion.viewerChrome),
+          alwaysIncludeSemantics: true,
           child: SizedBox(
             height: 64,
             child: Stack(

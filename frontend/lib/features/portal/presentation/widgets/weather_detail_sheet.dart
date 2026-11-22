@@ -357,6 +357,7 @@ class _WeatherSceneBackdrop extends ConsumerWidget {
         else
           Opacity(
             opacity: 0.72,
+            alwaysIncludeSemantics: true,
             child: ColorFiltered(
               colorFilter: ColorFilter.matrix(<double>[
                 0.764, 0.215, 0.022, 0.000, 0.000, //

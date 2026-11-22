@@ -161,6 +161,7 @@ class _MovieRedesignHistoryRowState extends State<MovieRedesignHistoryRow> {
                       const Duration(milliseconds: 200),
                     ),
                     opacity: _hovered ? 1 : 0,
+                    alwaysIncludeSemantics: true,
                     child: IconButton(
                       visualDensity: VisualDensity.compact,
                       // 样例每个图标钮都带 aria-label：删除钮只有字形，

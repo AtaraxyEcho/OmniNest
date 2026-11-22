@@ -448,14 +448,14 @@ void main() {
     );
     expect(find.text('Title'), findsOneWidget);
     // 行真的会滑到表头底下，模糊层必须有可见对象（样例 `backdrop-filter`）。
-    // 主区玻璃面板与吸顶表头各自保留一层模糊，避免表头滚动时失去
-    // 原型 `.fx-main` / `.f-head` 的层级。
+    // v15 起主区在无壁纸态降级为半透明实体面板，只保留吸顶表头这一层模糊：
+    // 静止的 88% 屏玻璃卡不再随环境光每帧重模糊，吸顶表头仍保持 `.f-head` 层级。
     expect(
       find.ancestor(
         of: find.text('Title'),
         matching: find.byType(BackdropFilter),
       ),
-      findsNWidgets(2),
+      findsOneWidget,
     );
   });
 

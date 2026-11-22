@@ -100,17 +100,17 @@ class _CinemaPlaceholder extends StatelessWidget {
   }
 }
 
-class _Cinema extends StatefulWidget {
+class _Cinema extends ConsumerStatefulWidget {
   const _Cinema({required this.items, required this.continueWatching});
 
   final List<MovieVideoItem> items;
   final List<MovieContinueWatching> continueWatching;
 
   @override
-  State<_Cinema> createState() => _CinemaState();
+  ConsumerState<_Cinema> createState() => _CinemaState();
 }
 
-class _CinemaState extends State<_Cinema> {
+class _CinemaState extends ConsumerState<_Cinema> {
   int _index = 0;
   bool _paused = false;
   Timer? _timer;
@@ -119,6 +119,7 @@ class _CinemaState extends State<_Cinema> {
   void initState() {
     super.initState();
     _restart();
+    _scheduleSyncMoviesAmbientCover();
   }
 
   @override
@@ -127,7 +128,42 @@ class _CinemaState extends State<_Cinema> {
     if (oldWidget.items.length != widget.items.length) {
       _index = 0;
       _restart();
+      _scheduleSyncMoviesAmbientCover();
+    } else if (widget.items.isNotEmpty &&
+        oldWidget.items.isNotEmpty &&
+        oldWidget.items[_index.clamp(0, oldWidget.items.length - 1)].id !=
+            widget.items[_index.clamp(0, widget.items.length - 1)].id) {
+      _scheduleSyncMoviesAmbientCover();
     }
+  }
+
+  void _scheduleSyncMoviesAmbientCover() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _syncMoviesAmbientCover();
+    });
+  }
+
+  void _syncMoviesAmbientCover() {
+    if (widget.items.isEmpty) {
+      ref.read(desktopAmbientHintProvider.notifier).setMoviesCover(null);
+      return;
+    }
+    final active = widget.items[_index.clamp(0, widget.items.length - 1)];
+    final url =
+        active.backdropImageUrl ??
+        active.posterImageUrl ??
+        active.backdropUrl ??
+        active.posterUrl;
+    ref.read(desktopAmbientHintProvider.notifier).setMoviesCover(url);
+  }
+
+  void _setIndex(int next) {
+    if (widget.items.isEmpty) return;
+    final clamped = next % widget.items.length;
+    if (clamped == _index) return;
+    setState(() => _index = clamped);
+    _syncMoviesAmbientCover();
   }
 
   void _restart() {
@@ -139,7 +175,7 @@ class _CinemaState extends State<_Cinema> {
       if (!mounted || _paused) {
         return;
       }
-      setState(() => _index = (_index + 1) % widget.items.length);
+      _setIndex((_index + 1) % widget.items.length);
     });
   }
 
@@ -185,6 +221,7 @@ class _CinemaState extends State<_Cinema> {
                   const Duration(milliseconds: 1200),
                 ),
                 opacity: i == _index ? 1 : 0,
+                alwaysIncludeSemantics: true,
                 // 所有 slide 都常驻：切换时只淡入淡出，不再把上一张的
                 // 子树整块换成 SizedBox.shrink() 造成海报瞬间跳位。
                 child: _KenBurns(
@@ -218,7 +255,7 @@ class _CinemaState extends State<_Cinema> {
                   children: [
                     for (var i = 0; i < widget.items.length; i++)
                       GestureDetector(
-                        onTap: () => setState(() => _index = i),
+                        onTap: () => _setIndex(i),
                         behavior: HitTestBehavior.opaque,
                         child: Padding(
                           padding: const EdgeInsets.symmetric(

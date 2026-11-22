@@ -176,6 +176,7 @@ class _PulsingDotState extends State<_PulsingDot>
             return Opacity(
               // pulse 的呼吸区间：满亮到 0.4，与 Tailwind pulse 的幅度一致。
               opacity: 0.4 + 0.6 * _controller.value,
+              alwaysIncludeSemantics: true,
               child: Container(
                 width: widget.size,
                 height: widget.size,

@@ -19,6 +19,7 @@ import 'package:flutter/services.dart'
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'package:omninest/app/desktop/desktop_ambient_hints.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
@@ -95,10 +96,14 @@ class DesktopPhotosPage extends ConsumerStatefulWidget {
 }
 
 class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
+  static const Duration _photosGateTimeout = Duration(milliseconds: 400);
+
   DesktopPhotosTab _tab = DesktopPhotosTab.library;
   final ScrollController _photosScrollController = ScrollController();
   bool _loadingMorePhotos = false;
   bool _morePhotosCheckScheduled = false;
+  Timer? _gateTimer;
+  bool _gateReleased = false;
 
   /// 缩略行高：样例 `.zoom` 的 150–320，默认 210。
   double _density = 210;
@@ -113,15 +118,33 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
   bool _purgingTrash = false;
   String? _selectedAlbumId;
 
+  bool _isAsyncSettled(AsyncValue<Object?> state) =>
+      !(state.isLoading && !state.hasValue);
+
   @override
   void initState() {
     super.initState();
     _photosScrollController.addListener(_maybeLoadMorePhotos);
     HardwareKeyboard.instance.addHandler(_handlePageKey);
+    // 统计眉标（photoDashboardProvider）与照片流（photoListProvider）共享 400ms 联合门控。
+    final settled =
+        _isAsyncSettled(ref.read(photoDashboardProvider)) &&
+        _isAsyncSettled(ref.read(photoListProvider));
+    if (settled) {
+      _gateReleased = true;
+    } else {
+      _gateTimer = Timer(_photosGateTimeout, () {
+        if (!mounted || _gateReleased) {
+          return;
+        }
+        setState(() => _gateReleased = true);
+      });
+    }
   }
 
   @override
   void dispose() {
+    _gateTimer?.cancel();
     HardwareKeyboard.instance.removeHandler(_handlePageKey);
     _photosScrollController
       ..removeListener(_maybeLoadMorePhotos)
@@ -246,14 +269,19 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final photoOrders = ref.watch(photoDisplayOrderProvider);
-    final dashboard = ref.watch(photoDashboardProvider).asData?.value;
+    final dashboardAsync = ref.watch(photoDashboardProvider);
+    final dashboard = dashboardAsync.asData?.value;
     final pageAsync = ref.watch(photoListProvider);
-    final favoritesAsync = ref.watch(photoFavoritesProvider);
-    final albumsAsync = ref.watch(photoAlbumsProvider);
     final page = pageAsync.asData?.value;
-    final favorites = favoritesAsync.asData?.value;
-    final albums = albumsAsync.asData?.value;
-    // 地点和回收站数据只在对应分区进入时请求。
+    // 按当前活跃 _tab 延迟订阅收藏、相册、地点与回收站，避免首屏并行拉取冗余接口。
+    final favoritesAsync =
+        _tab == DesktopPhotosTab.favorites
+            ? ref.watch(photoFavoritesProvider)
+            : null;
+    final albumsAsync =
+        _tab == DesktopPhotosTab.albums ? ref.watch(photoAlbumsProvider) : null;
+    final favorites = favoritesAsync?.asData?.value;
+    final albums = albumsAsync?.asData?.value;
     final locationGroupsAsync =
         _tab == DesktopPhotosTab.places
             ? ref.watch(photoLocationGroupsProvider)
@@ -262,6 +290,18 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
         _tab == DesktopPhotosTab.trash
             ? ref.watch(photoCenterControllerProvider)
             : null;
+
+    final dashboardLoading =
+        dashboardAsync.isLoading && !dashboardAsync.hasValue;
+    final pageLoading = pageAsync.isLoading && !pageAsync.hasValue;
+    if (!dashboardLoading && !pageLoading && !_gateReleased) {
+      _gateReleased = true;
+      _gateTimer?.cancel();
+      _gateTimer = null;
+    }
+    final jointGated = !_gateReleased;
+    final eyebrowLoading = jointGated || dashboardLoading;
+    final libraryLoading = jointGated || (page == null && pageAsync.isLoading);
 
     final labels = <DesktopPhotosTab, String>{
       DesktopPhotosTab.library: l10n.desktopPhotosLibrary,
@@ -288,266 +328,301 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
               topPadding: DesktopMetrics.pageTopPaddingCompact,
               slivers: [
                 DesktopStickySliver(
-                  child: DesktopPageHead(
-                    eyebrow:
-                        l10n
-                            .desktopPhotosCount(
-                              dashboard?.totalPhotos ?? 0,
-                              dashboard?.totalVideos ?? 0,
-                            )
-                            .toUpperCase(),
-                    title: l10n.modulePhotosTitle,
-                    actionsRightAlignedWhenWrapped: true,
-                    actions: [
-                      _importAction(context, l10n),
-                      if (supportsSelection)
-                        DesktopButton(
-                          label:
-                              selectionActive
-                                  ? l10n.photosDone
-                                  : l10n.desktopPhotosSelect,
-                          icon:
-                              selectionActive
-                                  ? DesktopIcons.close
-                                  : DesktopIcons.check,
-                          variant:
-                              selectionActive
-                                  ? DesktopButtonVariant.soft
-                                  : DesktopButtonVariant.ghost,
-                          onPressed: () {
-                            setState(() {
-                              if (selectionActive) {
+                  child: Stack(
+                    children: [
+                      DesktopPageHead(
+                        eyebrow:
+                            eyebrowLoading
+                                ? ' '
+                                : l10n
+                                    .desktopPhotosCount(
+                                      dashboard?.totalPhotos ?? 0,
+                                      dashboard?.totalVideos ?? 0,
+                                    )
+                                    .toUpperCase(),
+                        title: l10n.modulePhotosTitle,
+                        actionsRightAlignedWhenWrapped: true,
+                        actions: [
+                          _importAction(context, l10n),
+                          if (supportsSelection)
+                            DesktopButton(
+                              label:
+                                  selectionActive
+                                      ? l10n.photosDone
+                                      : l10n.desktopPhotosSelect,
+                              icon:
+                                  selectionActive
+                                      ? DesktopIcons.close
+                                      : DesktopIcons.check,
+                              variant:
+                                  selectionActive
+                                      ? DesktopButtonVariant.soft
+                                      : DesktopButtonVariant.ghost,
+                              onPressed: () {
+                                setState(() {
+                                  if (selectionActive) {
+                                    _selection.clear();
+                                    _selectionMode = false;
+                                    _lastSelectedPhotoId = null;
+                                  } else {
+                                    _selectionMode = true;
+                                  }
+                                });
+                              },
+                            ),
+                          // 样例 `Photos.tsx:54-55`：`.head-actions` 里 Seg 在左、缩放
+                          // 滑条在右；滑条只在 Library 档出现。
+                          DesktopSeg<DesktopPhotosTab>(
+                            options: DesktopPhotosTab.values,
+                            value: _tab,
+                            labelOf: (value) => labels[value] ?? '',
+                            onChanged: (value) {
+                              setState(() {
+                                _tab = value;
+                                if (value != DesktopPhotosTab.albums) {
+                                  _selectedAlbumId = null;
+                                }
+                                // 换分区时清空选中：样例的选中集只作用于当前列表。
                                 _selection.clear();
                                 _selectionMode = false;
                                 _lastSelectedPhotoId = null;
-                              } else {
-                                _selectionMode = true;
+                              });
+                              if (value == DesktopPhotosTab.library ||
+                                  value == DesktopPhotosTab.favorites) {
+                                _checkForMorePhotosAfterFrame();
                               }
-                            });
-                          },
-                        ),
-                      // 样例 `Photos.tsx:54-55`：`.head-actions` 里 Seg 在左、缩放
-                      // 滑条在右；滑条只在 Library 档出现。
-                      DesktopSeg<DesktopPhotosTab>(
-                        options: DesktopPhotosTab.values,
-                        value: _tab,
-                        labelOf: (value) => labels[value] ?? '',
-                        onChanged: (value) {
-                          setState(() {
-                            _tab = value;
-                            if (value != DesktopPhotosTab.albums) {
-                              _selectedAlbumId = null;
-                            }
-                            // 换分区时清空选中：样例的选中集只作用于当前列表。
-                            _selection.clear();
-                            _selectionMode = false;
-                            _lastSelectedPhotoId = null;
-                          });
-                          if (value == DesktopPhotosTab.library ||
-                              value == DesktopPhotosTab.favorites) {
-                            _checkForMorePhotosAfterFrame();
-                          }
-                          if (value == DesktopPhotosTab.trash) {
-                            // 回收站按需取数：进入分区才请求，避免首屏多打一次。
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (mounted) {
-                                ref
-                                    .read(
-                                      photoCenterControllerProvider.notifier,
-                                    )
-                                    .setFrameView(FrameView.trash);
+                              if (value == DesktopPhotosTab.trash) {
+                                // 回收站按需取数：进入分区才请求，避免首屏多打一次。
+                                WidgetsBinding.instance.addPostFrameCallback((
+                                  _,
+                                ) {
+                                  if (mounted) {
+                                    ref
+                                        .read(
+                                          photoCenterControllerProvider
+                                              .notifier,
+                                        )
+                                        .setFrameView(FrameView.trash);
+                                  }
+                                });
                               }
-                            });
-                          }
-                        },
+                            },
+                          ),
+                          if (_tab == DesktopPhotosTab.library)
+                            _DensitySlider(
+                              value: _density,
+                              onChanged:
+                                  (value) => setState(() => _density = value),
+                            ),
+                        ],
                       ),
-                      if (_tab == DesktopPhotosTab.library)
-                        _DensitySlider(
-                          value: _density,
-                          onChanged:
-                              (value) => setState(() => _density = value),
+                      if (eyebrowLoading)
+                        const Positioned(
+                          left: 0,
+                          top: 10,
+                          child: IgnorePointer(
+                            child: ExcludeSemantics(
+                              child: DesktopSkeletonBox(
+                                width: 96,
+                                height: 11,
+                                radius: 5,
+                              ),
+                            ),
+                          ),
                         ),
                     ],
                   ),
                 ),
-                SliverToBoxAdapter(
-                  child: switch (_tab) {
-                    DesktopPhotosTab.library => _PhotoGroups(
-                      photos: page?.items ?? const <PhotoItem>[],
-                      displayOrders: photoOrders,
-                      loading: page == null && pageAsync.isLoading,
-                      error:
-                          page == null && pageAsync.hasError
-                              ? errorReason(pageAsync.error!, l10n)
-                              : null,
-                      onRetry: () => ref.invalidate(photoListProvider),
-                      density: _density,
-                      selection: _selection,
-                      selectionMode: _selectionMode,
-                      onActivate:
-                          (photo, groupPhotos) => _activatePhoto(
-                            photo,
-                            groupPhotos,
-                            source: PhotoBrowseSource.library,
-                          ),
-                      onToggleSelect: _toggleSelect,
-                      onSecondaryTap:
-                          (photo, groupPhotos, globalPos) =>
-                              _openPhotoContextMenu(
-                                photo,
-                                groupPhotos,
-                                globalPos,
-                                source: PhotoBrowseSource.library,
-                              ),
-                      onSelectMany:
-                          (items) => setState(() {
-                            final ids = items.map((item) => item.id).toSet();
-                            final dayIsSelected =
-                                ids.isNotEmpty &&
-                                ids.every(_selection.contains);
-                            if (dayIsSelected) {
-                              _selection.removeAll(ids);
-                            } else {
-                              _selection.addAll(ids);
-                              if (items.isNotEmpty) {
-                                _lastSelectedPhotoId = items.last.id;
-                              }
+                if (_tab == DesktopPhotosTab.library)
+                  ..._buildPhotoGroupSlivers(
+                    context: context,
+                    photos: page?.items ?? const <PhotoItem>[],
+                    displayOrders: photoOrders,
+                    loading: libraryLoading,
+                    error:
+                        page == null && pageAsync.hasError
+                            ? errorReason(pageAsync.error!, l10n)
+                            : null,
+                    onRetry: () => ref.invalidate(photoListProvider),
+                    density: _density,
+                    selection: _selection,
+                    selectionMode: _selectionMode,
+                    onActivate:
+                        (photo, groupPhotos) => _activatePhoto(
+                          photo,
+                          groupPhotos,
+                          source: PhotoBrowseSource.library,
+                        ),
+                    onToggleSelect: _toggleSelect,
+                    onSecondaryTap:
+                        (photo, groupPhotos, globalPos) =>
+                            _openPhotoContextMenu(
+                              photo,
+                              groupPhotos,
+                              globalPos,
+                              source: PhotoBrowseSource.library,
+                            ),
+                    onSelectMany:
+                        (items) => setState(() {
+                          final ids = items.map((item) => item.id).toSet();
+                          final dayIsSelected =
+                              ids.isNotEmpty && ids.every(_selection.contains);
+                          if (dayIsSelected) {
+                            _selection.removeAll(ids);
+                          } else {
+                            _selection.addAll(ids);
+                            if (items.isNotEmpty) {
+                              _lastSelectedPhotoId = items.last.id;
                             }
-                          }),
-                      onOrderChanged: _savePhotoOrder,
-                      onResetOrder: _resetPhotoOrder,
-                    ),
-                    DesktopPhotosTab.places =>
-                      locationGroupsAsync!.hasError &&
-                              !locationGroupsAsync.hasValue
-                          ? DesktopErrorView(
-                            message: errorReason(
-                              locationGroupsAsync.error!,
-                              l10n,
-                            ),
-                            onRetry:
-                                () =>
-                                    ref.invalidate(photoLocationGroupsProvider),
-                          )
-                          : DesktopSkeletonSwitcher(
-                            regionId: 'photos-places',
-                            hasData: locationGroupsAsync.hasValue,
-                            loading: !locationGroupsAsync.hasValue,
-                            skeleton: const _PlacesLoadingSkeleton(),
-                            child: _PlacesSection(
-                              groups:
-                                  locationGroupsAsync.asData?.value ??
-                                  const <PhotoGroup>[],
-                              onOpen:
-                                  (photo, photos) => _openPhoto(
-                                    photo,
-                                    photos,
-                                    PhotoBrowseSource.locations,
+                          }
+                        }),
+                    onOrderChanged: _savePhotoOrder,
+                    onResetOrder: _resetPhotoOrder,
+                  )
+                else
+                  SliverToBoxAdapter(
+                    child: switch (_tab) {
+                      DesktopPhotosTab.library => const SizedBox.shrink(),
+                      DesktopPhotosTab.places =>
+                        locationGroupsAsync!.hasError &&
+                                !locationGroupsAsync.hasValue
+                            ? DesktopErrorView(
+                              message: errorReason(
+                                locationGroupsAsync.error!,
+                                l10n,
+                              ),
+                              onRetry:
+                                  () => ref.invalidate(
+                                    photoLocationGroupsProvider,
                                   ),
+                            )
+                            : DesktopSkeletonSwitcher(
+                              regionId: 'photos-places',
+                              hasData: locationGroupsAsync.hasValue,
+                              loading: !locationGroupsAsync.hasValue,
+                              skeleton: const _PlacesLoadingSkeleton(),
+                              child: _PlacesSection(
+                                groups:
+                                    locationGroupsAsync.asData?.value ??
+                                    const <PhotoGroup>[],
+                                onOpen:
+                                    (photo, photos) => _openPhoto(
+                                      photo,
+                                      photos,
+                                      PhotoBrowseSource.locations,
+                                    ),
+                              ),
                             ),
-                          ),
-                    DesktopPhotosTab.favorites =>
-                      favorites == null && favoritesAsync.hasError
-                          ? DesktopErrorView(
-                            message: errorReason(favoritesAsync.error!, l10n),
-                            onRetry:
-                                () => ref.invalidate(photoFavoritesProvider),
-                          )
-                          : DesktopSkeletonSwitcher(
-                            regionId: 'photos-favorites',
-                            hasData: favorites != null,
-                            loading:
-                                favorites == null && favoritesAsync.isLoading,
-                            skeleton: const DesktopSkeletonPhotoGrid(
-                              targetHeight: 200,
-                              showGroupHeaders: false,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                if (photoOrders.containsKey('favorites'))
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: Align(
-                                      alignment: Alignment.centerRight,
-                                      child: DesktopLink(
-                                        label: l10n.desktopPhotosResetOrder,
-                                        onPressed:
-                                            () => _resetPhotoOrder('favorites'),
+                      DesktopPhotosTab.favorites =>
+                        favorites == null && favoritesAsync!.hasError
+                            ? DesktopErrorView(
+                              message: errorReason(favoritesAsync.error!, l10n),
+                              onRetry:
+                                  () => ref.invalidate(photoFavoritesProvider),
+                            )
+                            : DesktopSkeletonSwitcher(
+                              regionId: 'photos-favorites',
+                              hasData: favorites != null,
+                              loading:
+                                  favorites == null &&
+                                  favoritesAsync!.isLoading,
+                              skeleton: const DesktopSkeletonPhotoGrid(
+                                targetHeight: 200,
+                                showGroupHeaders: false,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  if (photoOrders.containsKey('favorites'))
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 12,
+                                      ),
+                                      child: Align(
+                                        alignment: Alignment.centerRight,
+                                        child: DesktopLink(
+                                          label: l10n.desktopPhotosResetOrder,
+                                          onPressed:
+                                              () =>
+                                                  _resetPhotoOrder('favorites'),
+                                        ),
                                       ),
                                     ),
+                                  _JustifiedPhotos(
+                                    photos: applyPhotoDisplayOrder(
+                                      favorites?.items ?? const <PhotoItem>[],
+                                      photoOrders['favorites'],
+                                    ),
+                                    targetHeight: 200,
+                                    selection: _selection,
+                                    selectionMode: _selectionMode,
+                                    onActivate:
+                                        (photo, favoritePhotos) =>
+                                            _activatePhoto(
+                                              photo,
+                                              favoritePhotos,
+                                              source:
+                                                  PhotoBrowseSource.favorites,
+                                            ),
+                                    onToggleSelect: _toggleSelect,
+                                    onSecondaryTap:
+                                        (photo, favoritePhotos, globalPos) =>
+                                            _openPhotoContextMenu(
+                                              photo,
+                                              favoritePhotos,
+                                              globalPos,
+                                              source:
+                                                  PhotoBrowseSource.favorites,
+                                            ),
+                                    orderContext: 'favorites',
+                                    onOrderChanged: _savePhotoOrder,
                                   ),
-                                _JustifiedPhotos(
-                                  photos: applyPhotoDisplayOrder(
-                                    favorites?.items ?? const <PhotoItem>[],
-                                    photoOrders['favorites'],
-                                  ),
-                                  targetHeight: 200,
-                                  selection: _selection,
-                                  selectionMode: _selectionMode,
-                                  onActivate:
-                                      (photo, favoritePhotos) => _activatePhoto(
-                                        photo,
-                                        favoritePhotos,
-                                        source: PhotoBrowseSource.favorites,
-                                      ),
-                                  onToggleSelect: _toggleSelect,
-                                  onSecondaryTap:
-                                      (photo, favoritePhotos, globalPos) =>
-                                          _openPhotoContextMenu(
-                                            photo,
-                                            favoritePhotos,
-                                            globalPos,
-                                            source: PhotoBrowseSource.favorites,
-                                          ),
-                                  orderContext: 'favorites',
-                                  onOrderChanged: _savePhotoOrder,
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                    DesktopPhotosTab.albums =>
-                      albums == null && albumsAsync.hasError
-                          ? DesktopErrorView(
-                            message: errorReason(albumsAsync.error!, l10n),
-                            onRetry: () => ref.invalidate(photoAlbumsProvider),
-                          )
-                          : _selectedAlbumId == null
-                          ? _AlbumShelf(
-                            albums: albums ?? const <PhotoAlbum>[],
-                            loading: albums == null && albumsAsync.isLoading,
-                            onOpen: _openAlbum,
-                            onCreate: _createAlbum,
-                          )
-                          : _DesktopAlbumDetail(
-                            albumId: _selectedAlbumId!,
-                            onBack:
-                                () => setState(() => _selectedAlbumId = null),
-                            onShare: _shareAlbum,
-                            onDelete: _deleteAlbum,
-                            onOpenPhoto: _openAlbumPhoto,
-                            onOrderChanged: _savePhotoOrder,
-                          ),
-                    DesktopPhotosTab.trash => _TrashSection(
-                      state: photoCenterAsync?.asData?.value,
-                      loading:
-                          photoCenterAsync?.isLoading == true ||
-                          photoCenterAsync?.asData?.value.isLoadingTrash ==
-                              true,
-                      error:
-                          photoCenterAsync?.hasError == true &&
-                                  !photoCenterAsync!.hasValue
-                              ? errorReason(photoCenterAsync.error!, l10n)
-                              : null,
-                      onRetry:
-                          () => ref.invalidate(photoCenterControllerProvider),
-                      onRestore: _restorePhoto,
-                      onPurge: _confirmPurgePhoto,
-                      purging: _purgingTrash,
-                      onPurgeAll: _confirmPurgeAllTrash,
-                    ),
-                  },
-                ),
+                      DesktopPhotosTab.albums =>
+                        albums == null && albumsAsync!.hasError
+                            ? DesktopErrorView(
+                              message: errorReason(albumsAsync.error!, l10n),
+                              onRetry:
+                                  () => ref.invalidate(photoAlbumsProvider),
+                            )
+                            : _selectedAlbumId == null
+                            ? _AlbumShelf(
+                              albums: albums ?? const <PhotoAlbum>[],
+                              loading: albums == null && albumsAsync!.isLoading,
+                              onOpen: _openAlbum,
+                              onCreate: _createAlbum,
+                            )
+                            : _DesktopAlbumDetail(
+                              albumId: _selectedAlbumId!,
+                              onBack:
+                                  () => setState(() => _selectedAlbumId = null),
+                              onShare: _shareAlbum,
+                              onDelete: _deleteAlbum,
+                              onOpenPhoto: _openAlbumPhoto,
+                              onOrderChanged: _savePhotoOrder,
+                            ),
+                      DesktopPhotosTab.trash => _TrashSection(
+                        state: photoCenterAsync?.asData?.value,
+                        loading:
+                            photoCenterAsync?.isLoading == true ||
+                            photoCenterAsync?.asData?.value.isLoadingTrash ==
+                                true,
+                        error:
+                            photoCenterAsync?.hasError == true &&
+                                    !photoCenterAsync!.hasValue
+                                ? errorReason(photoCenterAsync.error!, l10n)
+                                : null,
+                        onRetry:
+                            () => ref.invalidate(photoCenterControllerProvider),
+                        onRestore: _restorePhoto,
+                        onPurge: _confirmPurgePhoto,
+                        purging: _purgingTrash,
+                        onPurgeAll: _confirmPurgeAllTrash,
+                      ),
+                    },
+                  ),
                 if (_loadingMorePhotos)
                   const SliverToBoxAdapter(
                     child: Padding(
@@ -743,6 +818,9 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
     List<PhotoItem> photos,
     PhotoBrowseSource source,
   ) {
+    ref
+        .read(desktopAmbientHintProvider.notifier)
+        .rememberPhotoViewed(photo.coverUrl);
     ref.read(photoBrowseScopeProvider.notifier).set(photos, source);
     desktopPush(context, DesktopRoutes.photoDetail(photo.id));
   }

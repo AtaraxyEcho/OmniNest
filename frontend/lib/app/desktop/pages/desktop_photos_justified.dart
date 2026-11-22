@@ -1,7 +1,22 @@
 part of 'desktop_photos_page.dart';
 
-class _JustifiedPhotosState extends State<_JustifiedPhotos>
-    with TickerProviderStateMixin {
+mixin _JustifiedPhotosStateMixin<W extends StatefulWidget>
+    on State<W>, TickerProviderStateMixin<W> {
+  List<PhotoItem> get _photos;
+  double get _targetHeight;
+  Set<String> get _selection;
+  void Function(PhotoItem photo, List<PhotoItem> photos) get _onActivate;
+  ValueChanged<PhotoItem> get _onToggleSelect;
+  void Function(PhotoItem photo, List<PhotoItem> photos, Offset globalPosition)?
+  get _onSecondaryTap;
+  bool get _selectionMode;
+  String? get _orderContext;
+  _PhotoOrderChanged? get _onOrderChanged;
+  bool get _showCaption;
+  bool get _showFavorite;
+  bool get _showSelectionControls;
+  VoidCallback? get _onRowHoverEnter => null;
+  VoidCallback? get _onRowHoverExit => null;
   static const double _dragSlop = 8.0;
   static const double _edgeScrollZone = 80.0;
 
@@ -10,16 +25,13 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
   String? _lastSwapTarget;
   DateTime? _lastSwapAt;
   Offset? _lastSwapPointer;
-
   String? _draggedPhotoId;
   bool _settling = false;
   _PhotoDragPayload? _activeDragPayload;
   ({String contextKey, List<String> order, int movedCount})?
   _pendingCommitOrder;
-
   late final _PhotoFlipTracker _flipTracker;
   final Map<String, GlobalKey<State<StatefulWidget>>> _tileKeys = {};
-
   late final Ticker _dragTicker;
   late final AnimationController _settleController;
   Rect? _settleStartRect;
@@ -45,7 +57,6 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
 
   Set<String> _pressingPhotoIds = <String>{};
   Set<String> _landedPhotoIds = <String>{};
-
   bool get _justDragged => _trailingClickGuard;
   bool get _isDragging => _draggedPhotoId != null && !_settling;
 
@@ -178,7 +189,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     if ((event.buttons & kPrimaryButton) == 0) return;
 
     // 勾选圈是独立点击目标，按住勾选圈不触发长按拖动。
-    if (widget.showSelectionControls &&
+    if (_showSelectionControls &&
         localPosition.dx >= 10 &&
         localPosition.dx <= 36 &&
         localPosition.dy >= 10 &&
@@ -192,7 +203,6 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     _pressPointer = event.pointer;
     _pressOrigin = event.position;
     _dragPointer = event.position;
-
     final pointerId = event.pointer;
     _pressTimer = Timer(DesktopMotion.photoReorderPressPreview, () {
       if (!mounted || _pressPointer != pointerId || _draggedPhotoId != null) {
@@ -245,7 +255,6 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
   void _beginDrag(_PhotoDragPayload payload) {
     _pressTimer?.cancel();
     _holdTimer?.cancel();
-
     final startRects = <String, Rect>{};
     for (final id in payload.movingIds) {
       final rect = _rectFor(id);
@@ -288,7 +297,6 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     _grabCenterK = 0.0;
     _activeDragPayload = livePayload;
     _pendingCommitOrder = null;
-
     final localPointer = overlayBox.globalToLocal(_dragPointerSmooth);
     final initialPose = _GhostPose(
       left: localPointer.dx - livePayload.grabOffset.dx,
@@ -508,7 +516,6 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
 
     // Esc 取消也要屏蔽尾随 click：否则真实松手会被当成一次点击打开照片。
     _startTrailingClickGuard();
-
     final collapsedOrder = _dragOrder ?? payload.baseOrderIds;
     final expandedOrder =
         accepted ? _expandedOrder(collapsedOrder, payload) : payload.orderIds;
@@ -605,7 +612,6 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     _settleStartRect = currentPose.rect;
     _settleTargetRect = targetLocalTopLeft & targetGlobal.size;
     _ghostPose.value = currentPose.copyWith(dropping: true);
-
     final centerDistance =
         (_settleStartRect!.center - _settleTargetRect!.center).distance;
     final rawDuration =
@@ -655,10 +661,8 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     _flipTracker.clear();
     _settleStartRect = null;
     _settleTargetRect = null;
-
     final pendingCommit = _pendingCommitOrder;
     _pendingCommitOrder = null;
-
     final companions =
         accepted && payload.movingIds.length > 1
             ? payload.movingIds.where((id) => id != payload.draggedId).toSet()
@@ -690,8 +694,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
         setState(() => _settlingOrder = null);
       }
     });
-
-    final onOrderChanged = widget.onOrderChanged;
+    final onOrderChanged = _onOrderChanged;
     if (pendingCommit != null && onOrderChanged != null) {
       unawaited(
         onOrderChanged(
@@ -761,14 +764,13 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
+  List<PhotoItem> _resolveOrderedPhotos() {
     final activeOrder = _dragOrder ?? _settlingOrder;
     final photos =
         activeOrder == null
-            ? widget.photos
+            ? _photos
             : applyPhotoDisplayOrder(
-              widget.photos
+              _photos
                   .where((photo) => activeOrder.contains(photo.id))
                   .toList(growable: false),
               activeOrder,
@@ -779,9 +781,144 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
         () => GlobalObjectKey<State<StatefulWidget>>('photo-order-${photo.id}'),
       );
     }
-    final isReordering = _draggedPhotoId != null;
-    final selectionActive = widget.selection.isNotEmpty || widget.selectionMode;
+    return photos;
+  }
 
+  Widget _buildJustifiedRow(
+    BuildContext context,
+    List<_SizedPhoto> row,
+    List<PhotoItem> photos, {
+    required bool isReordering,
+    required bool selectionActive,
+  }) {
+    final rowWidget = Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          for (var i = 0; i < row.length; i++) ...[
+            if (i > 0) const SizedBox(width: 8),
+            Expanded(
+              flex: (row[i].ratio * 1000).round(),
+              child: LayoutBuilder(
+                builder: (context, tileConstraints) {
+                  final photo = row[i].photo;
+                  // 保持单张照片卡片在拖拽起落全过程节点树恒定，杜绝松手整组重播入场动画。
+                  final tile = _PhotoTile(
+                    key: ValueKey<String>('desktop-photo-${photo.id}'),
+                    photo: photo,
+                    height: _targetHeight,
+                    onTap: (selectedPhoto) {
+                      if (_draggedPhotoId != null) {
+                        return;
+                      }
+                      if (_justDragged) return;
+                      _onActivate(selectedPhoto, photos);
+                    },
+                    onToggleSelect: _onToggleSelect,
+                    onSecondaryTap:
+                        _onSecondaryTap == null
+                            ? null
+                            : (targetPhoto, globalPos) => _onSecondaryTap!(
+                              targetPhoto,
+                              photos,
+                              globalPos,
+                            ),
+                    selected: _selection.contains(photo.id),
+                    pressing: _pressingPhotoIds.contains(photo.id),
+                    dragging: _draggedPhotoId == photo.id,
+                    reordering: isReordering,
+                    landed: _landedPhotoIds.contains(photo.id),
+                    selectionActive: selectionActive,
+                    showCaption: _showCaption,
+                    showFavorite: _showFavorite,
+                    showSelectionControls: _showSelectionControls,
+                  );
+                  final orderContext = _orderContext;
+                  final onOrderChanged = _onOrderChanged;
+                  if (orderContext == null ||
+                      onOrderChanged == null ||
+                      photos.length < 2) {
+                    return tile;
+                  }
+
+                  final selectedIds = _selection;
+                  final movingPhotos =
+                      selectedIds.contains(photo.id) && selectedIds.length > 1
+                          ? photos
+                              .where((item) => selectedIds.contains(item.id))
+                              .toList(growable: false)
+                          : <PhotoItem>[photo];
+                  final movingIds = movingPhotos
+                      .map((item) => item.id)
+                      .toList(growable: false);
+                  final orderIds = photos
+                      .map((item) => item.id)
+                      .toList(growable: false);
+                  final tileWidth = tileConstraints.maxWidth;
+                  final feedbackWidth =
+                      movingPhotos.length > 1 && tileWidth > 190
+                          ? 190.0
+                          : tileWidth;
+                  final feedbackHeight =
+                      tileWidth > 0
+                          ? _targetHeight * feedbackWidth / tileWidth
+                          : _targetHeight;
+                  final tileKey = _tileKeys[photo.id]!;
+                  return _FlipPhotoTile(
+                    key: tileKey,
+                    photoId: photo.id,
+                    tracker: _flipTracker,
+                    epoch: _flipTracker.epoch,
+                    child: Listener(
+                      behavior: HitTestBehavior.translucent,
+                      onPointerDown: (event) {
+                        final payload = _PhotoDragPayload(
+                          contextKey: orderContext,
+                          orderIds: orderIds,
+                          baseOrderIds: orderIds
+                              .where(
+                                (id) =>
+                                    id == photo.id || !movingIds.contains(id),
+                              )
+                              .toList(growable: false),
+                          draggedId: photo.id,
+                          movingIds: movingIds,
+                          movingPhotos: movingPhotos,
+                          feedbackWidth: feedbackWidth,
+                          feedbackHeight: feedbackHeight,
+                          fanOffsets: const <_PhotoFlyOffset>[],
+                          grabOffset: event.localPosition,
+                        );
+                        _onTilePointerDown(payload, event, event.localPosition);
+                      },
+                      onPointerMove: _onTilePointerMove,
+                      onPointerUp: _onTilePointerUp,
+                      onPointerCancel: _onTilePointerCancel,
+                      child: tile,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+    if (_onRowHoverEnter == null && _onRowHoverExit == null) {
+      return rowWidget;
+    }
+    return MouseRegion(
+      cursor: SystemMouseCursors.basic,
+      onEnter: (_) => _onRowHoverEnter?.call(),
+      onExit: (_) => _onRowHoverExit?.call(),
+      child: rowWidget,
+    );
+  }
+
+  Widget _buildBoxJustified(BuildContext context) {
+    final photos = _resolveOrderedPhotos();
+    final isReordering = _draggedPhotoId != null;
+    final selectionActive = _selection.isNotEmpty || _selectionMode;
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -793,138 +930,62 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             for (final row in rows)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    for (var i = 0; i < row.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 8),
-                      Expanded(
-                        flex: (row[i].ratio * 1000).round(),
-                        child: LayoutBuilder(
-                          builder: (context, tileConstraints) {
-                            final photo = row[i].photo;
-                            // 关键修复：移除 isReordering ? tile : DesktopStagger(...) 拓扑切换，
-                            // 保持单张照片卡片在拖拽起落全过程节点树恒定，杜绝松手整组重播入场动画。
-                            final tile = _PhotoTile(
-                              key: ValueKey<String>(
-                                'desktop-photo-${photo.id}',
-                              ),
-                              photo: photo,
-                              height: widget.targetHeight,
-                              onTap: (selectedPhoto) {
-                                if (_draggedPhotoId != null) {
-                                  return;
-                                }
-                                if (_justDragged) return;
-                                widget.onActivate(selectedPhoto, photos);
-                              },
-                              onToggleSelect: widget.onToggleSelect,
-                              onSecondaryTap:
-                                  widget.onSecondaryTap == null
-                                      ? null
-                                      : (targetPhoto, globalPos) =>
-                                          widget.onSecondaryTap!(
-                                            targetPhoto,
-                                            photos,
-                                            globalPos,
-                                          ),
-                              selected: widget.selection.contains(photo.id),
-                              pressing: _pressingPhotoIds.contains(photo.id),
-                              dragging: _draggedPhotoId == photo.id,
-                              reordering: isReordering,
-                              landed: _landedPhotoIds.contains(photo.id),
-                              selectionActive: selectionActive,
-                              showCaption: widget.showCaption,
-                              showFavorite: widget.showFavorite,
-                              showSelectionControls:
-                                  widget.showSelectionControls,
-                            );
-
-                            final orderContext = widget.orderContext;
-                            final onOrderChanged = widget.onOrderChanged;
-                            if (orderContext == null ||
-                                onOrderChanged == null ||
-                                photos.length < 2) {
-                              return tile;
-                            }
-
-                            final selectedIds = widget.selection;
-                            final movingPhotos =
-                                selectedIds.contains(photo.id) &&
-                                        selectedIds.length > 1
-                                    ? photos
-                                        .where(
-                                          (item) =>
-                                              selectedIds.contains(item.id),
-                                        )
-                                        .toList(growable: false)
-                                    : <PhotoItem>[photo];
-                            final movingIds = movingPhotos
-                                .map((item) => item.id)
-                                .toList(growable: false);
-                            final orderIds = photos
-                                .map((item) => item.id)
-                                .toList(growable: false);
-                            final tileWidth = tileConstraints.maxWidth;
-                            final feedbackWidth =
-                                movingPhotos.length > 1 && tileWidth > 190
-                                    ? 190.0
-                                    : tileWidth;
-                            final feedbackHeight =
-                                tileWidth > 0
-                                    ? widget.targetHeight *
-                                        feedbackWidth /
-                                        tileWidth
-                                    : widget.targetHeight;
-
-                            final tileKey = _tileKeys[photo.id]!;
-                            return _FlipPhotoTile(
-                              key: tileKey,
-                              photoId: photo.id,
-                              tracker: _flipTracker,
-                              epoch: _flipTracker.epoch,
-                              child: Listener(
-                                behavior: HitTestBehavior.translucent,
-                                onPointerDown: (event) {
-                                  final payload = _PhotoDragPayload(
-                                    contextKey: orderContext,
-                                    orderIds: orderIds,
-                                    baseOrderIds: orderIds
-                                        .where(
-                                          (id) =>
-                                              id == photo.id ||
-                                              !movingIds.contains(id),
-                                        )
-                                        .toList(growable: false),
-                                    draggedId: photo.id,
-                                    movingIds: movingIds,
-                                    movingPhotos: movingPhotos,
-                                    feedbackWidth: feedbackWidth,
-                                    feedbackHeight: feedbackHeight,
-                                    fanOffsets: const <_PhotoFlyOffset>[],
-                                    grabOffset: event.localPosition,
-                                  );
-                                  _onTilePointerDown(
-                                    payload,
-                                    event,
-                                    event.localPosition,
-                                  );
-                                },
-                                onPointerMove: _onTilePointerMove,
-                                onPointerUp: _onTilePointerUp,
-                                onPointerCancel: _onTilePointerCancel,
-                                child: tile,
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+              _buildJustifiedRow(
+                context,
+                row,
+                photos,
+                isReordering: isReordering,
+                selectionActive: selectionActive,
               ),
           ],
+        );
+      },
+    );
+  }
+
+  /// 按行虚拟化 Sliver 构建：通过 [SliverLayoutBuilder] + [SliverList.builder]
+  /// 仅实例化视口及缓存区内的行，显著降低百张以上照片的首屏构建与滚动开销。
+  Widget _buildSliverJustified(BuildContext context) {
+    final photos = _resolveOrderedPhotos();
+    final isReordering = _draggedPhotoId != null;
+    final selectionActive = _selection.isNotEmpty || _selectionMode;
+    return SliverLayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.crossAxisExtent;
+        if (photos.isEmpty) {
+          return const SliverToBoxAdapter(child: SizedBox.shrink());
+        }
+        if (photos.length == 1) {
+          final solo = _soloLayout(
+            context,
+            photos.first,
+            width,
+            selectionActive,
+          );
+          return SliverToBoxAdapter(
+            child:
+                _onRowHoverEnter == null && _onRowHoverExit == null
+                    ? solo
+                    : MouseRegion(
+                      cursor: SystemMouseCursors.basic,
+                      onEnter: (_) => _onRowHoverEnter?.call(),
+                      onExit: (_) => _onRowHoverExit?.call(),
+                      child: solo,
+                    ),
+          );
+        }
+        final rows = _layout(width, photos);
+        return SliverList.builder(
+          itemCount: rows.length,
+          itemBuilder: (context, rowIndex) {
+            return _buildJustifiedRow(
+              context,
+              rows[rowIndex],
+              photos,
+              isReordering: isReordering,
+              selectionActive: selectionActive,
+            );
+          },
         );
       },
     );
@@ -938,27 +999,27 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     bool selectionActive,
   ) {
     final ratio = _ratioOf(photo);
-    final photoWidth = (widget.targetHeight * ratio).clamp(120.0, width);
+    final photoWidth = (_targetHeight * ratio).clamp(120.0, width);
     final noteWidth = (width - photoWidth - 20).clamp(220.0, 320.0);
     final singleList = <PhotoItem>[photo];
     final tile = SizedBox(
       width: photoWidth,
-      height: widget.targetHeight,
+      height: _targetHeight,
       child: _PhotoTile(
         photo: photo,
-        height: widget.targetHeight,
-        onTap: (selectedPhoto) => widget.onActivate(selectedPhoto, singleList),
-        onToggleSelect: widget.onToggleSelect,
+        height: _targetHeight,
+        onTap: (selectedPhoto) => _onActivate(selectedPhoto, singleList),
+        onToggleSelect: _onToggleSelect,
         onSecondaryTap:
-            widget.onSecondaryTap == null
+            _onSecondaryTap == null
                 ? null
                 : (targetPhoto, globalPos) =>
-                    widget.onSecondaryTap!(targetPhoto, singleList, globalPos),
-        selected: widget.selection.contains(photo.id),
+                    _onSecondaryTap!(targetPhoto, singleList, globalPos),
+        selected: _selection.contains(photo.id),
         selectionActive: selectionActive,
-        showCaption: widget.showCaption,
-        showFavorite: widget.showFavorite,
-        showSelectionControls: widget.showSelectionControls,
+        showCaption: _showCaption,
+        showFavorite: _showFavorite,
+        showSelectionControls: _showSelectionControls,
       ),
     );
     return Wrap(
@@ -980,7 +1041,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
       final ratio = _ratioOf(photo);
       current.add(_SizedPhoto(photo: photo, ratio: ratio));
       ratioSum += ratio;
-      if (ratioSum * widget.targetHeight >= width) {
+      if (ratioSum * _targetHeight >= width) {
         rows.add(current);
         current = <_SizedPhoto>[];
         ratioSum = 0;
@@ -1009,4 +1070,119 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
     }
     return true;
   }
+}
+
+class _JustifiedPhotosState extends State<_JustifiedPhotos>
+    with
+        TickerProviderStateMixin,
+        _JustifiedPhotosStateMixin<_JustifiedPhotos> {
+  @override
+  List<PhotoItem> get _photos => widget.photos;
+  @override
+  double get _targetHeight => widget.targetHeight;
+  @override
+  Set<String> get _selection => widget.selection;
+  @override
+  void Function(PhotoItem photo, List<PhotoItem> photos) get _onActivate =>
+      widget.onActivate;
+  @override
+  ValueChanged<PhotoItem> get _onToggleSelect => widget.onToggleSelect;
+  @override
+  void Function(PhotoItem photo, List<PhotoItem> photos, Offset globalPosition)?
+  get _onSecondaryTap => widget.onSecondaryTap;
+  @override
+  bool get _selectionMode => widget.selectionMode;
+  @override
+  String? get _orderContext => widget.orderContext;
+  @override
+  _PhotoOrderChanged? get _onOrderChanged => widget.onOrderChanged;
+  @override
+  bool get _showCaption => widget.showCaption;
+  @override
+  bool get _showFavorite => widget.showFavorite;
+  @override
+  bool get _showSelectionControls => widget.showSelectionControls;
+
+  @override
+  Widget build(BuildContext context) => _buildBoxJustified(context);
+}
+
+/// 按行 Sliver 虚拟化的 Justified 照片流，供 [SliverMainAxisGroup] 按日分组消费。
+class _SliverJustifiedPhotos extends StatefulWidget {
+  const _SliverJustifiedPhotos({
+    required this.photos,
+    required this.targetHeight,
+    required this.selection,
+    required this.onActivate,
+    required this.onToggleSelect,
+    this.onSecondaryTap,
+    this.selectionMode = false,
+    this.orderContext,
+    this.onOrderChanged,
+    this.onRowHoverEnter,
+    this.onRowHoverExit,
+  });
+  final List<PhotoItem> photos;
+  final double targetHeight;
+  final Set<String> selection;
+  final void Function(PhotoItem photo, List<PhotoItem> photos) onActivate;
+  final ValueChanged<PhotoItem> onToggleSelect;
+  final void Function(
+    PhotoItem photo,
+    List<PhotoItem> photos,
+    Offset globalPosition,
+  )?
+  onSecondaryTap;
+  final bool selectionMode;
+  final String? orderContext;
+  final _PhotoOrderChanged? onOrderChanged;
+
+  /// 日分组与 Justified 流共用同一套磁贴开关，当前仅此一处消费，故不再从构造参数透传。
+  final bool showCaption = true;
+  final bool showFavorite = true;
+  final bool showSelectionControls = true;
+  final VoidCallback? onRowHoverEnter;
+  final VoidCallback? onRowHoverExit;
+
+  @override
+  State<_SliverJustifiedPhotos> createState() => _SliverJustifiedPhotosState();
+}
+
+class _SliverJustifiedPhotosState extends State<_SliverJustifiedPhotos>
+    with
+        TickerProviderStateMixin,
+        _JustifiedPhotosStateMixin<_SliverJustifiedPhotos> {
+  @override
+  List<PhotoItem> get _photos => widget.photos;
+  @override
+  double get _targetHeight => widget.targetHeight;
+  @override
+  Set<String> get _selection => widget.selection;
+  @override
+  void Function(PhotoItem photo, List<PhotoItem> photos) get _onActivate =>
+      widget.onActivate;
+  @override
+  ValueChanged<PhotoItem> get _onToggleSelect => widget.onToggleSelect;
+  @override
+  void Function(PhotoItem photo, List<PhotoItem> photos, Offset globalPosition)?
+  get _onSecondaryTap => widget.onSecondaryTap;
+  @override
+  bool get _selectionMode => widget.selectionMode;
+  @override
+  String? get _orderContext => widget.orderContext;
+  @override
+  _PhotoOrderChanged? get _onOrderChanged => widget.onOrderChanged;
+  @override
+  bool get _showCaption => widget.showCaption;
+  @override
+  bool get _showFavorite => widget.showFavorite;
+  @override
+  bool get _showSelectionControls => widget.showSelectionControls;
+  @override
+  VoidCallback? get _onRowHoverEnter => widget.onRowHoverEnter;
+  @override
+  VoidCallback? get _onRowHoverExit => widget.onRowHoverExit;
+
+  @override
+  Widget build(BuildContext context) => _buildSliverJustified(context);
 }

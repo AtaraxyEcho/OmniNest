@@ -215,6 +215,7 @@ class _EpisodeRow extends StatelessWidget {
                 height: 48,
                 child: Opacity(
                   opacity: 0.70,
+                  alwaysIncludeSemantics: true,
                   child: _CoverImage(
                     url: episode.posterImageUrl,
                     cacheKey: 'movie-episode-poster:${episode.id}',

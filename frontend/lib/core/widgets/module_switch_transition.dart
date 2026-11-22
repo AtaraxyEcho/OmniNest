@@ -67,6 +67,7 @@ class _ModuleSwitchTransitionState extends State<ModuleSwitchTransition>
     // 不产生离屏合成层，也不会在完成瞬间让 StatefulNavigationShell 重挂。
     return FadeTransition(
       opacity: _opacity,
+      alwaysIncludeSemantics: true,
       child: AnimatedBuilder(
         animation: _controller,
         child: widget.child,

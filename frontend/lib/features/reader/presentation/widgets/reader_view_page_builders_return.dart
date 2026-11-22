@@ -20,6 +20,7 @@ extension ReaderViewPageBuildersReturn on ReaderViewPageBuilders {
       child: AnimatedOpacity(
         opacity: showReturnControl ? 1.0 : 0.0,
         duration: MotionToken.reduced(context, _returnHintFadeDuration),
+        alwaysIncludeSemantics: true,
         child: ReaderReturnToProgressControl(
           settings: settings,
           label: l10n.readerReturnToProgress,
@@ -60,6 +61,7 @@ extension ReaderViewPageBuildersReturn on ReaderViewPageBuilders {
         duration: MotionToken.reduced(context, _returnHintFadeDuration),
         // 淡出后的候选快照仍留在状态里，不可见时必须挡住点击，
         // 否则空按会把本机位置悄悄跳到远端进度。
+        alwaysIncludeSemantics: true,
         child: IgnorePointer(
           ignoring: !visible,
           child: ReaderReturnToProgressControl(

@@ -10,6 +10,8 @@ import 'package:go_router/go_router.dart';
 
 import 'package:omninest/app/appearance/application/appearance_controller.dart';
 import 'package:omninest/app/desktop/desktop_ambient.dart';
+import 'package:omninest/app/desktop/desktop_ambient_hints.dart';
+import 'package:omninest/app/desktop/desktop_ambient_mesh.dart';
 import 'package:omninest/app/desktop/desktop_backdrop_layer.dart';
 import 'package:omninest/app/desktop/desktop_backdrop_scope.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
@@ -35,6 +37,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
+import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_theme.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
@@ -451,6 +454,10 @@ class _DesktopShellBody extends ConsumerWidget {
         backdropConfigured &&
         desktopBackdropAppliesToRoute(backdropScope, routePath);
 
+    final skin = DesktopSkin.of(context);
+    final hostedOrImmersive =
+        mode == DesktopShellMode.chrome || mode == DesktopShellMode.immersive;
+
     return DesktopShellScope(
       hosted: mode == DesktopShellMode.chrome,
       backdropActive: backdropActive,
@@ -464,10 +471,38 @@ class _DesktopShellBody extends ConsumerWidget {
         textStyle: bodyTextStyle,
         child: Overlay.wrap(
           child:
-              mode == DesktopShellMode.chrome
-                  ? _Workspace(path: path, child: child)
-                  : mode == DesktopShellMode.immersive
-                  ? _DesktopImmersiveCanvas(path: path, child: child)
+              hostedOrImmersive
+                  // 将 BackdropGroup / DesktopWindowFrame / _AmbientLayer 稳定挂载在
+                  // chrome 与 immersive 共享底层，避免进出沉浸页时环境光双缓冲销毁重建。
+                  ? BackdropGroup(
+                    child: DesktopWindowFrame(
+                      child: ColoredBox(
+                        color:
+                            mode == DesktopShellMode.chrome &&
+                                    backdropActive &&
+                                    routePath == DesktopRoutes.home
+                                ? Colors.transparent
+                                : skin.bg,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (!backdropActive)
+                              _AmbientLayer(
+                                key: const ValueKey('desktop-shared-ambient'),
+                                path: path,
+                              ),
+                            if (backdropActive ||
+                                mode == DesktopShellMode.chrome)
+                              DesktopBackdropLayer(path: path),
+                            if (mode == DesktopShellMode.chrome)
+                              _Workspace(path: path, child: child)
+                            else
+                              _DesktopImmersiveCanvas(path: path, child: child),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
                   : DesktopWindowChrome(
                     child: ColoredBox(
                       color: scaffoldBackgroundColor,
@@ -501,93 +536,57 @@ class _Workspace extends ConsumerWidget {
     final offline = ref.watch(
       appOnlineStatusProvider.select((async) => async.asData?.value == false),
     );
-    // 自定义壁纸在场时环境光整体让位（样例 `.bd-on .ambient { display:none }`）：
-    // 两者叠在一起会把壁纸压成一层灰雾，暗纱也会重复叠加两次。
-    // 只订阅这一位布尔：拖动暗化/模糊滑杆时 state 每帧都变，整份 watch 会把
-    // 标题栏、侧栏、内容区、详情坞与播放条全部拖进每帧重建。
-    final backdropConfigured = ref.watch(
-      appBackdropControllerProvider.select(
-        (async) => async.asData?.value.hasActiveBackdrop ?? false,
-      ),
-    );
-    final backdropScope = ref.watch(desktopBackdropScopeProvider);
-    final backdropActive =
-        backdropConfigured &&
-        desktopBackdropAppliesToRoute(backdropScope, path);
-    final routePath = Uri.tryParse(path)?.path ?? path.split('?').first;
-
-    // 工作区整体是一个 BackdropGroup：标题栏、卡片、吸顶表头等玻璃面板
-    // 因此共享同一次 backdrop 取样，不再各自捕获一遍背后的场景。各面板
-    // 仍用自己 σ / 色彩矩阵。弹层走 rootOverlay，不在本组内，取样不变。
-    return BackdropGroup(
-      child: DesktopWindowFrame(
-        child: ColoredBox(
-          // Home 的样例壁纸态让窗口底面完全透出背景库；其它页面继续保留
-          // 壳层基色，避免关闭壁纸后露出平台窗口底色。
-          color:
-              backdropActive && routePath == DesktopRoutes.home
-                  ? Colors.transparent
-                  : skin.bg,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (!backdropActive) _AmbientLayer(path: path),
-              DesktopBackdropLayer(path: path),
-              Column(
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Column(
+          children: [
+            DesktopTitleBar(path: path),
+            if (offline)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
+                color: Color.lerp(skin.bg, skin.warm, 0.22),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(DesktopIcons.wifiOff, size: 14, color: skin.text),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        l10n.desktopOfflineBar,
+                        style: DesktopType.caption(skin.text),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  DesktopTitleBar(path: path),
-                  if (offline)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 6,
-                      ),
-                      color: Color.lerp(skin.bg, skin.warm, 0.22),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            DesktopIcons.wifiOff,
-                            size: 14,
-                            color: skin.text,
-                          ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              l10n.desktopOfflineBar,
-                              style: DesktopType.caption(skin.text),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        DesktopSidebar(path: path),
-                        Expanded(child: _RouteEnter(path: path, child: child)),
-                        const DesktopDock(),
-                      ],
-                    ),
-                  ),
+                  DesktopSidebar(path: path),
+                  Expanded(child: _RouteEnter(path: path, child: child)),
+                  const DesktopDock(),
                 ],
               ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: DesktopMetrics.playerBarBottom,
-                child: const DesktopPlayerBar(),
-              ),
-              const DesktopPanelLayer(),
-              const DesktopToasts(),
-              const DesktopContextMenu(),
-              if (commandPaletteOpen) const DesktopCommandPalette(),
-              if (shortcutsOpen) const DesktopShortcutsSheet(),
-            ],
-          ),
+            ),
+          ],
         ),
-      ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: DesktopMetrics.playerBarBottom,
+          child: const DesktopPlayerBar(),
+        ),
+        const DesktopPanelLayer(),
+        const DesktopToasts(),
+        const DesktopContextMenu(),
+        if (commandPaletteOpen) const DesktopCommandPalette(),
+        if (shortcutsOpen) const DesktopShortcutsSheet(),
+      ],
     );
   }
 }

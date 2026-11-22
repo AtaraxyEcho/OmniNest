@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:omninest/app/desktop/desktop_ambient_hints.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
@@ -20,6 +21,7 @@ import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
+import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/errors/error_message.dart';
@@ -459,7 +461,17 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
     );
   }
 
+  void _rememberReaderAmbient(ReaderItem item) {
+    ref
+        .read(desktopAmbientHintProvider.notifier)
+        .rememberReaderBook(
+          item.coverUrl,
+          DesktopPalette.bookToneFor(item.id).tone,
+        );
+  }
+
   void _openBook(ReaderItem item) {
+    _rememberReaderAmbient(item);
     desktopPush(context, DesktopRoutes.bookDetail(item.id));
   }
 
@@ -467,6 +479,7 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
     if (item.id.isEmpty) {
       return;
     }
+    _rememberReaderAmbient(item);
     final encodedId = Uri.encodeComponent(item.id);
     if (item.isComic) {
       desktopPush(context, '/reader/comics/$encodedId/read');

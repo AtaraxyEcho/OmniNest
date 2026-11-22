@@ -304,7 +304,7 @@ extension _DesktopMediaImportDialogUI on _DesktopMediaImportDialogState {
           ),
     );
     if (!enabled) {
-      return Opacity(opacity: 0.48, child: row);
+      return Opacity(opacity: 0.48, alwaysIncludeSemantics: true, child: row);
     }
     return row;
   }

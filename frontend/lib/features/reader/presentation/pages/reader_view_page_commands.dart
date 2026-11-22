@@ -657,6 +657,7 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
             );
             return FadeTransition(
               opacity: animation,
+              alwaysIncludeSemantics: true,
               child: SlideTransition(
                 position: slide,
                 child: ScaleTransition(

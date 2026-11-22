@@ -250,6 +250,7 @@ class _DesktopCoverFieldState extends State<DesktopCoverField> {
                   AnimatedOpacity(
                     duration: MotionToken.reduced(context, MotionToken.fast),
                     opacity: hovered || _picking ? 1 : 0,
+                    alwaysIncludeSemantics: true,
                     child: ColoredBox(
                       color: Colors.black.withValues(alpha: 0.48),
                       child: Center(

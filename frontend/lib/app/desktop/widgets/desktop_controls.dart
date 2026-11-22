@@ -221,7 +221,11 @@ class DesktopButton extends StatelessWidget {
       },
     );
 
-    content = Opacity(opacity: enabled ? 1 : 0.4, child: content);
+    content = Opacity(
+      opacity: enabled ? 1 : 0.4,
+      alwaysIncludeSemantics: true,
+      child: content,
+    );
     content = GestureDetector(
       onTap: enabled ? onPressed : null,
       behavior: HitTestBehavior.opaque,
@@ -347,6 +351,7 @@ class DesktopIconButton extends StatelessWidget {
     }
     button = Opacity(
       opacity: enabled ? 1 : 0.4,
+      alwaysIncludeSemantics: true,
       child: GestureDetector(
         onTap: onPressed,
         behavior: HitTestBehavior.opaque,

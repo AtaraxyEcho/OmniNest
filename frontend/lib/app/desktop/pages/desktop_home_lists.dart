@@ -47,143 +47,155 @@ class _DesktopPhotoStripState extends ConsumerState<DesktopPhotoStrip> {
         minHeightFactor: 0.22,
       );
     }
-    if (dashboard == null && dashboardAsync.isLoading) {
-      return SizedBox(
-        height: 200,
-        child: Row(
-          children: [
-            for (var index = 0; index < 7; index++)
-              Expanded(
-                flex: 1,
-                child: Padding(
-                  padding: EdgeInsets.only(right: index == 6 ? 0 : 10),
-                  child: DesktopSkeletonBox(
-                    height: 200,
-                    radius: 14,
-                    index: index,
-                  ),
+    final skeleton = SizedBox(
+      height: 200,
+      child: Row(
+        children: [
+          for (var index = 0; index < 7; index++)
+            Expanded(
+              flex: 1,
+              child: Padding(
+                padding: EdgeInsets.only(right: index == 6 ? 0 : 10),
+                child: DesktopSkeletonBox(
+                  height: 200,
+                  radius: 14,
+                  index: index,
                 ),
               ),
-          ],
-        ),
-      );
-    }
-    if (photos.isEmpty) {
-      return DesktopEmpty(
-        message: l10n.desktopHomeEmptyPhotos,
-        icon: DesktopIcons.image,
-        actionLabel: l10n.desktopOpenPhotos,
-        onAction: () => context.go(DesktopRoutes.photos),
-      );
-    }
-    return SizedBox(
-      height: 200,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          const gap = 10.0;
-          final count = photos.length;
-          final available = (constraints.maxWidth - gap * (count - 1)).clamp(
-            0.0,
-            double.infinity,
-          );
-          // 样例 `Home.tsx:109-113` & `polish.css:619-620`：
-          // 默认所有缩略图严格等宽 `flex-grow: 1`，悬停项扩展为 `flex-grow: 3`。
-          final grow = List<double>.filled(count, 1.0);
-          if (_hovered != null && _hovered! < count) {
-            grow[_hovered!] = 3.0;
-          }
-          final total = grow.fold<double>(0, (sum, value) => sum + value);
-          return Row(
-            children: [
-              for (var index = 0; index < count; index++)
-                () {
-                  final itemWidth =
-                      total == 0 ? 0.0 : available * grow[index] / total;
-                  final trailingGap = index == count - 1 ? 0.0 : gap;
-                  return MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    // 命中区包住卡片的间隙内边缘，宽度动画时指针不会因
-                    // padding 重新布局而短暂离开 MouseRegion。
-                    onEnter: (_) {
-                      if (_hovered != index) {
-                        setState(() => _hovered = index);
-                      }
-                    },
-                    onExit: (_) {
-                      if (_hovered == index) {
-                        setState(() => _hovered = null);
-                      }
-                    },
-                    child: AnimatedContainer(
-                      duration: DesktopMotion.of(
-                        context,
-                        DesktopMotion.photoStrip,
-                      ),
-                      curve: Curves.easeOutCubic,
-                      width: itemWidth + trailingGap,
-                      padding: EdgeInsets.only(right: trailingGap),
-                      child: GestureDetector(
-                        onTap:
-                            () => context.push(
-                              DesktopRoutes.photoDetail(photos[index].id),
-                            ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              RepaintBoundary(
-                                child: DesktopCover(
-                                  url: photos[index].coverUrl,
-                                  fallbackIcon: DesktopIcons.image,
-                                  // 原型的 `<Img>` 首帧保持照片条的玻璃/背景层，
-                                  // 不先替换成带图标的深色卡片；图片到达后直接覆盖。
-                                  fallback: const SizedBox.expand(),
-                                  cacheKey: photos[index].coverCacheKey,
-                                  // 悬停会改变卡片宽度；固定解码宽度，避免
-                                  // LayoutBuilder 每帧生成新的图片提供器而闪回占位。
-                                  cacheWidth: 1200,
-                                ),
+            ),
+        ],
+      ),
+    );
+    final content =
+        photos.isEmpty
+            ? DesktopEmpty(
+              message: l10n.desktopHomeEmptyPhotos,
+              icon: DesktopIcons.image,
+              actionLabel: l10n.desktopOpenPhotos,
+              onAction: () => context.go(DesktopRoutes.photos),
+            )
+            : SizedBox(
+              height: 200,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const gap = 10.0;
+                  final count = photos.length;
+                  final available = (constraints.maxWidth - gap * (count - 1))
+                      .clamp(0.0, double.infinity);
+                  // 样例 `Home.tsx:109-113` & `polish.css:619-620`：
+                  // 默认所有缩略图严格等宽 `flex-grow: 1`，悬停项扩展为 `flex-grow: 3`。
+                  final grow = List<double>.filled(count, 1.0);
+                  if (_hovered != null && _hovered! < count) {
+                    grow[_hovered!] = 3.0;
+                  }
+                  final total = grow.fold<double>(
+                    0,
+                    (sum, value) => sum + value,
+                  );
+                  return Row(
+                    children: [
+                      for (var index = 0; index < count; index++)
+                        () {
+                          final itemWidth =
+                              total == 0
+                                  ? 0.0
+                                  : available * grow[index] / total;
+                          final trailingGap = index == count - 1 ? 0.0 : gap;
+                          return MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            // 命中区包住卡片的间隙内边缘，宽度动画时指针不会因
+                            // padding 重新布局而短暂离开 MouseRegion。
+                            onEnter: (_) {
+                              if (_hovered != index) {
+                                setState(() => _hovered = index);
+                              }
+                            },
+                            onExit: (_) {
+                              if (_hovered == index) {
+                                setState(() => _hovered = null);
+                              }
+                            },
+                            child: AnimatedContainer(
+                              duration: DesktopMotion.of(
+                                context,
+                                DesktopMotion.photoStrip,
                               ),
-                              AnimatedOpacity(
-                                duration: MotionToken.reduced(
-                                  context,
-                                  MotionToken.fast,
-                                ),
-                                curve: MotionToken.curve,
-                                opacity: _hovered == index ? 1 : 0,
-                                child: Align(
-                                  alignment: Alignment.bottomLeft,
-                                  child: Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      12,
-                                      12,
-                                      12,
-                                      10,
-                                    ),
-                                    child: Text(
-                                      // 样例标签显示 `place`，不是照片标题。
-                                      _photoPlaceLabel(photos[index]) ?? '',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: DesktopType.caption(
-                                        DesktopPalette.onStage,
+                              curve: Curves.easeOutCubic,
+                              width: itemWidth + trailingGap,
+                              padding: EdgeInsets.only(right: trailingGap),
+                              child: GestureDetector(
+                                onTap:
+                                    () => context.push(
+                                      DesktopRoutes.photoDetail(
+                                        photos[index].id,
                                       ),
                                     ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      RepaintBoundary(
+                                        child: DesktopCover(
+                                          url: photos[index].coverUrl,
+                                          fallbackIcon: DesktopIcons.image,
+                                          // 原型的 `<Img>` 首帧保持照片条的玻璃/背景层，
+                                          // 不先替换成带图标的深色卡片；图片到达后直接覆盖。
+                                          fallback: const SizedBox.expand(),
+                                          cacheKey: photos[index].coverCacheKey,
+                                          // 悬停会改变卡片宽度；固定解码宽度，避免
+                                          // LayoutBuilder 每帧生成新的图片提供器而闪回占位。
+                                          cacheWidth: 800,
+                                        ),
+                                      ),
+                                      AnimatedOpacity(
+                                        duration: MotionToken.reduced(
+                                          context,
+                                          MotionToken.fast,
+                                        ),
+                                        curve: MotionToken.curve,
+                                        opacity: _hovered == index ? 1 : 0,
+                                        alwaysIncludeSemantics: true,
+                                        child: Align(
+                                          alignment: Alignment.bottomLeft,
+                                          child: Padding(
+                                            padding: const EdgeInsets.fromLTRB(
+                                              12,
+                                              12,
+                                              12,
+                                              10,
+                                            ),
+                                            child: Text(
+                                              // 样例标签显示 `place`，不是照片标题。
+                                              _photoPlaceLabel(photos[index]) ??
+                                                  '',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: DesktopType.caption(
+                                                DesktopPalette.onStage,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                            ),
+                          );
+                        }(),
+                    ],
                   );
-                }(),
-            ],
-          );
-        },
-      ),
+                },
+              ),
+            );
+    return DesktopSkeletonSwitcher(
+      regionId: 'home-photo-strip',
+      hasData: dashboard != null,
+      loading: dashboard == null && dashboardAsync.isLoading,
+      skeleton: skeleton,
+      child: content,
     );
   }
 }
@@ -224,120 +236,127 @@ class DesktopRecentFiles extends ConsumerWidget {
         minHeightFactor: 0.22,
       );
     }
-    if (recentAsync.isLoading && !recentAsync.hasValue) {
-      return const DesktopSkeletonRows(count: 5);
-    }
-    if (files.isEmpty) {
-      return DesktopEmpty(
-        message: l10n.desktopHomeEmptyFiles,
-        icon: DesktopIcons.folder,
-        actionLabel: l10n.desktopOpenFiles,
-        onAction: () => context.go(DesktopRoutes.files),
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // 样例 `.mini-list > *`：逐行 55ms 交错。
-        for (var index = 0; index < files.length; index++)
-          DesktopStagger(
-            index: index,
-            child: DesktopHover(
-              builder:
-                  (context, hovered) => GestureDetector(
-                    onTap:
-                        () => context.push(
-                          DesktopRoutes.filePreview(files[index].id),
-                        ),
-                    onSecondaryTap:
-                        () => ref
-                            .read(desktopShellProvider.notifier)
-                            .showDetail(
-                              DesktopDetailData(
-                                kind: 'file',
-                                title: files[index].name,
-                                subtitle: formatFileSize(
-                                  files[index].sizeBytes,
+    final content =
+        files.isEmpty
+            ? DesktopEmpty(
+              message: l10n.desktopHomeEmptyFiles,
+              icon: DesktopIcons.folder,
+              actionLabel: l10n.desktopOpenFiles,
+              onAction: () => context.go(DesktopRoutes.files),
+            )
+            : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 样例 `.mini-list > *`：逐行 55ms 交错。
+                for (var index = 0; index < files.length; index++)
+                  DesktopStagger(
+                    index: index,
+                    child: DesktopHover(
+                      builder:
+                          (context, hovered) => GestureDetector(
+                            onTap:
+                                () => context.push(
+                                  DesktopRoutes.filePreview(files[index].id),
                                 ),
-                                squareArt: true,
-                                facts: [
-                                  MapEntry(
-                                    l10n.desktopFileSection,
-                                    files[index].nodeType,
+                            onSecondaryTap:
+                                () => ref
+                                    .read(desktopShellProvider.notifier)
+                                    .showDetail(
+                                      DesktopDetailData(
+                                        kind: 'file',
+                                        title: files[index].name,
+                                        subtitle: formatFileSize(
+                                          files[index].sizeBytes,
+                                        ),
+                                        squareArt: true,
+                                        facts: [
+                                          MapEntry(
+                                            l10n.desktopFileSection,
+                                            files[index].nodeType,
+                                          ),
+                                          MapEntry(
+                                            l10n.desktopStorage,
+                                            formatFileSize(
+                                              files[index].sizeBytes,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                            behavior: HitTestBehavior.opaque,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 9,
+                              ),
+                              decoration: BoxDecoration(
+                                color:
+                                    hovered ? skin.raise2 : Colors.transparent,
+                                borderRadius: BorderRadius.circular(
+                                  DesktopMetrics.radius,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 34,
+                                    height: 34,
+                                    decoration: BoxDecoration(
+                                      color: _toneFor(
+                                        files[index].nodeType,
+                                      ).withValues(alpha: 0.16),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(
+                                      _iconFor(files[index].nodeType),
+                                      size: 15,
+                                      color: _toneFor(files[index].nodeType),
+                                    ),
                                   ),
-                                  MapEntry(
-                                    l10n.desktopStorage,
-                                    formatFileSize(files[index].sizeBytes),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      files[index].name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: DesktopType.rowTitle(skin.text),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        formatFileSize(files[index].sizeBytes),
+                                        style: DesktopType.caption(skin.text3),
+                                      ),
+                                      if (files[index].updatedAt != null) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          _formatRelativeTime(
+                                            l10n,
+                                            files[index].updatedAt!,
+                                          ),
+                                          style: DesktopType.micro(skin.text3),
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ],
                               ),
                             ),
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 9,
-                      ),
-                      decoration: BoxDecoration(
-                        color: hovered ? skin.raise2 : Colors.transparent,
-                        borderRadius: BorderRadius.circular(
-                          DesktopMetrics.radius,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: _toneFor(
-                                files[index].nodeType,
-                              ).withValues(alpha: 0.16),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Icon(
-                              _iconFor(files[index].nodeType),
-                              size: 15,
-                              color: _toneFor(files[index].nodeType),
-                            ),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              files[index].name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: DesktopType.rowTitle(skin.text),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                formatFileSize(files[index].sizeBytes),
-                                style: DesktopType.caption(skin.text3),
-                              ),
-                              if (files[index].updatedAt != null) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  _formatRelativeTime(
-                                    l10n,
-                                    files[index].updatedAt!,
-                                  ),
-                                  style: DesktopType.micro(skin.text3),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ],
-                      ),
                     ),
                   ),
-            ),
-          ),
-      ],
+              ],
+            );
+    return DesktopSkeletonSwitcher(
+      regionId: 'home-recent-files',
+      hasData: recentAsync.hasValue,
+      loading: recentAsync.isLoading && !recentAsync.hasValue,
+      skeleton: const DesktopSkeletonRows(count: 5),
+      child: content,
     );
   }
 
@@ -416,9 +435,6 @@ class _DesktopActivityTimelineState
     final notifState = ref.watch(notificationControllerProvider);
     final items = notifState.items.take(4).toList();
 
-    if (notifState.isLoading && items.isEmpty) {
-      return const DesktopSkeletonRows(count: 4);
-    }
     if (notifState.loadFailed && items.isEmpty) {
       return DesktopErrorView(
         message: l10n.notificationLoadFailed,
@@ -429,96 +445,121 @@ class _DesktopActivityTimelineState
         minHeightFactor: 0.22,
       );
     }
-    if (items.isEmpty) {
-      return DesktopEmpty(
-        message: l10n.desktopHomeEmptyActivity,
-        icon: DesktopIcons.clock,
-        actionLabel: l10n.notificationTitle,
-        onAction: () => context.go(DesktopRoutes.notifications),
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // 样例 `.timeline > *`：逐条 55ms 交错。
-        for (var index = 0; index < items.length; index++)
-          DesktopStagger(
-            index: index,
-            child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    width: 28,
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: _activityToneFor(
-                              skin,
-                              items[index].type,
-                            ).withValues(alpha: 0.14),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            _activityIconFor(items[index].type),
-                            size: 13,
-                            color: _activityToneFor(skin, items[index].type),
-                          ),
-                        ),
-                        if (index != items.length - 1)
-                          Expanded(
-                            child: Container(width: 1, color: skin.line),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 14, top: 3),
+    final content =
+        items.isEmpty
+            ? DesktopEmpty(
+              message: l10n.desktopHomeEmptyActivity,
+              icon: DesktopIcons.clock,
+              actionLabel: l10n.notificationTitle,
+              onAction: () => context.go(DesktopRoutes.notifications),
+            )
+            : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 样例 `.timeline > *`：逐条 55ms 交错。
+                for (var index = 0; index < items.length; index++)
+                  DesktopStagger(
+                    index: index,
+                    child: IntrinsicHeight(
                       child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Expanded(
+                          SizedBox(
+                            width: 28,
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  (items[index].title ?? '').isNotEmpty
-                                      ? items[index].title!
-                                      : items[index].type,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: DesktopType.denseStrong(skin.text),
+                                Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: _activityToneFor(
+                                      skin,
+                                      items[index].type,
+                                    ).withValues(alpha: 0.14),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    _activityIconFor(items[index].type),
+                                    size: 13,
+                                    color: _activityToneFor(
+                                      skin,
+                                      items[index].type,
+                                    ),
+                                  ),
                                 ),
-                                if ((items[index].message ?? '').isNotEmpty)
-                                  Text(
-                                    items[index].message!,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: DesktopType.caption(skin.text3),
+                                if (index != items.length - 1)
+                                  Expanded(
+                                    child: Container(
+                                      width: 1,
+                                      color: skin.line,
+                                    ),
                                   ),
                               ],
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          Text(
-                            _formatRelativeTime(l10n, items[index].createdAt),
-                            style: DesktopType.caption(skin.text3),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: 14,
+                                top: 3,
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          (items[index].title ?? '').isNotEmpty
+                                              ? items[index].title!
+                                              : items[index].type,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: DesktopType.denseStrong(
+                                            skin.text,
+                                          ),
+                                        ),
+                                        if ((items[index].message ?? '')
+                                            .isNotEmpty)
+                                          Text(
+                                            items[index].message!,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: DesktopType.caption(
+                                              skin.text3,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    _formatRelativeTime(
+                                      l10n,
+                                      items[index].createdAt,
+                                    ),
+                                    style: DesktopType.caption(skin.text3),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-      ],
+              ],
+            );
+    return DesktopSkeletonSwitcher(
+      regionId: 'home-activity-timeline',
+      hasData: !notifState.isLoading || items.isNotEmpty,
+      loading: notifState.isLoading && items.isEmpty,
+      skeleton: const DesktopSkeletonRows(count: 4),
+      child: content,
     );
   }
 

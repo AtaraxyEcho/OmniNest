@@ -67,6 +67,7 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
               child: AnimatedOpacity(
                 opacity: _slideStageHovered ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 200),
+                alwaysIncludeSemantics: true,
                 child: Center(
                   child: Icon(
                     Icons.chevron_left_rounded,
@@ -86,6 +87,7 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
               child: AnimatedOpacity(
                 opacity: _slideStageHovered ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 200),
+                alwaysIncludeSemantics: true,
                 child: Center(
                   child: Icon(
                     Icons.chevron_right_rounded,

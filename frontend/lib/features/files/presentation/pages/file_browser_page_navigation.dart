@@ -216,6 +216,7 @@ class _PulsingStatusDotState extends State<_PulsingStatusDot>
         opacity: Tween(begin: 0.35, end: 1.0).animate(
           CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
         ),
+        alwaysIncludeSemantics: true,
         child: widget.child,
       ),
     );
@@ -565,7 +566,11 @@ class _AnimatedSectionBody extends StatelessWidget {
       // 退场子树排除语义，避免与入场子树同批更新触发 Windows 桥失败。
       layoutBuilder: excludeExitingSemanticsStack,
       transitionBuilder: (child, animation) {
-        return FadeTransition(opacity: animation, child: child);
+        return FadeTransition(
+          opacity: animation,
+          alwaysIncludeSemantics: true,
+          child: child,
+        );
       },
       child: child,
     );

@@ -131,6 +131,8 @@ class ProfileDesktopShell extends StatelessWidget {
                                     switchInCurve: Curves.easeOutQuart,
                                     switchOutCurve: Curves.easeInCubic,
                                     layoutBuilder: excludeExitingSemanticsStack,
+                                    transitionBuilder:
+                                        semanticsSafeFadeTransition,
                                     child: KeyedSubtree(
                                       key: ValueKey(selectedSection),
                                       child: child,

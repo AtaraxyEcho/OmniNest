@@ -150,6 +150,7 @@ class _AppBackdropVideoViewState extends ConsumerState<AppBackdropVideoView>
               const Duration(milliseconds: 80),
             ),
             curve: Curves.easeOut,
+            alwaysIncludeSemantics: true,
             child: Video(
               key: ValueKey(session.controller),
               controller: session.controller!,

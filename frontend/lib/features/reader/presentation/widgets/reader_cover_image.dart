@@ -73,6 +73,7 @@ class AuthCoverImage extends ConsumerWidget {
                     context,
                     const Duration(milliseconds: 300),
                   ),
+                  alwaysIncludeSemantics: true,
                   child: child,
                 );
               },
@@ -134,6 +135,7 @@ class AuthCoverImage extends ConsumerWidget {
                 context,
                 const Duration(milliseconds: 300),
               ),
+              alwaysIncludeSemantics: true,
               child: child,
             );
           },

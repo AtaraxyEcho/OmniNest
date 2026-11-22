@@ -59,11 +59,26 @@ class _NpSpectrumBackdropState extends ConsumerState<NpSpectrumBackdrop>
     _syncTicker();
   }
 
+  void _bindFeed(ValueListenable<MusicSpectrumFrame> next) {
+    if (identical(_feed, next)) return;
+    _feed?.removeListener(_onFeedUpdate);
+    _feed = next;
+    _feed?.addListener(_onFeedUpdate);
+  }
+
+  void _onFeedUpdate() {
+    // 保持对 MusicSpectrumSampler 的活跃监听以解锁底层原生 FFT 采样，
+    // 实际画面更新仍由 _ticker 按刷新率统一步进。
+  }
+
   @override
   void didUpdateWidget(NpSpectrumBackdrop oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.seed != widget.seed) {
       _state.updateSeed(widget.seed);
+      _state.resetAudioTracking();
+    } else if (!oldWidget.playing && widget.playing) {
+      _state.resetAudioTracking();
     }
     _syncTicker();
     final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
@@ -161,6 +176,8 @@ class _NpSpectrumBackdropState extends ConsumerState<NpSpectrumBackdrop>
   @override
   void dispose() {
     _disposed = true;
+    _feed?.removeListener(_onFeedUpdate);
+    _feed = null;
     _ticker.dispose();
     _state.dispose();
     super.dispose();
@@ -168,7 +185,7 @@ class _NpSpectrumBackdropState extends ConsumerState<NpSpectrumBackdrop>
 
   @override
   Widget build(BuildContext context) {
-    _feed = ref.watch(musicSpectrumFeedProvider);
+    _bindFeed(ref.watch(musicSpectrumFeedProvider));
     return RepaintBoundary(
       child: CustomPaint(
         painter: _NpSpectrumPainter(state: _state),
@@ -242,7 +259,7 @@ class _SpectrumState extends ChangeNotifier {
   static const int pointCount = 56;
   static const int maxSparks = 90;
   static const List<_RibbonLayerConfig> layers = <_RibbonLayerConfig>[
-    _RibbonLayerConfig(follow: 9.0, amp: 1.0, dh: 0.0, alpha: 0.50),
+    _RibbonLayerConfig(follow: 12.0, amp: 1.0, dh: 0.0, alpha: 0.50),
     _RibbonLayerConfig(follow: 7.0, amp: 0.82, dh: 22.0, alpha: 0.42),
     _RibbonLayerConfig(follow: 5.0, amp: 0.62, dh: 48.0, alpha: 0.36),
     _RibbonLayerConfig(follow: 3.5, amp: 0.40, dh: -26.0, alpha: 0.30),
@@ -281,6 +298,13 @@ class _SpectrumState extends ChangeNotifier {
   double _bassAvg = 0.0;
   double _lastOnsetAt = -10.0;
   int _silentFrames = 0;
+
+  void resetAudioTracking() {
+    _peak = 0.35;
+    _bassAvg = 0.0;
+    _lastOnsetAt = -10.0;
+    _silentFrames = 0;
+  }
 
   void updateSeed(String seed) {
     var sd = 7;
@@ -352,20 +376,21 @@ class _SpectrumState extends ChangeNotifier {
     }
     // 自动增益：快升慢落（audioBus.ts:37）。
     final targetPeak = math.max(maxVal, 0.2);
-    _peak += (targetPeak - _peak) * (maxVal > _peak ? 0.2 : 0.01);
+    _peak += (targetPeak - _peak) * (maxVal > _peak ? 0.2 : 0.035);
     final invPeak = _peak > 1e-4 ? 1.0 / _peak : 1.0;
     for (var i = 0; i < pointCount; i++) {
-      bands[i] = (bands[i] * invPeak).clamp(0.0, 1.0);
+      final v = (bands[i] * invPeak).clamp(0.0, 1.0);
+      bands[i] = math.pow(v, 0.82).toDouble();
     }
 
     var onset = 0.0;
     final bass = frame.bass.clamp(0.0, 1.0);
     final frameBeat = frame.beat.clamp(0.0, 1.0);
-    if ((idle - _lastOnsetAt) > 0.28) {
-      if (frameBeat > 0.35) {
+    if ((idle - _lastOnsetAt) > 0.18) {
+      if (frameBeat > 0.22) {
         onset = frameBeat;
         _lastOnsetAt = idle;
-      } else if (bass > _bassAvg * 1.3 + 0.04) {
+      } else if (bass > _bassAvg * 1.18 + 0.03) {
         onset = ((bass - _bassAvg) * 3.0).clamp(0.0, 1.0);
         _lastOnsetAt = idle;
       }
@@ -411,9 +436,9 @@ class _SpectrumState extends ChangeNotifier {
     if (realOnset != null) {
       t += dt;
       if (realOnset > 0) {
-        hit = math.max(hit, 0.5 + realOnset * 0.5);
-        pulse = math.max(pulse, 0.25 + realOnset * 0.35);
-        _emitSparks(2, 0.6);
+        hit = math.max(hit, 0.65 + 0.35 * realOnset);
+        pulse = math.max(pulse, 0.38 + 0.42 * realOnset);
+        _emitSparks(2 + (realOnset * 2).round(), 0.7 + realOnset * 0.25);
       }
     } else if (playing) {
       t += dt;
@@ -474,13 +499,13 @@ class _SpectrumState extends ChangeNotifier {
       s.y += s.vy * dt;
     }
 
-    // 更新 4 层频谱丝带值（上升 2.5×、回落 1.0×）并记录 L0 峰顶归一化 Y。
+    // 更新 4 层频谱丝带值（上升 3.0×、回落 1.35×）并记录 L0 峰顶归一化 Y。
     for (var li = layers.length - 1; li >= 0; li--) {
       final cfg = layers[li];
       final v = vals[li];
       for (var i = 0; i < pointCount; i++) {
         final rising = target[i] > v[i];
-        final alpha = math.min(1.0, dt * cfg.follow * (rising ? 2.5 : 1.0));
+        final alpha = math.min(1.0, dt * cfg.follow * (rising ? 3.0 : 1.35));
         v[i] += (target[i] - v[i]) * alpha;
       }
       if (li == 0) {

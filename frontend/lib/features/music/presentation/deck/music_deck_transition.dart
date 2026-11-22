@@ -12,6 +12,7 @@ Widget musicDeckImmersiveTransition(Widget child, Animation<double> animation) {
   );
   return FadeTransition(
     opacity: animation,
+    alwaysIncludeSemantics: true,
     child: SlideTransition(
       position: Tween<Offset>(
         begin: const Offset(0, 0.06),

@@ -73,6 +73,7 @@ class _AnimatedCardState extends State<AnimatedCard>
     }
     return FadeTransition(
       opacity: _opacity,
+      alwaysIncludeSemantics: true,
       child: SlideTransition(position: _offset, child: widget.child),
     );
   }

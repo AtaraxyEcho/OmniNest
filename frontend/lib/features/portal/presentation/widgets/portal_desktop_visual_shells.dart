@@ -277,6 +277,7 @@ class _PortalDesktopVisualHostState
                           const Duration(milliseconds: 240),
                         ),
                         curve: Curves.easeOutCubic,
+                        alwaysIncludeSemantics: true,
                         child: AnimatedScale(
                           // 背景"收远"而不是下移：与前景的推近形成对向运动，
                           // 位移读起来像页面被挤走。不叠压暗遮罩，壁纸可见度
@@ -343,6 +344,7 @@ class _PortalDesktopVisualHostState
                   final settled = MediaQuery.disableAnimationsOf(context);
                   return FadeTransition(
                     opacity: curved,
+                    alwaysIncludeSemantics: true,
                     child: SlideTransition(
                       position: Tween<Offset>(
                         begin: settled ? Offset.zero : const Offset(0, 0.02),

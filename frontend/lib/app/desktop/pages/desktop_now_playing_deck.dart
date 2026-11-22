@@ -119,7 +119,11 @@ class _DeckState extends State<_Deck> with TickerProviderStateMixin {
                               playing ? (1.00 + 0.025 * wave) : 1.00;
                           return Transform.scale(
                             scale: auraScale,
-                            child: Opacity(opacity: auraOpacity, child: child),
+                            child: Opacity(
+                              opacity: auraOpacity,
+                              alwaysIncludeSemantics: true,
+                              child: child,
+                            ),
                           );
                         },
                         child: ImageFiltered(

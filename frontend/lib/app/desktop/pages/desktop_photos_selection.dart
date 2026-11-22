@@ -144,6 +144,7 @@ class _PhotoTile extends StatelessWidget {
                                   DesktopMotion.photoReorderSourceFade,
                                 )
                                 : Duration.zero,
+                        alwaysIncludeSemantics: true,
                         child: AnimatedScale(
                           scale:
                               pressing
@@ -196,6 +197,7 @@ class _PhotoTile extends StatelessWidget {
                                 context,
                                 DesktopMotion.soft,
                               ),
+                              alwaysIncludeSemantics: true,
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
                                   gradient:
@@ -243,6 +245,7 @@ class _PhotoTile extends StatelessWidget {
                               DesktopMotion.soft,
                             ),
                             opacity: hovered ? 1 : 0,
+                            alwaysIncludeSemantics: true,
                             child: Text(
                               photo.title,
                               maxLines: 1,
@@ -360,6 +363,7 @@ class _SelectCheck extends StatelessWidget {
     return AnimatedOpacity(
       opacity: visible ? 1 : 0,
       duration: DesktopMotion.of(context, DesktopMotion.soft),
+      alwaysIncludeSemantics: true,
       child: AnimatedScale(
         scale: selected ? 1.1 : 1,
         duration: DesktopMotion.of(context, DesktopMotion.soft),
@@ -437,6 +441,7 @@ class _PhotoSelectionOverlay extends StatelessWidget {
           opacity: visible ? 1 : 0,
           duration: DesktopMotion.of(context, DesktopMotion.pane),
           curve: DesktopMotion.ease,
+          alwaysIncludeSemantics: true,
           child: Center(
             child: _PhotoSelectionBar(
               count: count,

@@ -323,6 +323,7 @@ class _ThemeGlyph extends StatelessWidget {
       return AnimatedOpacity(
         duration: duration,
         opacity: visible ? 1 : 0,
+        alwaysIncludeSemantics: true,
         child: AnimatedRotation(
           duration: duration,
           curve: DesktopMotion.spring,

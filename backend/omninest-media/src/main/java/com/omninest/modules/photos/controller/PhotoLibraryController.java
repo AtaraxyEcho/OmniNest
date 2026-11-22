@@ -43,6 +43,7 @@ import com.omninest.modules.photos.service.PhotoAiTaskService;
 import com.omninest.modules.photos.domain.PhotoDisplayOrder;
 import com.omninest.modules.photos.repository.PhotoDisplayOrderRepository;
 import com.omninest.modules.photos.service.PhotoAlbumService;
+import com.omninest.modules.photos.service.PhotoDisplayOrderService;
 import com.omninest.modules.photos.service.PhotoBatchService;
 import com.omninest.modules.photos.service.PhotoEditService;
 import com.omninest.modules.photos.service.PhotoMotionRescanService;
@@ -59,12 +60,17 @@ import java.io.IOException;
 import java.time.Duration;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -91,6 +97,7 @@ public class PhotoLibraryController {
     private final PhotoLibraryService libraryService;
     private final PhotoAlbumService albumService;
     private final PhotoDisplayOrderRepository displayOrderRepository;
+    private final PhotoDisplayOrderService displayOrderService;
     private final PhotoAdminService adminService;
     private final PhotoBatchService batchService;
     private final PhotoEditService editService;
@@ -543,6 +550,15 @@ public class PhotoLibraryController {
         return ApiResponse.success();
     }
 
+    @Operation(summary = "重置相册内照片排序", description = "清除指定相册的自定义展示顺序，恢复默认排序")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
+    @DeleteMapping("/api/v1/photos/albums/{albumId}/items/order")
+    ApiResponse<Void> resetAlbumItemsOrder(@PathVariable UUID albumId) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        albumService.resetAlbumItemsOrder(userId, albumId);
+        return ApiResponse.success();
+    }
+
     // ─── 多视图自定义排序 ───
 
     @Operation(summary = "获取照片自定义排序映射", description = "返回当前用户各视图上下文（按日分组、收藏等）的自定义排序")
@@ -566,22 +582,18 @@ public class PhotoLibraryController {
     ) {
         UUID userId = currentUserContext.requireCurrentUserId();
         String normalizedKey = normalizeOrderContextKey(contextKey);
-        PhotoDisplayOrder record = displayOrderRepository
-                .findByOwnerUserIdAndContextKey(userId, normalizedKey)
-                .orElseGet(() -> {
-                    PhotoDisplayOrder created = new PhotoDisplayOrder();
-                    created.setOwnerUserId(userId);
-                    created.setContextKey(normalizedKey);
-                    return created;
-                });
-        List<UUID> deduped = new ArrayList<>();
+        Set<UUID> uniqueIds = new LinkedHashSet<>();
         for (UUID photoId : body.photoIds()) {
-            if (photoId != null && !deduped.contains(photoId)) {
-                deduped.add(photoId);
+            if (photoId != null) {
+                uniqueIds.add(photoId);
             }
         }
-        record.setOrderedPhotoIds(deduped);
-        displayOrderRepository.save(record);
+        List<UUID> deduped = new ArrayList<>(uniqueIds);
+        try {
+            displayOrderService.saveDisplayOrder(userId, normalizedKey, deduped);
+        } catch (DataIntegrityViolationException | OptimisticLockingFailureException conflict) {
+            displayOrderService.saveDisplayOrder(userId, normalizedKey, deduped);
+        }
         return ApiResponse.success(deduped);
     }
 
@@ -591,9 +603,11 @@ public class PhotoLibraryController {
     ApiResponse<Void> deleteDisplayOrder(@PathVariable String contextKey) {
         UUID userId = currentUserContext.requireCurrentUserId();
         String normalizedKey = normalizeOrderContextKey(contextKey);
-        displayOrderRepository
-                .findByOwnerUserIdAndContextKey(userId, normalizedKey)
-                .ifPresent(displayOrderRepository::delete);
+        try {
+            displayOrderService.deleteDisplayOrder(userId, normalizedKey);
+        } catch (DataIntegrityViolationException | OptimisticLockingFailureException conflict) {
+            displayOrderService.deleteDisplayOrder(userId, normalizedKey);
+        }
         return ApiResponse.success();
     }
 
@@ -605,7 +619,7 @@ public class PhotoLibraryController {
         return trimmed;
     }
 
-    public record ReorderPhotosRequest(@NotNull List<UUID> photoIds) {
+    public record ReorderPhotosRequest(@NotNull @Size(max = 5000) List<UUID> photoIds) {
     }
 
     // ─── 时间线与分组 ───

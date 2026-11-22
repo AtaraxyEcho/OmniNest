@@ -316,7 +316,11 @@ class _QueueBody extends ConsumerWidget {
           proxyDecorator:
               (child, index, animation) => Material(
                 color: Colors.transparent,
-                child: Opacity(opacity: 0.85, child: child),
+                child: Opacity(
+                  opacity: 0.85,
+                  alwaysIncludeSemantics: true,
+                  child: child,
+                ),
               ),
           itemBuilder: (context, index) {
             final item = queue[index];

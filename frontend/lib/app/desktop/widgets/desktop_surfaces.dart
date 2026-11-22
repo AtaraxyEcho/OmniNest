@@ -297,6 +297,7 @@ class _DesktopStickySliverDelegate extends SliverPersistentHeaderDelegate {
                   opacity: stuck ? 1.0 : 0.0,
                   duration: duration,
                   curve: DesktopMotion.ease,
+                  alwaysIncludeSemantics: true,
                   child: ClipRect(
                     child: BackdropFilter.grouped(
                       filterConfig: ImageFilterConfig(
@@ -564,6 +565,7 @@ class DesktopLink extends StatelessWidget {
             behavior: HitTestBehavior.opaque,
             child: Opacity(
               opacity: hovered ? 0.75 : 1,
+              alwaysIncludeSemantics: true,
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(

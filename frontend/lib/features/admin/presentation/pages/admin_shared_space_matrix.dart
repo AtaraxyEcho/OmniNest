@@ -567,6 +567,7 @@ class _DesktopCapabilityPill extends StatelessWidget {
             behavior: HitTestBehavior.opaque,
             child: Opacity(
               opacity: enabled ? 1.0 : 0.55,
+              alwaysIncludeSemantics: true,
               child: AnimatedContainer(
                 duration: MotionToken.reduced(context, MotionToken.fast),
                 curve: MotionToken.curve,

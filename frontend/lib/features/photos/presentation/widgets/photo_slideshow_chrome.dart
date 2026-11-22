@@ -276,6 +276,7 @@ class SlideshowSlideLayer extends StatelessWidget {
       transform: Matrix4.identity()..scaleByDouble(scale, scale, 1, 1),
       child: Opacity(
         opacity: opacity.clamp(0.0, 1.0),
+        alwaysIncludeSemantics: true,
         child: RepaintBoundary(child: SizedBox.expand(child: resolved)),
       ),
     );

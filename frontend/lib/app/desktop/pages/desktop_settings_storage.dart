@@ -218,6 +218,7 @@ class _StorageDistributionState extends ConsumerState<_StorageDistribution> {
                               animationsDisabled
                                   ? Duration.zero
                                   : const Duration(milliseconds: 140),
+                          alwaysIncludeSemantics: true,
                           child: Row(
                             children: [
                               Container(

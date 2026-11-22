@@ -549,7 +549,11 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
       builder:
           (context, t, child) => Transform.translate(
             offset: Offset(0, t * 72),
-            child: Opacity(opacity: 1 - t, child: child),
+            child: Opacity(
+              opacity: 1 - t,
+              alwaysIncludeSemantics: true,
+              child: child,
+            ),
           ),
       child: _BatchActionBar(state: state, ref: ref),
     );

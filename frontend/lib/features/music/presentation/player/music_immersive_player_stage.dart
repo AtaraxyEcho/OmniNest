@@ -64,6 +64,7 @@ class _StageRevealState extends State<_StageReveal>
       opacity: Tween<double>(begin: _startOpacity, end: 1).animate(
         CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
       ),
+      alwaysIncludeSemantics: true,
       child: widget.child,
     );
   }

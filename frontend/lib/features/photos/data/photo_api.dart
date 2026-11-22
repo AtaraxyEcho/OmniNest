@@ -329,6 +329,14 @@ class PhotoApi {
     ensureEnvelopeSuccess(response.data, fallbackMessage: '保存相册排序失败');
   }
 
+  /// 重置相册内照片自定义排序，恢复默认顺序。
+  Future<void> resetAlbumItemsOrder({required String albumId}) async {
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
+      '/photos/albums/${Uri.encodeComponent(albumId)}/items/order',
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '重置相册排序失败');
+  }
+
   /// 获取当前用户的全部上下文展示排序（按日分组 / 收藏）。
   Future<Map<String, List<String>>> listDisplayOrders() async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(

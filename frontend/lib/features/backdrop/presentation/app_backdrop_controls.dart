@@ -115,6 +115,7 @@ class AppBackdropControls extends StatelessWidget {
                   const Duration(milliseconds: 180),
                 ),
                 layoutBuilder: excludeExitingSemanticsStack,
+                transitionBuilder: semanticsSafeFadeTransition,
                 child:
                     settings.separateDeviceBackdrops
                         ? _BackdropTargetNotice(
@@ -338,6 +339,7 @@ class _BackdropToggleRow extends StatelessWidget {
         onTap: interactive ? () => onChanged!(!value) : null,
         child: Opacity(
           opacity: interactive ? 1 : 0.45,
+          alwaysIncludeSemantics: true,
           child: Padding(
             // 测试与调用方定位开关行的稳定锚点。
             key: ValueKey<String>('backdrop-toggle-$title'),

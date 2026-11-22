@@ -116,21 +116,23 @@ class _DesktopBarTipOverlayState extends State<DesktopBarTipOverlay> {
         return Positioned(
           top: 0,
           left: 0,
-          child: CompositedTransformFollower(
-            link: _layerLink,
-            showWhenUnlinked: false,
-            targetAnchor: targetAnchor,
-            followerAnchor: followerAnchor,
-            offset: const Offset(0, -8),
-            child: IgnorePointer(
-              child: Material(
-                type: MaterialType.transparency,
-                child: _DesktopTipCapsule(
-                  title: widget.title,
-                  value: widget.value,
-                  subtitle: widget.subtitle,
-                  dotColor: widget.dotColor,
-                  align: widget.align,
+          child: ExcludeSemantics(
+            child: CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              targetAnchor: targetAnchor,
+              followerAnchor: followerAnchor,
+              offset: const Offset(0, -8),
+              child: IgnorePointer(
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: _DesktopTipCapsule(
+                    title: widget.title,
+                    value: widget.value,
+                    subtitle: widget.subtitle,
+                    dotColor: widget.dotColor,
+                    align: widget.align,
+                  ),
                 ),
               ),
             ),
@@ -462,6 +464,7 @@ class _DesktopInteractiveBarChartState
               animationsDisabled
                   ? Duration.zero
                   : const Duration(milliseconds: 140),
+          alwaysIncludeSemantics: true,
           child: bar,
         ),
       ),
@@ -610,6 +613,7 @@ class _DesktopInteractiveSegmentedBarState
                 animationsDisabled
                     ? Duration.zero
                     : const Duration(milliseconds: 140),
+            alwaysIncludeSemantics: true,
             child: ColoredBox(
               color: segment.color,
               child: const SizedBox.expand(),

@@ -538,7 +538,10 @@ class _NotificationMobileRow extends StatelessWidget {
         ],
       ),
     );
-    final dimmedRow = isUnread ? row : Opacity(opacity: 0.55, child: row);
+    final dimmedRow =
+        isUnread
+            ? row
+            : Opacity(opacity: 0.55, alwaysIncludeSemantics: true, child: row);
     if (!canManage) {
       return dimmedRow;
     }

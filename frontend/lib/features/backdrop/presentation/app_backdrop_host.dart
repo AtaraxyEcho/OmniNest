@@ -91,6 +91,7 @@ class AppBackdropHost extends ConsumerWidget {
                     ? Duration.zero
                     : const Duration(milliseconds: 240),
             curve: Curves.easeOutCubic,
+            alwaysIncludeSemantics: true,
             child: surface,
           ),
         ),

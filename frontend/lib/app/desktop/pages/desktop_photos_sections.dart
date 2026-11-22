@@ -184,6 +184,7 @@ class _TrashPhotoTile extends StatelessWidget {
                 AnimatedOpacity(
                   duration: DesktopMotion.of(context, DesktopMotion.soft),
                   opacity: hovered ? 1.0 : 0.0,
+                  alwaysIncludeSemantics: true,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: Colors.black.withValues(alpha: 0.42),
@@ -560,10 +561,12 @@ class _PlacesSectionState extends ConsumerState<_PlacesSection> {
       ],
     );
 
+    final hasLoadedLocationPage =
+        _loadedLocation == selectedName && _loadedPhotos != null;
+    // 首地点分页加载期间保持骨架过渡，避免先渲 1~3 张缩略图再突变为完整分页导致二次跳动。
+    final locationPageLoading = _loading && !hasLoadedLocationPage;
     final photos =
-        (_loadedLocation == selectedName && _loadedPhotos != null)
-            ? _loadedPhotos!
-            : selectedGroup.photos;
+        hasLoadedLocationPage ? _loadedPhotos! : selectedGroup.photos;
     final displayCount =
         (_loadedLocation == selectedName && _loadedTotal != null)
             ? math.max(_loadedTotal!, photos.length)
@@ -611,43 +614,65 @@ class _PlacesSectionState extends ConsumerState<_PlacesSection> {
               style: DesktopType.caption(skin.text3),
             ),
             const SizedBox(height: 14),
-            if (photos.isEmpty && !_loading)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 40),
-                child: DesktopEmpty(
-                  icon: DesktopIcons.image,
-                  message: l10n.photosNoPlaces,
-                  actionLabel: null,
-                ),
-              )
-            else ...[
-              _JustifiedPhotos(
-                photos: photos,
+            DesktopSkeletonSwitcher(
+              regionId: 'photos-places-grid-$selectedName',
+              hasData: hasLoadedLocationPage,
+              loading: locationPageLoading,
+              skeleton: const DesktopSkeletonPhotoGrid(
                 targetHeight: 180,
-                selection: const <String>{},
-                onActivate:
-                    (photo, groupPhotos) => widget.onOpen(photo, groupPhotos),
-                onToggleSelect: (_) {},
-                showSelectionControls: false,
+                groups: 1,
+                rows: 2,
+                showGroupHeaders: false,
               ),
-              if (_hasMore)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: Center(
-                    child: DesktopButton(
-                      label: l10n.adminLoadMore(photos.length, displayCount),
-                      variant: DesktopButtonVariant.soft,
-                      busy: _loading,
-                      onPressed:
-                          _loading
-                              ? null
-                              : () => unawaited(
-                                _loadLocationPage(selectedName, reset: false),
+              child:
+                  photos.isEmpty
+                      ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 40),
+                        child: DesktopEmpty(
+                          icon: DesktopIcons.image,
+                          message: l10n.photosNoPlaces,
+                          actionLabel: null,
+                        ),
+                      )
+                      : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _JustifiedPhotos(
+                            photos: photos,
+                            targetHeight: 180,
+                            selection: const <String>{},
+                            onActivate:
+                                (photo, groupPhotos) =>
+                                    widget.onOpen(photo, groupPhotos),
+                            onToggleSelect: (_) {},
+                            showSelectionControls: false,
+                          ),
+                          if (_hasMore)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 16),
+                              child: Center(
+                                child: DesktopButton(
+                                  label: l10n.adminLoadMore(
+                                    photos.length,
+                                    displayCount,
+                                  ),
+                                  variant: DesktopButtonVariant.soft,
+                                  busy: _loading,
+                                  onPressed:
+                                      _loading
+                                          ? null
+                                          : () => unawaited(
+                                            _loadLocationPage(
+                                              selectedName,
+                                              reset: false,
+                                            ),
+                                          ),
+                                ),
                               ),
-                    ),
-                  ),
-                ),
-            ],
+                            ),
+                        ],
+                      ),
+            ),
           ],
         );
       },
