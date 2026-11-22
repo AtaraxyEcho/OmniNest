@@ -21,6 +21,7 @@ import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_ch
 import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_overlays.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// mock HTTP 返回的图片字节：由测试引擎现场生成并编码的合法 PNG。
 Uint8List? _servedImageBytes;
@@ -285,7 +286,7 @@ Future<void> _pumpSlideshow(WidgetTester tester, List<PhotoItem> photos) async {
         photoRepositoryProvider.overrideWithValue(_StubPhotoRepository(photos)),
       ],
       child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('en'),
         theme: OmniNestTheme.from(AppThemePalette.dark),
@@ -339,7 +340,7 @@ Future<void> _pumpSlideshowViaPush(
       child: _WindowChromeProbe(
         hidden: chromeHidden,
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('en'),
           theme: OmniNestTheme.from(AppThemePalette.dark),

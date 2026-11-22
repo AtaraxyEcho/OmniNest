@@ -39,6 +39,7 @@ import 'package:omninest/features/reader/application/reader_controller.dart'
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 import 'package:omninest/features/video/video_dashboard.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart'
     show MovieStats;
 import 'package:omninest/features/reader/domain/reader_dashboard.dart'
@@ -642,7 +643,7 @@ Widget wrapDesktop(
     child: MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: DesktopTheme.resolve(isDark: dark, accent: accent),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('en'),
       home: ColoredBox(

@@ -8,6 +8,7 @@ import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/app/theme/feature/portal_mobile_theme.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_create_playlist_dialog.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_visual_widgets.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   testWidgets('Portal 调色板跟随根主题明暗', (tester) async {
@@ -197,7 +198,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           locale: const Locale('zh'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme:
               brightness == Brightness.light

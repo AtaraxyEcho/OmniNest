@@ -6,6 +6,7 @@ import 'package:flutter/services.dart'
         FilteringTextInputFormatter,
         LengthLimitingTextInputFormatter,
         TextInputFormatter;
+import 'package:omninest/app/desktop/widgets/desktop_window_controls.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/widgets/app_dropdown.dart';
@@ -286,6 +287,7 @@ class _ReaderMetadataEditPageState
     return Scaffold(
       backgroundColor: context.readerColors.surface,
       appBar: AppBar(
+        flexibleSpace: const DesktopWindowDragRegion(child: SizedBox.expand()),
         backgroundColor: context.readerColors.surfaceContainer,
         leading: IconButton(
           tooltip: AppLocalizations.of(context).coreBack,

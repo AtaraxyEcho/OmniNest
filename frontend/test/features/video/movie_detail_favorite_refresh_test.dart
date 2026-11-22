@@ -14,6 +14,7 @@ import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/data/movie_api.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/pages/movie_detail_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   testWidgets('详情页收藏走控制器并触发中心数据回调刷新', (tester) async {
@@ -40,7 +41,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: ThemeData.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const MovieDetailPage(videoItemId: 'video-1'),

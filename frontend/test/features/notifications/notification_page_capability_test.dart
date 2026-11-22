@@ -10,6 +10,7 @@ import 'package:omninest/features/notifications/domain/notification_models.dart'
 import 'package:omninest/core/widgets/workstation_portal_link.dart';
 import 'package:omninest/features/notifications/presentation/pages/notification_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 受限角色（无 activity:write）的通知页门控回归：
 /// 全部主动写入口（全部已读 / 清空 / 条目删除）必须隐藏，仅保留浏览；
@@ -79,7 +80,7 @@ void main() {
   Widget buildPage() {
     return MaterialApp(
       theme: OmniNestTheme.light(),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       home: const NotificationPage(),

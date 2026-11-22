@@ -8,6 +8,7 @@ import 'package:omninest/features/video/application/movie_center_state.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_shell.dart';
 
 import 'desktop_test_harness.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 模块在桌面统一壳内的托管形态验收：
 /// 模块自己的顶栏与分区侧栏让位，分区改走页内分段条，内容照常渲染。
@@ -27,7 +28,7 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: DesktopTheme.resolve(isDark: true),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('en'),
             home: DesktopShellScope(

@@ -7,6 +7,7 @@ import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/pages/movie_detail_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   for (final scale in <double>[1.15, 1.3]) {
@@ -27,7 +28,7 @@ void main() {
           ],
           child: MaterialApp(
             theme: ThemeData.dark(),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('zh'),
             builder: (context, child) {

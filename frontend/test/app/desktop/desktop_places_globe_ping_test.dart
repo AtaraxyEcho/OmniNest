@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/desktop/widgets/desktop_places_globe.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// Places 地图 `.pin b` 的 `ping 2.4s ease-out infinite`（`desktop.css:351`）。
 ///
@@ -36,7 +37,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           // MediaQuery 必须放在 MaterialApp 内层：WidgetsApp 会用

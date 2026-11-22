@@ -26,6 +26,7 @@ import 'package:omninest/features/photos/presentation/pages/photos_page.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/pages/movie_center_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   runApp(const ProviderScope(child: _HarnessApp()));
@@ -38,7 +39,7 @@ class _HarnessApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Harness',
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       theme: OmniNestTheme.from(AppThemePalette.light),

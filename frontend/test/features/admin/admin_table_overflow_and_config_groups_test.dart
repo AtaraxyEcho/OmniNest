@@ -10,6 +10,7 @@ import 'package:omninest/features/admin/domain/admin_operations.dart';
 import 'package:omninest/features/admin/domain/admin_paging.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_operations_pages.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_list_components.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _MockAdminOperationsApi extends Mock implements AdminOperationsApi {}
 
@@ -86,7 +87,7 @@ Future<void> _pumpLogsPage(
       overrides: [adminOperationsApiProvider.overrideWithValue(api)],
       child: MaterialApp(
         theme: OmniNestTheme.light(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: const Scaffold(body: AdminLogsPage()),
@@ -240,7 +241,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(
@@ -305,7 +306,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(
@@ -356,7 +357,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(
@@ -387,7 +388,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: OmniNestTheme.light(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: const Scaffold(

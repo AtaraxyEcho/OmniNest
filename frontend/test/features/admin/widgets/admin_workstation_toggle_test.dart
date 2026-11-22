@@ -4,11 +4,12 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/feature/admin_colors.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/features/admin/presentation/theme/admin_workstation_theme.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 Widget _wrap(Widget child, {Brightness brightness = Brightness.dark}) {
   return MaterialApp(
     theme: ThemeData(brightness: brightness, useMaterial3: true),
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    localizationsDelegates: kOmniNestLocalizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(body: AdminWorkstationScope(child: Center(child: child))),
   );

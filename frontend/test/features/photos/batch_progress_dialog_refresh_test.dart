@@ -8,6 +8,7 @@ import 'package:omninest/features/photos/application/photo_batch_task_monitor.da
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo_batch_task.dart';
 import 'package:omninest/features/photos/presentation/widgets/batch_progress_dialog.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _SpyPhotoCenterController extends PhotoCenterController {
   int refreshCalls = 0;
@@ -46,7 +47,7 @@ Future<int> _pumpAndCountRefreshes(
         ),
       ],
       child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         theme: OmniNestTheme.from(AppThemePalette.dark),

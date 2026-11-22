@@ -16,6 +16,7 @@ import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_repository.dart';
 import 'package:omninest/features/photos/presentation/pages/photos_page.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _MockPhotoRepository extends Mock implements PhotoRepository {}
 
@@ -72,7 +73,7 @@ Future<Widget> _framePage() async {
     ],
     child: MaterialApp.router(
       routerConfig: router,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('en'),
       theme: OmniNestTheme.from(AppThemePalette.light),
@@ -96,7 +97,7 @@ void main() {
   testWidgets('侧栏被父级约束压窄时品牌行降级为居中 Logo 不溢出', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('en'),
         theme: OmniNestTheme.from(AppThemePalette.light),

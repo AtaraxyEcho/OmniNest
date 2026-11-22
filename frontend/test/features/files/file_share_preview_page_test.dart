@@ -12,6 +12,7 @@ import 'package:omninest/features/files/domain/public_share.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/features/files/presentation/pages/file_share_preview_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 公开分享预览页挂在应用壳层之外：安全区与返回入口必须自带，
 /// 否则刘海/横屏切掉卡片，访客直达链接后无路可退。
@@ -259,7 +260,7 @@ Widget _host(
     child: MaterialApp.router(
       routerConfig: router,
       theme: OmniNestTheme.from(AppThemePalette.dark),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
     ),

@@ -7,6 +7,7 @@ import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_track_list.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playing_bars.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 曲目行状态契约：播放中不使用背景条，改由动态竖条 + 主色标题表达；
 /// 悬停仅保留瞬态弱 tint，普通/播放行默认透明底。
@@ -38,7 +39,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: OmniNestTheme.dark(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: Scaffold(

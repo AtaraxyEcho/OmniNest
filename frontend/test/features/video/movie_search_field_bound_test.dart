@@ -12,6 +12,7 @@ import 'package:omninest/core/search/scoped_search_source.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/pages/movie_center_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _StubCenterController extends MovieCenterController {
   /// 防抖后真正打给服务端的那次关键词（`setSearchQuery` 是扩展方法，不能覆写拦截）。
@@ -84,7 +85,7 @@ void main() {
         container: container,
         child: MaterialApp(
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(body: MovieCenterPage()),

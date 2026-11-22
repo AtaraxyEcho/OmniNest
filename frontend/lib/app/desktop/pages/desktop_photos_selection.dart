@@ -479,8 +479,10 @@ class _PhotoSelectionBar extends StatelessWidget {
     final skin = DesktopSkin.of(context);
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+      child: BackdropFilter.grouped(
+        filterConfig: ImageFilterConfig(
+          ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+        ),
         child: Container(
           padding: const EdgeInsets.fromLTRB(18, 8, 10, 8),
           decoration: BoxDecoration(

@@ -7,6 +7,7 @@ import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/files/application/public_share_service.dart';
 import 'package:omninest/features/files/domain/public_share.dart';
 import 'package:omninest/features/files/presentation/pages/file_share_preview_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   test('公开分享应用服务转发预览和接受命令', () async {
@@ -44,7 +45,7 @@ void main() {
       ProviderScope(
         overrides: [publicShareServiceProvider.overrideWithValue(service)],
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           theme: OmniNestTheme.from(AppThemePalette.dark),

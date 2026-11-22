@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/desktop/widgets/desktop_window_controls.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
@@ -418,6 +419,9 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
       // 加载态保留返回入口：慢网或卡住时用户不能被困在纯色页面里。
       return Scaffold(
         appBar: AppBar(
+          flexibleSpace: const DesktopWindowDragRegion(
+            child: SizedBox.expand(),
+          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
@@ -431,7 +435,12 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
     }
     if (_error != null || (_sessionFilePath == null && _bytes == null)) {
       return Scaffold(
-        appBar: AppBar(title: Text(l10n.readerPdfTitle)),
+        appBar: AppBar(
+          flexibleSpace: const DesktopWindowDragRegion(
+            child: SizedBox.expand(),
+          ),
+          title: Text(l10n.readerPdfTitle),
+        ),
         body: AppErrorView(
           message: _error ?? l10n.readerPdfLoadFailed,
           onRetry: _load,
@@ -455,6 +464,9 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage>
           return Scaffold(
             backgroundColor: readerSettings.surfaceColor,
             appBar: AppBar(
+              flexibleSpace: const DesktopWindowDragRegion(
+                child: SizedBox.expand(),
+              ),
               title: Text(
                 l10n.readerPdfPageIndicator(_currentPage, _totalPages),
               ),

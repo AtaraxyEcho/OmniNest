@@ -15,6 +15,7 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_session_store_base.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 const String _profileMarker = 'PROFILE_PAGE';
 
@@ -77,7 +78,7 @@ Future<GoRouter> _pump(
         unreadCountProvider.overrideWith(_ZeroUnread.new),
       ],
       child: MaterialApp.router(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         theme: OmniNestTheme.dark(),

@@ -9,6 +9,7 @@ import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_detail_text_content.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 章节来自本地解析的 EPUB 目录，上千条是常见规模；页签内容必须懒建。
 List<ParsedChapter> _chapters(int count) => [
@@ -41,7 +42,7 @@ Future<void> _pumpDetail(
         ),
       ],
       child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         theme: OmniNestTheme.dark(),

@@ -39,6 +39,8 @@ import 'package:omninest/features/reader/reader_debug_log.dart';
 import 'package:omninest/platform/android/reader_volume_key_service.dart';
 
 part 'comic_reader_view_sections.dart';
+part 'comic_reader_view_sections_parts.dart';
+part 'comic_reader_view_builders.dart';
 
 /// 漫画阅读模式：支持 Book 3D 仿真翻页、Swipe 水平滑动、Scroll 竖向卷轴。
 enum ComicReadingMode {
@@ -55,7 +57,7 @@ enum ComicReadingMode {
 /// 漫画阅读器视图。
 ///
 /// 支持 Book 3D 翻页、Swipe 滑动、Scroll 卷轴三模式，单/双页跨页、RTL 日漫方向、
-/// 每页独立缩放（放大 > 1.02 自动锁翻页拖拽）与漫画书签管理。
+/// 每页独立缩放（放大 > 1.02 自动锁翻页拖拽）、单页 90° 旋转与漫画书签管理。
 class ComicReaderView extends ConsumerStatefulWidget {
   const ComicReaderView({
     required this.itemId,
@@ -101,13 +103,40 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
   Offset? _lastDoubleTapLocalPosition;
   double _currentZoomScale = 1.0;
 
+  /// 客户端首帧解码实测像素尺寸缓存（用于无元数据宽图回填双页跨页槽位）。
+  final Map<int, Size> _resolvedPageSizes = {};
+
+  /// 按 `pageId` 记忆的单页旋转步数（0 / 1 / 2 / 3，顺时针 90° 步进）。
+  final Map<String, int> _pageQuarterTurns = {};
+  int _rotationRevision = 0;
+
   double get currentZoomScale => _currentZoomScale;
+
+  int get currentPageQuarterTurns {
+    if (_pages.isEmpty || _anchor.pageIndex >= _pages.length) return 0;
+    return (_pageQuarterTurns[_pages[_anchor.pageIndex].id] ?? 0) % 4;
+  }
 
   void zoomIn() => _zoomByStep(0.25);
 
   void zoomOut() => _zoomByStep(-0.25);
 
   void resetZoom() => _resetCurrentSlotZoom();
+
+  void rotateCurrentPage([int delta = 1]) => _rotateCurrentPage(delta);
+
+  /// 统一合并保存入口：供设置面板等子组件写入主题/亮度/暖色/自动夜间偏好，
+  /// 避免与 `_pendingDisplaySettings` 并发写盘产生竞态覆盖。
+  Future<void> savePreferencePatch(Map<String, dynamic> patch) async {
+    final updated = ReaderViewSettings.fromJson({
+      ..._settings.toJson(),
+      ...patch,
+    });
+    if (mounted) {
+      setState(() => _settings = updated);
+    }
+    await _saveMergedPreferences(patch);
+  }
 
   /// 当前阅读锚点（统一真相源）。
   ComicAnchor _anchor = const ComicAnchor(pageId: '', pageIndex: 0);
@@ -131,6 +160,11 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
   late ReaderProgressSyncService _progressSync;
   final ReaderPanelCoordinator _panelCoordinator = ReaderPanelCoordinator();
   final ReaderCommandGate _commandGate = ReaderCommandGate();
+
+  /// Book 模式翻页使用轻量 60ms 防抖门，放宽 220ms 节流以配合加速收尾队列连翻。
+  final ReaderCommandGate _bookPageCommandGate = ReaderCommandGate(
+    interval: const Duration(milliseconds: 60),
+  );
   VoidCallback? _volumeKeyEventCancel;
   bool _volumeKeyPagingPushed = false;
 
@@ -147,8 +181,7 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
       _displaySettings.rtlOverride ??
       (_manifest.readingDirection?.toLowerCase() == 'rtl');
   bool get _isPagedMode => _readingMode != ComicReadingMode.scroll;
-  bool get _imageZoomed =>
-      _readingMode == ComicReadingMode.page && _currentZoomScale > 1.02;
+  bool get _imageZoomed => _isPagedMode && _currentZoomScale > 1.02;
 
   /// 统一桌面阅读器视觉设置：不再强制纯黑，根据当前模式同步 Book 书桌色或主题纸面色。
   ReaderViewSettings get _controlSettings => _settings.copyWith(
@@ -319,7 +352,7 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
       final delta = forward ? 1 : -1;
       final command =
           delta > 0 ? ReaderCommand.nextPage : ReaderCommand.previousPage;
-      if (_requiresCommandGate(command) && !_commandGate.accept()) {
+      if (!_acceptCommandGate(command)) {
         return;
       }
       _turnSlotByDelta(delta);
@@ -734,8 +767,10 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
       textScale: MediaQuery.textScalerOf(context).scale(1),
     );
     final isBookMode = _readingMode == ComicReadingMode.book;
-    final useSpread =
-        isBookMode && _displaySettings.dualPage && viewport.width >= 720;
+    final useSpread = _displaySettings.resolveDualPage(
+      viewportWidth: viewport.width,
+      mode: _modeName(_readingMode),
+    );
     final slots = _buildSpreadSlots(viewport.width);
     final activeSlotIndex = _slotIndexForPage(slots, _anchor.pageIndex);
     final activeSlot =
@@ -749,8 +784,7 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
     if (_isPagedMode && activeSlot != null) {
       visibleStartPageIndex = activeSlot.startPageIndex;
       visibleEndPageIndex = activeSlot.endPageIndex;
-      isDualSpreadActive =
-          activeSlot.pageIndices.length > 1 && (!isBookMode || useSpread);
+      isDualSpreadActive = activeSlot.pageIndices.length > 1 && useSpread;
     } else {
       visibleStartPageIndex = _anchor.pageIndex;
       visibleEndPageIndex = _anchor.pageIndex;
@@ -767,8 +801,8 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
                   math.min(_totalPages, visibleEndPageIndex + 1),
                   _totalPages,
                 )
-                : l10n.readerPageOf(_anchor.pageIndex + 1, _totalPages));
-    final currentBookmark = _findBookmarkForPage(bookmarks, _anchor.pageIndex);
+                : l10n.readerPageOf(visibleStartPageIndex + 1, _totalPages));
+    final currentBookmark = _findBookmarkForSlot(bookmarks, activeSlot);
     final isBookmarked = currentBookmark != null;
     ref.listen<AsyncValue<Map<String, dynamic>>>(readerPreferencesProvider, (
       _,
@@ -834,6 +868,7 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
                   child: _buildContent(
                     slots: slots,
                     activeSlotIndex: activeSlotIndex,
+                    useSpread: useSpread,
                     isBookmarked: isBookmarked,
                     pageSurfaceBg: pageSurfaceBg,
                   ),
@@ -871,14 +906,28 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
             ],
             ComicReaderBottomBar(
               visible: _showControls && !_panelCoordinator.isOpen,
-              currentPageIndex: _anchor.pageIndex,
+              currentPageIndex: visibleStartPageIndex,
               totalPages: _totalPages,
               isPageMode: _isPagedMode,
               settings: controlSettings,
               isRtl: _isRtl,
               isDualPage: isDualSpreadActive,
               visibleEndPageIndex: visibleEndPageIndex,
-              zoomScale: isBookMode ? 1.0 : _currentZoomScale,
+              resolvePreviewPageRange:
+                  _isPagedMode && useSpread && slots.isNotEmpty
+                      ? (previewPageIndex) {
+                        final slotIdx = _slotIndexForPage(
+                          slots,
+                          previewPageIndex,
+                        );
+                        final slot = slots[slotIdx];
+                        return (
+                          start: slot.startPageIndex,
+                          end: slot.endPageIndex,
+                        );
+                      }
+                      : null,
+              zoomScale: _isPagedMode ? _currentZoomScale : 1.0,
               onResetZoom: _imageZoomed ? _resetCurrentSlotZoom : null,
               onPrevious:
                   visibleStartPageIndex > 0 ? () => _turnSlotByDelta(-1) : null,
@@ -892,7 +941,7 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
             ),
             ComicPageIndicator(
               visible: !topBarVisible,
-              currentPageIndex: _anchor.pageIndex,
+              currentPageIndex: visibleStartPageIndex,
               totalPages: _totalPages,
               visibleEndPageIndex: visibleEndPageIndex,
             ),
@@ -903,7 +952,7 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
                   layout: layout,
                   settings: controlSettings,
                   manifest: _manifest,
-                  currentPageIndex: _anchor.pageIndex,
+                  currentPageIndex: visibleStartPageIndex,
                   displaySettings: _displaySettings,
                   volumeKeyPaging: _settings.volumeKeyPaging,
                   bookmarks: bookmarks,
@@ -939,10 +988,12 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
               activePanel: _panelCoordinator.active,
               onBack: _requestExit,
               onShowContents: () => _togglePanel(ReaderPanelType.contents),
-              onToggleBookmark: () => _toggleCurrentPageBookmark(bookmarks),
+              onToggleBookmark:
+                  () => _toggleCurrentPageBookmark(bookmarks, activeSlot),
               onShowBookmarks: () => _togglePanel(ReaderPanelType.annotations),
               onShowSettings: () => _togglePanel(ReaderPanelType.settings),
               onShowShortcuts: () => _togglePanel(ReaderPanelType.shortcuts),
+              onRotatePage: _totalPages > 0 ? _rotateCurrentPage : null,
               onSelectReadingMode: supportsPageMode ? _selectReadingMode : null,
               onSwitchReadingMode: supportsPageMode ? _switchReadingMode : null,
             ),

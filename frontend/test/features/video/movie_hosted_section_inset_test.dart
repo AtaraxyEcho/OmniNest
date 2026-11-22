@@ -19,6 +19,7 @@ import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/pages/movie_center_page.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_mobile_chips.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 const _caps = UserCapabilities(
   canBrowseContent: true,
@@ -105,7 +106,7 @@ Future<void> _pumpHostedFilms(WidgetTester tester) async {
         movieCenterControllerProvider.overrideWith(() => _FakeMovieCenter()),
       ],
       child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         theme: OmniNestTheme.dark(),

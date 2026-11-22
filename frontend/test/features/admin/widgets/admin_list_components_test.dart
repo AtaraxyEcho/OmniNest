@@ -7,6 +7,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_list_components.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   Future<void> pumpTable(
@@ -29,7 +30,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(
@@ -132,7 +133,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(
@@ -171,7 +172,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(
@@ -268,7 +269,7 @@ void main() {
         ProviderScope(
           child: MaterialApp(
             theme: OmniNestTheme.light(),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('zh'),
             home: Scaffold(
@@ -332,7 +333,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(
@@ -377,7 +378,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(
@@ -402,7 +403,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(

@@ -6,6 +6,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 摘要：从别的空间 push 进来的阅读子页必须自铺底。
 ///
@@ -22,7 +23,7 @@ void main() {
         overrides: [authSessionProvider.overrideWith(_GuestSession.new)],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: MobileShellScope(

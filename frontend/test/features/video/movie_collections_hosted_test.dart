@@ -13,6 +13,7 @@ import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_collections.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_collection_card.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 MovieCollection _collection(String id, String name, int itemCount) {
   return MovieCollection(
@@ -35,7 +36,7 @@ Future<void> _pump(
     ProviderScope(
       child: MaterialApp(
         theme: OmniNestTheme.from(AppThemePalette.dark),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: MobileShellScope(

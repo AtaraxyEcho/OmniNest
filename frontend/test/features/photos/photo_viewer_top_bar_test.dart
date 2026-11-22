@@ -5,6 +5,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_viewer_chrome.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 PhotoItem _photo({bool favorite = false}) {
   return PhotoItem(
@@ -30,7 +31,7 @@ Future<void> _pumpTopBar(
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
     MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       theme: OmniNestTheme.from(AppThemePalette.dark),

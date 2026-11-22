@@ -3,6 +3,7 @@ import 'package:omninest/core/widgets/workstation_pagination_bar.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   Widget host({
@@ -15,7 +16,7 @@ void main() {
   }) {
     return MaterialApp(
       theme: OmniNestTheme.light(),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       home: Scaffold(

@@ -7,6 +7,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/presentation/widgets/external_storage_account_dialog.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   testWidgets('外部存储表单提交结构化 S3 凭据', (tester) async {
@@ -15,7 +16,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: OmniNestTheme.from(AppThemePalette.light),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: Scaffold(
@@ -65,7 +66,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: OmniNestTheme.from(AppThemePalette.light),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: Scaffold(
@@ -131,7 +132,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: OmniNestTheme.from(AppThemePalette.light),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: Scaffold(
@@ -189,7 +190,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: OmniNestTheme.from(AppThemePalette.light),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: Scaffold(
@@ -252,7 +253,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: OmniNestTheme.from(AppThemePalette.light),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: Scaffold(

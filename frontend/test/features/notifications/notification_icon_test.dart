@@ -6,6 +6,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
 import 'package:omninest/features/notifications/presentation/widgets/notification_icon.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _Unread extends UnreadCountNotifier {
   _Unread(this.value);
@@ -26,7 +27,7 @@ Future<void> _pump(WidgetTester tester, {required int unread}) async {
     ProviderScope(
       overrides: [unreadCountProvider.overrideWith(() => _Unread(unread))],
       child: MaterialApp.router(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         theme: OmniNestTheme.dark(),

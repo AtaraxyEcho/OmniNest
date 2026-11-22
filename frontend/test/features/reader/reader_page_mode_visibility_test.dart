@@ -4,6 +4,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/reader/domain/comic_reader_display_settings.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_reader_settings_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 产品决策 D3：Web 只开放滚动模式，隐藏翻页入口。
 void main() {
@@ -14,7 +15,7 @@ void main() {
 
   Widget wrap(Widget child) {
     return MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       home: Scaffold(body: child),

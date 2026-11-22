@@ -5,6 +5,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/widgets/app_dropdown.dart';
 import 'package:omninest/features/admin/presentation/theme/admin_workstation_theme.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 工位域表单高度一致性：AppDropdown 与 TextField（皮肤
 /// inputDecorationTheme 驱动）在同一表单内渲染高度必须严格相等。
@@ -14,7 +15,7 @@ import 'package:omninest/features/admin/presentation/theme/admin_workstation_the
 Widget _wrap(Widget child) {
   return MaterialApp(
     theme: OmniNestTheme.light(),
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    localizationsDelegates: kOmniNestLocalizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(body: AdminWorkstationScope(child: Center(child: child))),
   );

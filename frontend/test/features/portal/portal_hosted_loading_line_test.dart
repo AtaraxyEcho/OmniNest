@@ -27,6 +27,7 @@ import 'package:omninest/features/portal/presentation/pages/portal_page.dart';
 import 'package:omninest/features/reader/domain/reader_dashboard.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 把 Provider 钉在 loading：返回一个永不完成的 Future。
 Future<T> _pending<T>() => Completer<T>().future;
@@ -60,7 +61,7 @@ Future<void> _pumpPendingHome(WidgetTester tester) async {
         ),
       ],
       child: MaterialApp.router(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         routerConfig: _homeRouter(),

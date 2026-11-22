@@ -11,6 +11,7 @@ import 'package:omninest/features/reader/domain/comic_models.dart';
 import 'package:omninest/features/reader/domain/comic_reader_display_settings.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_page_image.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_reader_layout.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _StubComicImageLoader extends Mock implements ComicImageLoader {}
 
@@ -119,7 +120,7 @@ void main() {
     Widget host(ComicPage page) => ProviderScope(
       overrides: [comicImageLoaderProvider.overrideWithValue(loader)],
       child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SizedBox(

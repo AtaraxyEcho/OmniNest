@@ -10,6 +10,7 @@ import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/domain/series_play_target.dart';
 import 'package:omninest/features/video/presentation/pages/series_detail_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 续播解析要跨两次 await：意图回来后如果页面已经退出，
 /// 分集 Provider 就必须在 `ref.read` 之前被跳过，否则在已卸载的 WidgetRef 上取值。
@@ -45,7 +46,7 @@ void main() {
         container: container,
         child: MaterialApp(
           theme: ThemeData.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const SeriesDetailPage(seriesId: 'series-1'),

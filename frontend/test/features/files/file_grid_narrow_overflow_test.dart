@@ -6,6 +6,7 @@ import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/widgets/file_grid.dart';
 import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 卡片行内的固定控件（Checkbox 48 + 缩略图 42 + 菜单钮 48）在手机两列卡片里
 /// 超过内容宽度，多选态会在 RenderFlex 溢出。
@@ -23,7 +24,7 @@ Future<void> _pumpGrid(
   await tester.pumpWidget(
     MaterialApp(
       theme: OmniNestTheme.from(AppThemePalette.dark),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       home: Scaffold(

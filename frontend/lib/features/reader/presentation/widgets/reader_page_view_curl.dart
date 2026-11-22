@@ -1,6 +1,6 @@
 part of 'reader_page_view.dart';
 
-/// 双向卷页双槽空闲预抓图与装配（v12：背面离屏抓图优先等待首帧就绪，400ms 超时兜底）。
+/// 双向卷页双槽空闲预抓图与装配（v13：同步透传 seamlessSpine 并兼容单页精装书壳透明底）。
 extension _ReaderPageViewCurl on _ReaderPageViewState {
   void _scheduleIdleNextCurlWarmup() {
     _curlWarmupTimer?.cancel();
@@ -254,6 +254,7 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
       back: pair.back,
       paper: widget.surfaceColor,
       spread: widget.spread,
+      seamlessSpine: widget.seamlessSpine,
     );
 
     final forward = _isLogicalForward(frame.direction);
@@ -328,8 +329,11 @@ extension _ReaderPageViewCurl on _ReaderPageViewState {
               color: widget.surfaceColor,
               side: _pendingBackCaptureSide,
               showPaperGrain: widget.showPaperGrain,
+              seamlessSpine: widget.seamlessSpine,
               child: child,
             )
+            : (widget.seamlessSpine || widget.deskColor != null)
+            ? SizedBox.expand(child: child)
             : ColoredBox(color: widget.surfaceColor, child: child);
     return Positioned(
       left: 0,

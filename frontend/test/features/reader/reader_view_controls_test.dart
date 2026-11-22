@@ -9,11 +9,12 @@ import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.d
 import 'package:omninest/features/reader/presentation/widgets/reader_view_bottom_bar.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_top_bar.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   Widget buildApp(Widget child, {double textScale = 1, Locale? locale}) {
     return MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: locale,
       builder:

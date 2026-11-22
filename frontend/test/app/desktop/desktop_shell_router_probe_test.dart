@@ -10,6 +10,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'desktop_test_harness.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 还原真实 `appRouterProvider` 的 StatefulShellRoute + 顶层 push 结构。
 ///
@@ -78,7 +79,7 @@ void main() {
         overrides: desktopSeedOverrides(),
         child: MaterialApp.router(
           routerConfig: router,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('en'),
           builder:

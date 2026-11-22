@@ -119,6 +119,10 @@ class ReaderPageView extends StatefulWidget {
     this.pageCountNotifier,
     this.spread = false,
     this.paperEdgeColor,
+    this.deskColor,
+    this.seamlessSpine = false,
+    this.bookmarkOnLeft = false,
+    this.fullSurfaceDrag = false,
     this.snapshotPageBuilder,
     this.crossChapterSnapshotBuilder,
     this.prepareSnapshotPage,
@@ -151,6 +155,19 @@ class ReaderPageView extends StatefulWidget {
 
   /// 纸叠边缘色（样例 `--paper-edge`）；缺省由 surfaceColor 压暗派生。
   final Color? paperEdgeColor;
+
+  /// 书桌底色；透传给 `ReaderPageSpread` 动态派生硬壳封底色。
+  final Color? deskColor;
+
+  /// 无缝跨页模式：书脊内侧圆角归零且仅描外侧三边纸缘，适配漫画 0px 无缝拼合。
+  final bool seamlessSpine;
+
+  /// 书签缎带挂在左叶外缘（RTL 日漫模式使用）。
+  final bool bookmarkOnLeft;
+
+  /// 是否解除桌面 22% 边缘拖拽限制，允许在页面中段直接拖拽掀页（漫画模式使用）。
+  final bool fullSurfaceDrag;
+
   final Object? contentRevision;
   final bool bookmarked;
   final PageTurnCallbacks callbacks;
@@ -358,6 +375,9 @@ class _ReaderPageViewState extends State<ReaderPageView>
         oldWidget.state.pageIndex != widget.state.pageIndex ||
         oldWidget.surfaceColor != widget.surfaceColor ||
         oldWidget.paperEdgeColor != widget.paperEdgeColor ||
+        oldWidget.deskColor != widget.deskColor ||
+        oldWidget.seamlessSpine != widget.seamlessSpine ||
+        oldWidget.bookmarkOnLeft != widget.bookmarkOnLeft ||
         oldWidget.showPaperGrain != widget.showPaperGrain ||
         oldWidget.contentRevision != widget.contentRevision ||
         oldWidget.reverse != widget.reverse;
@@ -441,7 +461,10 @@ class _ReaderPageViewState extends State<ReaderPageView>
       right: right,
       surfaceColor: widget.surfaceColor,
       paperEdgeColor: widget.paperEdgeColor,
+      deskColor: widget.deskColor,
       showPaperGrain: widget.showPaperGrain,
+      seamlessSpine: widget.seamlessSpine,
+      bookmarkOnLeft: widget.bookmarkOnLeft,
       progress: widget.reverse ? (1.0 - rawProgress) : rawProgress,
     );
   }

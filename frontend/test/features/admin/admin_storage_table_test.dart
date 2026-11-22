@@ -10,6 +10,7 @@ import 'package:omninest/features/admin/domain/admin_operations.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_operations_pages.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_management_models.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 带管理权限的可控会话，用于渲染仅对 system:config:manage 可见的新增入口。
 class _PermissionedAuthSessionNotifier extends AuthSessionNotifier {
@@ -68,7 +69,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(
@@ -148,7 +149,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(
@@ -219,7 +220,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(
@@ -280,7 +281,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(

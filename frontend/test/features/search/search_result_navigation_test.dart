@@ -13,6 +13,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/search/domain/search_result.dart';
 import 'package:omninest/features/search/presentation/widgets/search_result_tile.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 Future<GoRouter> _pumpSearch(
   WidgetTester tester, {
@@ -79,7 +80,7 @@ Future<GoRouter> _pumpSearch(
       child: MaterialApp.router(
         routerConfig: router,
         theme: OmniNestTheme.from(AppThemePalette.dark),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
       ),

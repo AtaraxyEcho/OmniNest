@@ -11,12 +11,13 @@ import 'package:omninest/features/files/presentation/theme/files_workstation_the
 import 'package:omninest/features/files/presentation/widgets/file_inspector_panel.dart';
 import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
 import 'package:omninest/features/files/presentation/widgets/files_check_mark.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 Widget _wrap(Widget child) {
   return ProviderScope(
     child: MaterialApp(
       theme: OmniNestTheme.from(AppThemePalette.dark),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       home: Scaffold(body: FilesWorkstationScope(child: child)),
@@ -222,7 +223,16 @@ void main() {
           File(
             'lib/features/files/presentation/widgets/share_link_sheet.dart',
           ).readAsStringSync();
-      expect(source, contains('return Material('), reason: 'ListTile 断言修复');
+      expect(
+        source,
+        contains('MaterialType.transparency'),
+        reason: 'ListTile 断言修复',
+      );
+      expect(
+        source,
+        contains('child: Material('),
+        reason: 'Material 位于弹窗根容器内层，裁剪圆角由外层负责',
+      );
       expect(source, contains('embedded'), reason: '桌面弹窗嵌入形态');
       expect(source, contains('showFilesDialog'), reason: '走弹窗壳');
       expect(source, contains('showModalBottomSheet'), reason: '移动贴底');

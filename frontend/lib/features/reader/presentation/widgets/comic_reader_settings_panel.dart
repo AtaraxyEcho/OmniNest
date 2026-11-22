@@ -15,7 +15,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_view_settin
 import 'package:omninest/platform/platform_capabilities.dart';
 
 /// 漫画阅读器的显示设置面板（对齐统一磨砂抽屉样式，支持背景主题 4 色卡、亮度、护眼暖色、
-/// 自动夜间、漫画缩放、三模式、RTL、单/双页与图片适应模式）。
+/// 自动夜间、漫画缩放、单页旋转 90°、三模式、RTL、单/双页与图片适应模式）。
 class ComicReaderSettingsPanel extends ConsumerWidget {
   const ComicReaderSettingsPanel({
     required this.displaySettings,
@@ -30,6 +30,8 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
     this.onZoomIn,
     this.onZoomOut,
     this.onResetZoom,
+    this.quarterTurns,
+    this.onRotatePage,
     super.key,
   });
 
@@ -54,17 +56,33 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
   final VoidCallback? onZoomOut;
   final VoidCallback? onResetZoom;
 
+  /// 当前页旋转步数与旋转回调；未显式传入时自动联动宿主 `ComicReaderViewState`。
+  final int? quarterTurns;
+  final VoidCallback? onRotatePage;
+
+  /// 统一合并保存入口：优先走宿主 `ComicReaderViewState.savePreferencePatch`
+  /// 以合并防抖中的显示设置，彻底消除主题/亮度/暖色与显示设置并发写盘竞态。
   Future<void> _savePreferencePatch(
     WidgetRef ref,
+    ComicReaderViewState? hostState,
     Map<String, dynamic> patch,
   ) async {
-    final current =
+    if (hostState != null) {
+      await hostState.savePreferencePatch(patch);
+      return;
+    }
+    final Map<String, dynamic> current =
         ref.read(readerPreferencesProvider).asData?.value ??
         await ref.read(readerPreferencesProvider.future);
-    await ref.read(readerPreferencesProvider.notifier).save({
-      ...?current,
-      ...patch,
-    });
+    await ref
+        .read(readerPreferencesProvider.notifier)
+        .save(
+          mergeComicReaderPreferences(
+            current: current,
+            appliedDisplaySettings: displaySettings,
+            patch: patch,
+          ),
+        );
   }
 
   @override
@@ -83,9 +101,10 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
     final showPageMode = pageModeEnabled ?? supportsPageMode;
     final isRtl = effectiveRtl ?? displaySettings.rtlOverride ?? false;
     final isPaged = displaySettings.readingMode != 'scroll';
-    final isSwipeMode =
-        displaySettings.readingMode == 'page' ||
-        displaySettings.readingMode == 'swipe';
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final effectiveDualPage = displaySettings.resolveDualPage(
+      viewportWidth: viewportWidth,
+    );
 
     final prefsMap = ref.watch(readerPreferencesProvider).asData?.value;
     final activeSettings =
@@ -93,13 +112,16 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
             ? ReaderViewSettings.fromJson(prefsMap)
             : themeSettings;
     final hostState = context.findAncestorStateOfType<ComicReaderViewState>();
+    // Book 与 Swipe 翻页模式均支持缩放，仅 Scroll 模式置灰。
     final effectiveZoom =
-        isSwipeMode ? (zoomScale ?? hostState?.currentZoomScale ?? 1.0) : 1.0;
-    final handleZoomOut =
-        isSwipeMode ? (onZoomOut ?? hostState?.zoomOut) : null;
-    final handleZoomIn = isSwipeMode ? (onZoomIn ?? hostState?.zoomIn) : null;
+        isPaged ? (zoomScale ?? hostState?.currentZoomScale ?? 1.0) : 1.0;
+    final handleZoomOut = isPaged ? (onZoomOut ?? hostState?.zoomOut) : null;
+    final handleZoomIn = isPaged ? (onZoomIn ?? hostState?.zoomIn) : null;
     final handleResetZoom =
-        isSwipeMode ? (onResetZoom ?? hostState?.resetZoom) : null;
+        isPaged ? (onResetZoom ?? hostState?.resetZoom) : null;
+    final effectiveTurns =
+        (quarterTurns ?? hostState?.currentPageQuarterTurns ?? 0) % 4;
+    final handleRotatePage = onRotatePage ?? hostState?.rotateCurrentPage;
 
     final sliderTheme = SliderThemeData(
       trackHeight: 4,
@@ -139,7 +161,7 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
                   onTap: () {
                     final palette = themeChoices[i].$1;
                     unawaited(
-                      _savePreferencePatch(ref, {
+                      _savePreferencePatch(ref, hostState, {
                         'paletteId': palette.id,
                         'themeIndex': ReaderReadingPalette.legacyIndexFromId(
                           palette.id,
@@ -170,7 +192,9 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
             divisions: 14,
             onChanged:
                 (v) => unawaited(
-                  _savePreferencePatch(ref, {'brightness': v.round()}),
+                  _savePreferencePatch(ref, hostState, {
+                    'brightness': v.round(),
+                  }),
                 ),
           ),
         ),
@@ -191,8 +215,9 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
             max: 60,
             divisions: 12,
             onChanged:
-                (v) =>
-                    unawaited(_savePreferencePatch(ref, {'warmth': v.round()})),
+                (v) => unawaited(
+                  _savePreferencePatch(ref, hostState, {'warmth': v.round()}),
+                ),
           ),
         ),
         const SizedBox(height: 12),
@@ -207,19 +232,21 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
           settings: activeSettings,
           mobile: mobile,
           onChanged:
-              (v) => unawaited(_savePreferencePatch(ref, {'autoNight': v})),
+              (v) => unawaited(
+                _savePreferencePatch(ref, hostState, {'autoNight': v}),
+              ),
         ),
         const SizedBox(height: 18),
 
-        // 5. 漫画 Zoom（- / 100% / +；非 Swipe 模式置灰并标注提示）
+        // 5. 漫画 Zoom（- / 100% / +；Book 与 Swipe 模式均可用，仅 Scroll 模式置灰）
         Row(
           children: [
             Expanded(
               child: _SectionLabel(label: isZh ? '画面缩放' : 'Zoom', color: muted),
             ),
-            if (!isSwipeMode)
+            if (!isPaged)
               Text(
-                isZh ? '仅滑动模式可用' : 'Swipe mode only',
+                isZh ? '仅翻页模式可用' : 'Paged modes only',
                 style: TextStyle(
                   color: muted.withValues(alpha: 0.78),
                   fontSize: AppTypography.labelMicro,
@@ -229,9 +256,9 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
         ),
         const SizedBox(height: 10),
         Opacity(
-          opacity: isSwipeMode ? 1.0 : 0.45,
+          opacity: isPaged ? 1.0 : 0.45,
           child: IgnorePointer(
-            ignoring: !isSwipeMode,
+            ignoring: !isPaged,
             child: _ZoomControlRow(
               zoomScale: effectiveZoom,
               foreground: fg,
@@ -242,6 +269,19 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
             ),
           ),
         ),
+        if (handleRotatePage != null) ...[
+          const SizedBox(height: 14),
+          _ActionRow(
+            title: isZh ? '旋转当前页 90°' : 'Rotate Current Page 90°',
+            badge: '${effectiveTurns * 90}°',
+            icon: Icons.rotate_right_rounded,
+            foreground: fg,
+            muted: muted,
+            accent: activeSettings.accentColor,
+            highlighted: effectiveTurns != 0,
+            onTap: handleRotatePage,
+          ),
+        ],
         const SizedBox(height: 20),
 
         if (showPageMode) ...[
@@ -280,20 +320,25 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
         ),
         if (showPageMode && isPaged) ...[
           const SizedBox(height: 16),
-          // 单/双页跨页切换
+          // 单/双页跨页切换（显式覆写 dualPageOverride）
           _ToggleRow(
             title: isZh ? '双页跨页显示' : 'Dual-Page Spread',
             subtitle:
                 isZh
                     ? '宽屏并排显示两页，跨页宽图自动独占整屏'
                     : 'Show two pages side by side; wide spreads fill screen',
-            value: displaySettings.dualPage,
+            value: effectiveDualPage,
             foreground: fg,
             muted: muted,
             settings: activeSettings,
             mobile: mobile,
             onChanged:
-                (value) => onChanged(displaySettings.copyWith(dualPage: value)),
+                (value) => onChanged(
+                  displaySettings.copyWith(
+                    dualPage: value,
+                    dualPageOverride: value,
+                  ),
+                ),
           ),
           const SizedBox(height: 20),
           // 图片适应模式
@@ -392,6 +437,77 @@ class ComicReaderSettingsPanel extends ConsumerWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _ActionRow extends StatelessWidget {
+  const _ActionRow({
+    required this.title,
+    required this.badge,
+    required this.icon,
+    required this.foreground,
+    required this.muted,
+    required this.accent,
+    required this.highlighted,
+    required this.onTap,
+  });
+
+  final String title;
+  final String badge;
+  final IconData icon;
+  final Color foreground;
+  final Color muted;
+  final Color accent;
+  final bool highlighted;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color:
+              highlighted
+                  ? accent.withValues(alpha: 0.14)
+                  : foreground.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(
+            color:
+                highlighted
+                    ? accent.withValues(alpha: 0.36)
+                    : foreground.withValues(alpha: 0.10),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: highlighted ? accent : foreground),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: foreground,
+                  fontSize: AppTypography.bodyMedium,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Text(
+              badge,
+              style: TextStyle(
+                color: highlighted ? accent : muted,
+                fontSize: AppTypography.bodySmall,
+                fontWeight: FontWeight.w600,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

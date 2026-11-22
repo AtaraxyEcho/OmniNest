@@ -12,6 +12,7 @@ import 'package:omninest/features/music/data/music_playback_queue_store.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_queue_sheet.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 const List<MusicTrack> _tracks = <MusicTrack>[
   MusicTrack(
@@ -234,7 +235,7 @@ Future<_QueueSheetHarness> _pumpQueueSheet(
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: const Scaffold(body: MusicDeckQueueSheet()),

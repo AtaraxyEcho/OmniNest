@@ -6,6 +6,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/admin/application/admin_operations_controller.dart';
 import 'package:omninest/features/admin/domain/admin_operations.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_operations_pages.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 双分组测试数据：TMDB 2 项 + 存储与共享空间 2 项，用于分组计数断言。
 const _groupedView = AdminConfigManagementView(
@@ -62,7 +63,7 @@ Future<void> _pumpConfigPage(WidgetTester tester) async {
     ProviderScope(
       child: MaterialApp(
         theme: OmniNestTheme.light(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: const Scaffold(
@@ -151,7 +152,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(
@@ -226,7 +227,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(
@@ -279,7 +280,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(

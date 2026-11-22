@@ -12,6 +12,7 @@ import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_settings_panel.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _StubBackdropController extends AppBackdropController {
   @override
@@ -43,7 +44,7 @@ Future<Color?> _panelFill(
       container: container,
       child: MaterialApp(
         locale: const Locale('zh'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         theme: theme.copyWith(extensions: [palette]),
         home: MobileShellScope(

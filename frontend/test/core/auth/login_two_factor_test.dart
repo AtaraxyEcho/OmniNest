@@ -9,6 +9,7 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/auth/auth_session_store_base.dart';
 import 'package:omninest/core/auth/login_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 登录页两步验证流测试：
 /// - 密码登录返回挑战时切换到验证码面板且不落会话；
@@ -194,7 +195,7 @@ Widget _host(AuthClient client) {
     ],
     child: MaterialApp.router(
       routerConfig: router,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
     ),
   );

@@ -11,6 +11,7 @@ import 'package:omninest/core/server/server_config.dart';
 import 'package:omninest/core/server/server_config_controller.dart';
 import 'package:omninest/core/server/server_config_store_base.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_server_panel.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 Future<void> _pumpPanel(
   WidgetTester tester, {
@@ -37,7 +38,7 @@ Future<void> _pumpPanel(
       ],
       child: MaterialApp.router(
         routerConfig: router,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
       ),

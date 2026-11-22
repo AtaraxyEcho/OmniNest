@@ -13,6 +13,7 @@ import 'package:omninest/features/music/domain/music_visualizer_preset.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_layout_spec.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_lyrics.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 滚动歌词组件测试共用的驱动与探针。
 
@@ -130,7 +131,7 @@ Widget musicScrollLyricsApp({
     // 歌词区包含本地化文案（"回到当前播放"），测试宿主需要提供委派，
     // 与真实宿主一致。
     locale: const Locale('zh'),
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    localizationsDelegates: kOmniNestLocalizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(
       body:

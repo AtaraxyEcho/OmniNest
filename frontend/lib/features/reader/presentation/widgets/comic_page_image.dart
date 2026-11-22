@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,8 +22,10 @@ class ComicPageImage extends ConsumerStatefulWidget {
     required this.layout,
     this.fit,
     this.alignment = Alignment.center,
+    this.quarterTurns = 0,
     this.onLayout,
     this.onFirstFramePainted,
+    this.onIntrinsicSizeResolved,
     super.key,
   });
 
@@ -42,11 +46,17 @@ class ComicPageImage extends ConsumerStatefulWidget {
   /// 图片在容器内的对齐方式（双页无缝拼合时左页靠右、右页靠左）。
   final AlignmentGeometry alignment;
 
+  /// 单页 90° 旋转步数（0 / 1 / 2 / 3，顺时针）。
+  final int quarterTurns;
+
   /// 页面布局完成回调，参数依次为页码索引和渲染高度。
   final void Function(int index, double height)? onLayout;
 
   /// 首帧图片绘制就绪回调（每页仅触发一次），供翻页离屏抓图精准等待首帧落盘。
   final VoidCallback? onFirstFramePainted;
+
+  /// 首帧解码后上报图片原始像素尺寸（用于客户端实测宽图回填跨页槽位）。
+  final void Function(int pageIndex, Size size)? onIntrinsicSizeResolved;
 
   @override
   ConsumerState<ComicPageImage> createState() => _ComicPageImageState();
@@ -58,6 +68,7 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
   String? _error;
   int _loadGeneration = 0;
   bool _firstFrameNotified = false;
+  bool _intrinsicSizeNotified = false;
 
   @override
   void initState() {
@@ -80,6 +91,7 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
         oldWidget.page.sourcePath != widget.page.sourcePath ||
         oldWidget.itemId != widget.itemId) {
       _firstFrameNotified = false;
+      _intrinsicSizeNotified = false;
       final cached = _readCachedSync();
       if (cached != null) {
         _loadGeneration++;
@@ -106,6 +118,7 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
   Future<void> _loadImage() async {
     final generation = ++_loadGeneration;
     _firstFrameNotified = false;
+    _intrinsicSizeNotified = false;
     setState(() {
       _loading = true;
       _error = null;
@@ -158,6 +171,45 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
     });
   }
 
+  void _notifyIntrinsicSizeIfNeeded() {
+    if (_intrinsicSizeNotified) return;
+    final cb = widget.onIntrinsicSizeResolved;
+    final bytes = _imageBytes;
+    if (cb == null || bytes == null || bytes.isEmpty) return;
+    _intrinsicSizeNotified = true;
+    final pageIndex = widget.page.pageIndex;
+    final generation = _loadGeneration;
+    unawaited(_resolveIntrinsicSize(bytes, pageIndex, generation, cb));
+  }
+
+  Future<void> _resolveIntrinsicSize(
+    Uint8List bytes,
+    int pageIndex,
+    int generation,
+    void Function(int pageIndex, Size size) callback,
+  ) async {
+    ui.ImmutableBuffer? buffer;
+    ui.ImageDescriptor? descriptor;
+    try {
+      buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+      descriptor = await ui.ImageDescriptor.encoded(buffer);
+      final width = descriptor.width.toDouble();
+      final height = descriptor.height.toDouble();
+      if (!mounted || generation != _loadGeneration) return;
+      if (width > 0 && height > 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || generation != _loadGeneration) return;
+          callback(pageIndex, Size(width, height));
+        });
+      }
+    } on Object {
+      // 图片头解析失败时静默降级，不中断页面渲染。
+    } finally {
+      descriptor?.dispose();
+      buffer?.dispose();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -196,9 +248,10 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
     final width = widget.page.width;
     final height = widget.page.height;
     if (width != null && height != null && width > 0 && height > 0) {
-      return width / height;
+      final raw = width / height;
+      return (widget.quarterTurns % 4).isOdd ? (1.0 / raw) : raw;
     }
-    return 3 / 4;
+    return (widget.quarterTurns % 4).isOdd ? (4 / 3) : (3 / 4);
   }
 
   Widget _buildContent(int cacheWidth) {
@@ -222,6 +275,7 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
         !_hasKnownDimensions;
     final effectiveFit =
         isContinuousDynamic ? BoxFit.fitWidth : (widget.fit ?? BoxFit.contain);
+    final normalizedTurns = widget.quarterTurns % 4;
     final image = Image.memory(
       _imageBytes!,
       fit: effectiveFit,
@@ -231,11 +285,12 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
       cacheWidth: cacheWidth,
       gaplessPlayback: true,
       frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-        // 首帧解码完成才是真实高度的时刻：尺寸未知的图片在 _loadImage 里上报时
-        // 盒子还是占位比例，这一份补报会把高度索引改成实际渲染值。
+        // 首帧解码完成才是真实高度与真实像素尺寸的时刻：
+        // 尺寸未知的图片在 _loadImage 里上报时盒子还是占位比例，这一份补报会同步高度与宽图判定。
         if (frame != null || wasSynchronouslyLoaded) {
           _reportLayout();
           _notifyFirstFramePainted();
+          _notifyIntrinsicSizeIfNeeded();
         }
         return child;
       },
@@ -245,14 +300,18 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
             message: AppLocalizations.of(context).readerComicImageDecodeFailed,
           ),
     );
+    final oriented =
+        normalizedTurns == 0
+            ? image
+            : RotatedBox(quarterTurns: normalizedTurns, child: image);
     if (widget.layout == ComicPageImageLayout.paged &&
         effectiveFit != BoxFit.contain) {
       return ColoredBox(
         color: widget.surfaceColor,
-        child: ClipRect(child: image),
+        child: ClipRect(child: oriented),
       );
     }
-    return ColoredBox(color: widget.surfaceColor, child: image);
+    return ColoredBox(color: widget.surfaceColor, child: oriented);
   }
 }
 

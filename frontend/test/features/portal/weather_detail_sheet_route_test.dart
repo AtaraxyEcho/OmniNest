@@ -7,6 +7,7 @@ import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/portal/application/weather_provider.dart';
 import 'package:omninest/features/portal/presentation/widgets/weather_detail_sheet.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 WeatherData _sampleWeather({
   int hourlyCount = 2,
@@ -71,7 +72,7 @@ Future<void> _pumpSheet(
   await tester.pumpWidget(
     ProviderScope(
       child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: locale,
         home: Scaffold(
@@ -265,7 +266,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('en'),
           home: Navigator(

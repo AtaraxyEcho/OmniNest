@@ -4,6 +4,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_common_widgets.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_redesign_components.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 紧凑指标卡回归：网格定高 132 与固定 132 高容器两种场景下，
 /// plain / supporting / progress / footer / supporting+progress 各形态
@@ -20,7 +21,7 @@ Future<void> _pump(
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
     MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       theme: OmniNestTheme.dark(),

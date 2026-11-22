@@ -14,6 +14,7 @@ import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_repository.dart';
 import 'package:omninest/features/photos/presentation/pages/photos_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _MockPhotoRepository extends Mock implements PhotoRepository {}
 
@@ -74,7 +75,7 @@ void main() {
         ],
         child: MaterialApp.router(
           routerConfig: router,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           theme: OmniNestTheme.from(AppThemePalette.dark),

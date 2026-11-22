@@ -10,6 +10,7 @@ import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/features/files/application/file_download_url_provider.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/pages/file_preview_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   const file = FileNode(
@@ -133,7 +134,7 @@ void main() {
 
 Widget _testApp(Widget child) {
   return MaterialApp(
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    localizationsDelegates: kOmniNestLocalizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     locale: const Locale('zh'),
     theme: OmniNestTheme.from(AppThemePalette.dark),

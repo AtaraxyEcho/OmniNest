@@ -11,6 +11,7 @@ import 'package:omninest/app/appearance/application/composed_scaler.dart';
 import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/appearance/application/font_scale_scope.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/desktop_tray_locale_binding.dart';
 import 'package:omninest/app/desktop/desktop_shell.dart';
@@ -119,10 +120,7 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
       themeMode: themeMode,
       themeAnimationDuration: MotionToken.resolveForPlatform(MotionToken.fast),
       scrollBehavior: const OmniNestScrollBehavior(),
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        ...GlobalMaterialLocalizations.delegates,
-      ],
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: const [Locale('zh'), Locale('en')],
       locale: Locale(languageCode),
       routerConfig: router,

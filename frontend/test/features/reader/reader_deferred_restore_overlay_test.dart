@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_deferred_restore_overlay.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 摘要：回归「恢复定位期间闪现章首再跳到阅读位置」。
 ///
@@ -14,7 +15,7 @@ void main() {
     final settings = ReaderViewSettings();
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Stack(
           children: [

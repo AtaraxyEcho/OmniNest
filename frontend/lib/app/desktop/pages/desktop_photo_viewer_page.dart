@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -11,9 +12,10 @@ import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
-import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
+import 'package:omninest/app/desktop/widgets/desktop_window_controls.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/app/theme/desktop/desktop_palette.dart';
@@ -25,11 +27,12 @@ import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/features/photos/photo_dashboard.dart';
 import 'package:omninest/features/photos/application/photo_display_order_controller.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_overlays.dart';
 
 part 'desktop_photo_viewer_filmstrip.dart';
 
-/// 桌面照片查看器（样例 `PhotoViewer`）：压暗背景 + 顶栏 + 左右翻页 +
-/// 缩放/旋转舞台 + 底部胶片条 + 右侧信息面板 + 幻灯片自动播放。
+/// 桌面照片查看器（样例 `PhotoViewer`）：柔和模糊背景 + 上下暗纱渐变 + 顶栏 +
+/// 左右翻页 + 缩放/旋转舞台 + 底部胶片条/幻灯片分段进度 + 右侧信息面板。
 ///
 /// 与移动 `PhotoDetailPage` 分开：移动版是"页面 + 底部操作"，样例是满铺
 /// 覆盖层，两套几何无法共用；数据仍走同一组 provider，动作落在
@@ -44,14 +47,18 @@ class DesktopPhotoViewerPage extends ConsumerStatefulWidget {
       _DesktopPhotoViewerPageState();
 }
 
-class _DesktopPhotoViewerPageState
-    extends ConsumerState<DesktopPhotoViewerPage> {
+class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
+    with SingleTickerProviderStateMixin {
   static const Duration _slideInterval = Duration(milliseconds: 3800);
 
   final TransformationController _zoom = TransformationController();
   final FocusNode _focus = FocusNode(debugLabel: 'desktop-photo-viewer');
   final GlobalKey _stageKey = GlobalKey(
     debugLabel: 'desktop-photo-viewer-stage',
+  );
+  late final AnimationController _slideProgress = AnimationController(
+    vsync: this,
+    duration: _slideInterval,
   );
   Offset? _lastDoubleTapLocal;
 
@@ -60,25 +67,39 @@ class _DesktopPhotoViewerPageState
   double _scale = 1;
   bool _info = false;
   bool _slideshow = false;
+  bool _thumbnailsVisible = true;
   bool _pointerInsideViewer = false;
   bool _shareOpen = false;
   bool _loadingMoreBrowsePhotos = false;
-  Timer? _slideTimer;
 
   @override
   void initState() {
     super.initState();
     _zoom.addListener(_syncScale);
+    _slideProgress.addStatusListener(_onSlideProgressStatus);
   }
 
   @override
   void dispose() {
-    _slideTimer?.cancel();
+    _slideProgress
+      ..removeStatusListener(_onSlideProgressStatus)
+      ..dispose();
     _zoom
       ..removeListener(_syncScale)
       ..dispose();
     _focus.dispose();
     super.dispose();
+  }
+
+  void _onSlideProgressStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed || !_slideshow || !mounted) {
+      return;
+    }
+    final previousId = _currentId;
+    _step(1);
+    if (_slideshow && _currentId == previousId) {
+      _slideProgress.forward(from: 0);
+    }
   }
 
   void _syncScale() {
@@ -119,6 +140,7 @@ class _DesktopPhotoViewerPageState
     final fallback = index >= 0 ? list[index] : null;
     final detail = ref.watch(photoDetailProvider(_currentId)).asData?.value;
     final photo = detail ?? fallback;
+    final chromeVisible = !_slideshow || _pointerInsideViewer;
 
     return Focus(
       focusNode: _focus,
@@ -131,18 +153,33 @@ class _DesktopPhotoViewerPageState
           color: DesktopPalette.stageBlack,
           child: Stack(
             children: [
-              // `.vw-bg` 只做 50% 透明、1.5 饱和与 .8 亮度，不使用全屏模糊。
+              // 还原旧版 SlideshowBlurredCover 同源柔和模糊层（96px 低分缩略图 +
+              // 1.12 放大 + low 采样 + 0.35 暗罩），外层 450ms 交叉淡入淡出同步切图氛围。
               Positioned.fill(
                 child: IgnorePointer(
-                  child: Opacity(
-                    opacity: 0.5,
-                    child: ColorFiltered(
-                      colorFilter: desktopColorGrade(
-                        saturation: 1.5,
-                        brightness: 0.8,
-                      ),
-                      child: DesktopImage(url: photo?.coverUrl),
+                  child: AnimatedSwitcher(
+                    duration: DesktopMotion.of(
+                      context,
+                      const Duration(milliseconds: 450),
                     ),
+                    layoutBuilder:
+                        (currentChild, previousChildren) => Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            ...previousChildren,
+                            if (currentChild != null) currentChild,
+                          ],
+                        ),
+                    child:
+                        photo == null
+                            ? const ColoredBox(
+                              key: ValueKey<String>('viewer-bg-empty'),
+                              color: DesktopPalette.stageBlack,
+                            )
+                            : SlideshowBlurredCover(
+                              key: ValueKey<String>('viewer-bg-${photo.id}'),
+                              photo: photo,
+                            ),
                   ),
                 ),
               ),
@@ -161,30 +198,16 @@ class _DesktopPhotoViewerPageState
                   onDoubleTap: _toggleZoom,
                   onWheel: _onWheel,
                 ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: 0,
-                  height: 64,
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0x73000000), Colors.transparent],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                // 补齐旧版上下三段式暗纱渐变（底部 0xB8 → 0x2E → transparent，
+                // 控件隐藏时保留 0.4 透明底纱）。
+                SlideshowGradients(visible: chromeVisible),
                 _TopBar(
                   photo: photo,
                   index: index,
                   total: list.length,
                   info: _info,
                   slideshow: _slideshow,
-                  visible: !_slideshow || _pointerInsideViewer,
+                  visible: chromeVisible,
                   favorite: photo.favorite,
                   onClose: _close,
                   onToggleInfo: () => setState(() => _info = !_info),
@@ -216,45 +239,35 @@ class _DesktopPhotoViewerPageState
                           ? () => _step(1)
                           : null,
                 ),
-                if (list.length > 1)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: IgnorePointer(
-                      ignoring: _slideshow && !_pointerInsideViewer,
-                      child: AnimatedOpacity(
-                        opacity: !_slideshow || _pointerInsideViewer ? 1 : 0,
-                        duration: DesktopMotion.of(
-                          context,
-                          DesktopMotion.viewerChrome,
-                        ),
-                        child: _Filmstrip(
-                          photos: list,
-                          currentId: photo.id,
-                          onPick: (id) => _select(id),
-                        ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: IgnorePointer(
+                    ignoring: !chromeVisible,
+                    child: AnimatedOpacity(
+                      opacity: chromeVisible ? 1 : 0,
+                      duration: DesktopMotion.of(
+                        context,
+                        DesktopMotion.viewerChrome,
+                      ),
+                      child: _Filmstrip(
+                        photos: list,
+                        currentPhoto: photo,
+                        currentIndex: math.max(index, 0),
+                        slideshow: _slideshow,
+                        thumbnailsVisible: _thumbnailsVisible,
+                        slideProgress: _slideProgress,
+                        onPick: _select,
+                        onToggleSlideshow: _toggleSlideshow,
+                        onToggleThumbnails:
+                            () => setState(
+                              () => _thumbnailsVisible = !_thumbnailsVisible,
+                            ),
                       ),
                     ),
                   ),
-                if (_slideshow)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: TweenAnimationBuilder<double>(
-                      key: ValueKey<String>(photo.id),
-                      tween: Tween<double>(begin: 0, end: 1),
-                      duration: _slideInterval,
-                      builder:
-                          (context, value, _) => LinearProgressIndicator(
-                            value: value,
-                            minHeight: 2,
-                            backgroundColor: Colors.transparent,
-                            color: skin.accent,
-                          ),
-                    ),
-                  ),
+                ),
                 _InfoPanel(
                   open: _info,
                   photo: photo,
@@ -398,10 +411,13 @@ class _DesktopPhotoViewerPageState
       _scale = 1;
       _zoom.value = Matrix4.identity();
     });
+    if (_slideshow) {
+      _slideProgress.forward(from: 0);
+    }
   }
 
   void _close() {
-    _slideTimer?.cancel();
+    _slideProgress.stop();
     // 覆盖层只 push 不 go：直接 go 会把来路换成照片页，系统返回即退出应用。
     exitDetailRoute(context, fallbackRoute: '/photos');
   }
@@ -458,11 +474,14 @@ class _DesktopPhotoViewerPageState
   void _toggleSlideshow() {
     setState(() {
       _slideshow = !_slideshow;
-      _slideTimer?.cancel();
-      if (_slideshow) {
-        _slideTimer = Timer.periodic(_slideInterval, (_) => _step(1));
-      }
     });
+    if (_slideshow) {
+      _slideProgress.forward(from: 0);
+    } else {
+      _slideProgress
+        ..stop()
+        ..reset();
+    }
   }
 
   Future<void> _toggleFavorite(PhotoItem photo) async {
@@ -763,86 +782,102 @@ class _TopBar extends StatelessWidget {
         child: AnimatedOpacity(
           opacity: visible ? 1 : 0,
           duration: DesktopMotion.of(context, DesktopMotion.viewerChrome),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-            child: Row(
+          child: SizedBox(
+            height: 64,
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                DesktopIconButton(
-                  icon: DesktopIcons.left,
-                  size: 36,
-                  iconSize: 18,
-                  tooltip: l10n.photosClose,
-                  onPressed: onClose,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                const DesktopWindowDragRegion(child: SizedBox.expand()),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Text(
-                        _placeLabel(photo) ?? photo.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: DesktopType.cardTitle(skin.text),
+                      DesktopIconButton(
+                        icon: DesktopIcons.left,
+                        size: 36,
+                        iconSize: 18,
+                        tooltip: l10n.photosClose,
+                        onPressed: onClose,
                       ),
-                      Text(
-                        l10n.desktopPhotosIndex(index + 1, total),
-                        style: DesktopType.caption(skin.text3),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: IgnorePointer(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _placeLabel(photo) ?? photo.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: DesktopType.cardTitle(skin.text),
+                              ),
+                              Text(
+                                l10n.desktopPhotosIndex(index + 1, total),
+                                style: DesktopType.caption(skin.text3),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      DesktopIconButton(
+                        icon:
+                            slideshow ? DesktopIcons.pause : DesktopIcons.play,
+                        size: 36,
+                        iconSize: 17,
+                        active: slideshow,
+                        tooltip: l10n.photosSlideshow,
+                        onPressed: onToggleSlideshow,
+                      ),
+                      DesktopIconButton(
+                        icon: DesktopIcons.rotate,
+                        size: 36,
+                        iconSize: 18,
+                        tooltip: l10n.photosRotate,
+                        onPressed: onRotate,
+                      ),
+                      DesktopIconButton(
+                        icon:
+                            favorite
+                                ? DesktopIcons.heartFilled
+                                : DesktopIcons.heart,
+                        size: 36,
+                        iconSize: 18,
+                        tooltip: l10n.photosFavorite,
+                        onPressed: onToggleFavorite,
+                      ),
+                      DesktopIconButton(
+                        icon: DesktopIcons.edit,
+                        size: 36,
+                        iconSize: 17,
+                        tooltip: l10n.photosEdit,
+                        onPressed: onEdit,
+                      ),
+                      DesktopIconButton(
+                        icon: DesktopIcons.share,
+                        size: 36,
+                        iconSize: 17,
+                        tooltip: l10n.filesShare,
+                        onPressed: onShare,
+                      ),
+                      DesktopIconButton(
+                        icon: DesktopIcons.trash,
+                        size: 36,
+                        iconSize: 17,
+                        tooltip: l10n.photosDelete,
+                        onPressed: onDelete,
+                      ),
+                      DesktopIconButton(
+                        icon: DesktopIcons.info,
+                        size: 36,
+                        iconSize: 18,
+                        active: info,
+                        tooltip: l10n.desktopPhotosInfo,
+                        onPressed: onToggleInfo,
                       ),
                     ],
                   ),
-                ),
-                DesktopIconButton(
-                  icon: slideshow ? DesktopIcons.pause : DesktopIcons.play,
-                  size: 36,
-                  iconSize: 17,
-                  active: slideshow,
-                  tooltip: l10n.photosSlideshow,
-                  onPressed: onToggleSlideshow,
-                ),
-                DesktopIconButton(
-                  icon: DesktopIcons.rotate,
-                  size: 36,
-                  iconSize: 18,
-                  tooltip: l10n.photosRotate,
-                  onPressed: onRotate,
-                ),
-                DesktopIconButton(
-                  icon:
-                      favorite ? DesktopIcons.heartFilled : DesktopIcons.heart,
-                  size: 36,
-                  iconSize: 18,
-                  tooltip: l10n.photosFavorite,
-                  onPressed: onToggleFavorite,
-                ),
-                DesktopIconButton(
-                  icon: DesktopIcons.edit,
-                  size: 36,
-                  iconSize: 17,
-                  tooltip: l10n.photosEdit,
-                  onPressed: onEdit,
-                ),
-                DesktopIconButton(
-                  icon: DesktopIcons.share,
-                  size: 36,
-                  iconSize: 17,
-                  tooltip: l10n.filesShare,
-                  onPressed: onShare,
-                ),
-                DesktopIconButton(
-                  icon: DesktopIcons.trash,
-                  size: 36,
-                  iconSize: 17,
-                  tooltip: l10n.photosDelete,
-                  onPressed: onDelete,
-                ),
-                DesktopIconButton(
-                  icon: DesktopIcons.info,
-                  size: 36,
-                  iconSize: 18,
-                  active: info,
-                  tooltip: l10n.desktopPhotosInfo,
-                  onPressed: onToggleInfo,
                 ),
               ],
             ),

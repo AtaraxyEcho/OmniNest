@@ -8,6 +8,7 @@ import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   testWidgets('窄卡片内标题与日期文本不溢出', (tester) async {
@@ -27,7 +28,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: OmniNestTheme.light(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('en'),
         home: Scaffold(
@@ -66,7 +67,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: OmniNestTheme.from(AppThemePalette.dark),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('en'),
         home: SizedBox(
@@ -105,7 +106,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: OmniNestTheme.light(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('en'),
         home: SizedBox(
@@ -142,7 +143,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: OmniNestTheme.light(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('en'),
         home: Scaffold(
@@ -203,7 +204,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: OmniNestTheme.light(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('en'),
         home: Center(
@@ -256,7 +257,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: OmniNestTheme.light(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('en'),
         home: SizedBox(

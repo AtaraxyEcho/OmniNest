@@ -13,6 +13,7 @@ import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/files/application/file_browser_controller.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 FileNode _folder(String id, String name, {String? parentId}) {
   return FileNode(
@@ -170,7 +171,7 @@ Future<_AuditFileController> _pumpHost(WidgetTester tester) async {
         fileBrowserControllerProvider.overrideWith(() => controller),
       ],
       child: MaterialApp.router(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         routerConfig: router,

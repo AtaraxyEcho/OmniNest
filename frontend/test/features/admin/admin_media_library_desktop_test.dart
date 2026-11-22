@@ -9,6 +9,7 @@ import 'package:omninest/core/widgets/desktop_shell_scope.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_operations_pages.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_management_models.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _AdminSession extends AuthSessionNotifier {
   @override
@@ -69,7 +70,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(
@@ -120,7 +121,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(

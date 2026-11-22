@@ -8,6 +8,7 @@ import 'package:omninest/core/window/desktop_close_action.dart';
 import 'package:omninest/core/window/desktop_close_confirm_dialog.dart';
 import 'package:omninest/core/window/desktop_close_flow.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -21,7 +22,7 @@ void main() {
     return MaterialApp(
       navigatorKey: desktopCloseNavigatorKey,
       locale: const Locale('zh'),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       theme: OmniNestTheme.light(),
       home: const Scaffold(body: SizedBox.shrink()),

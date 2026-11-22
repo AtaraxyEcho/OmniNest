@@ -25,6 +25,7 @@ import 'package:omninest/features/portal/presentation/widgets/portal_mobile_shel
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../support/golden_fonts.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 一段文本的墨迹水平区间（全局坐标）。
 class InkRange {
@@ -97,7 +98,7 @@ Future<void> _pumpHome(
         realtimeWeatherProvider.overrideWith((ref) async => _weather()),
       ],
       child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         theme:

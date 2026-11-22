@@ -160,6 +160,13 @@ final globalReaderApiProvider = Provider<ReaderApi>((ref) {
   return ReaderApi(ref.watch(apiClientProvider));
 });
 
+/// 进程级过期缓存清理去重集合：同作用域（账号或匿名）在单次进程生命周期内
+/// 仅执行一次，避免 `localDatabaseInitProvider` 随依赖重算时重复扫描 SQLite。
+final Set<String> _cleanedCacheScopes = <String>{};
+
+/// 过期缓存清理延迟：移出冷启动关键路径，首屏就绪后再静默回收。
+const Duration _cacheCleanupDelay = Duration(seconds: 3);
+
 /// 初始化依赖 LocalDatabase 的静态工具类。
 /// 必须在应用启动时读取一次，确保 ReaderLocalProgress / ReaderSyncQueue / ReaderImageCache 可用。
 final localDatabaseInitProvider = Provider<LocalDatabase>((ref) {
@@ -167,9 +174,10 @@ final localDatabaseInitProvider = Provider<LocalDatabase>((ref) {
   final userId = ref.watch(
     authSessionProvider.select((session) => session.value?.user?.id),
   );
+  final cipher = ref.watch(offlineColumnCipherProvider);
   final localStorage = ReaderLocalStorage(
     db,
-    textCipher: ref.watch(offlineColumnCipherProvider),
+    textCipher: cipher,
     userId: userId,
   );
   final imageRepository = createReaderImageRepository(
@@ -179,11 +187,7 @@ final localDatabaseInitProvider = Provider<LocalDatabase>((ref) {
   ReaderLocalProgress.init(
     DatabaseReaderLocalProgressStore(db, userId: userId),
   );
-  ReaderSyncQueue.init(
-    db,
-    textCipher: ref.watch(offlineColumnCipherProvider),
-    userId: userId,
-  );
+  ReaderSyncQueue.init(db, textCipher: cipher, userId: userId);
   if (userId != null && userId.isNotEmpty) {
     // 冷启动恢复会话前队列以空账号落库；拿到真实账号后立即认领，
     // 否则这些操作既不会被重放，也不会在登出时被清理。
@@ -193,8 +197,10 @@ final localDatabaseInitProvider = Provider<LocalDatabase>((ref) {
   ReaderProgressBackupWeb.setUserId(userId);
   ReaderImageCache.init(imageRepository);
 
-  // 启动时自动清理过期缓存（不阻塞启动）
-  unawaited(_autoCleanExpiredCache(localStorage, imageRepository));
+  // 解耦至进程级作用域去重 + 3 秒延后静默执行，避免启动期重复触发磁盘清理。
+  final scopeKey =
+      (userId == null || userId.isEmpty) ? '__anonymous__' : userId;
+  _scheduleExpiredCacheCleanup(scopeKey, localStorage, imageRepository);
 
   return db;
 });
@@ -229,7 +235,20 @@ final syncReplayFailuresProvider = StreamProvider<int>((ref) {
   return listener.replayFailureStream;
 });
 
-/// 启动时自动清理超过 30 天未访问的章节和图片缓存。
+void _scheduleExpiredCacheCleanup(
+  String scopeKey,
+  ReaderLocalStorage localStorage,
+  ReaderImageRepository imageRepository,
+) {
+  if (!_cleanedCacheScopes.add(scopeKey)) {
+    return;
+  }
+  Timer(_cacheCleanupDelay, () {
+    unawaited(_autoCleanExpiredCache(localStorage, imageRepository));
+  });
+}
+
+/// 启动后静默清理超过 30 天未访问的章节和图片缓存。
 Future<void> _autoCleanExpiredCache(
   ReaderLocalStorage localStorage,
   ReaderImageRepository imageRepository,

@@ -13,6 +13,7 @@ import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 AdminConsoleSummary _fakeSummary() {
   return AdminConsoleSummary(
@@ -93,7 +94,7 @@ Future<void> _pumpShell(
       ],
       child: MaterialApp(
         theme: light ? OmniNestTheme.light() : OmniNestTheme.dark(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: AdminDashboardPage(initialSectionSegment: initialSectionSegment),

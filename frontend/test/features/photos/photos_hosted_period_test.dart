@@ -19,6 +19,7 @@ import 'package:omninest/features/photos/domain/photo_timeline.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_period_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photos_page.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_hosted_chrome.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 const _caps = UserCapabilities(
   canBrowseContent: true,
@@ -199,7 +200,7 @@ Future<void> _pump(
       child: MaterialApp.router(
         // 桌面分支取 context.photosColors，需要注册了模块色板的主题。
         theme: OmniNestTheme.from(AppThemePalette.dark),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         routerConfig: router,

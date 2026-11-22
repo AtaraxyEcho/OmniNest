@@ -19,8 +19,9 @@ enum _ReaderTopIcon {
   type,
 }
 
-/// 桌面原型 `.bk-top`（v4 终审定稿）：
-/// - 严格对齐样例：不加右上角三键，顶栏空白区内置窗口拖拽与双击最大化；
+/// 桌面原型 `.bk-top`（v5 全宽底层拖拽标准化）：
+/// - 64px 全宽底层 `DesktopWindowDragRegion` 支持任意空白区窗口拖拽与双击最大化；
+/// - 上层左右按钮与模式胶囊作为独立兄弟节点脱离 `onDoubleTap` 竞技场，0ms 响应且绝不误触最大化；
 /// - 单个 Expanded 占满中段弹性空白，模式胶囊与 5 枚细线矢量工具图标严格锚定右缘 20px。
 class ReaderDesktopTopBar extends StatelessWidget {
   const ReaderDesktopTopBar({
@@ -87,168 +88,177 @@ class ReaderDesktopTopBar extends StatelessWidget {
         ),
         child: SizedBox(
           height: 64,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                _DesktopIconButton(
-                  icon: _ReaderTopIcon.left,
-                  label: l10n.readerClose,
-                  foreground: foreground,
-                  accent: settings.accentColor,
-                  bookMode: bookMode,
-                  onPressed: onBack,
-                  large: true,
-                ),
-                const SizedBox(width: 10),
-                // 关键修复：仅将窗口拖拽与双击最大化限定在中段空白标题区，
-                // 左右按钮与模式胶囊彻底脱离 onDoubleTap 竞技场，0ms 响应且绝不误触最大化！
-                Expanded(
-                  child: DesktopWindowDragRegion(
-                    child: SizedBox(
-                      height: 64,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: compactModeLabels ? 180 : 300,
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                bookTitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: foreground,
-                                  fontFamily: AppTypography.serifFamily,
-                                  fontFamilyFallback:
-                                      AppTypography.serifFamilyFallback,
-                                  fontSize: 17, // ignore: font_size_whitelist
-                                  fontWeight: FontWeight.w400,
-                                  height: 1.25,
-                                ),
-                              ),
-                              if (chapterTitle.isNotEmpty)
-                                Text(
-                                  chapterTitle,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: muted,
-                                    fontSize: 12, // ignore: font_size_whitelist
-                                    height: 1.3,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                if (pageModeEnabled) ...[
-                  _DesktopModeSwitch(
-                    settings: settings,
-                    foreground: foreground,
-                    bookMode: bookMode,
-                    iconOnly: compactModeLabels,
-                    onSettingsChanged: onSettingsChanged,
-                  ),
-                  const SizedBox(width: 10),
-                ],
-                _DesktopIconButton(
-                  icon: _ReaderTopIcon.search,
-                  label: '${l10n.readerSearchInBook} (/)',
-                  foreground: foreground,
-                  accent: settings.accentColor,
-                  bookMode: bookMode,
-                  selected: activePanel == ReaderPanelType.search,
-                  onPressed: onSearch,
-                ),
-                const SizedBox(width: 4),
-                _DesktopIconButton(
-                  icon: _ReaderTopIcon.list2,
-                  label: '${l10n.readerTableOfContents} (T)',
-                  foreground: foreground,
-                  accent: settings.accentColor,
-                  bookMode: bookMode,
-                  selected: activePanel == ReaderPanelType.contents,
-                  onPressed: onShowContents,
-                ),
-                const SizedBox(width: 4),
-                _DesktopIconButton(
-                  icon: _ReaderTopIcon.bookmark,
-                  filled: isBookmarked,
-                  label:
-                      isBookmarked
-                          ? l10n.readerRemoveBookmark
-                          : l10n.readerAddBookmark,
-                  foreground: foreground,
-                  accent: settings.accentColor,
-                  bookMode: bookMode,
-                  selected: isBookmarked,
-                  onPressed: onAddBookmark,
-                ),
-                const SizedBox(width: 4),
-                Stack(
-                  clipBehavior: Clip.none,
+          child: Stack(
+            children: [
+              // 64px 全宽底层窗口拖拽区：任意空白区域均可拖动窗口与双击最大化，
+              // 上层按钮与模式胶囊作为独立兄弟节点保持 0ms 响应。
+              const Positioned.fill(
+                child: DesktopWindowDragRegion(child: SizedBox.expand()),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
                   children: [
                     _DesktopIconButton(
-                      icon: _ReaderTopIcon.highlight,
-                      label: l10n.readerAnnotations,
+                      icon: _ReaderTopIcon.left,
+                      label: l10n.readerClose,
                       foreground: foreground,
                       accent: settings.accentColor,
                       bookMode: bookMode,
-                      selected: activePanel == ReaderPanelType.annotations,
-                      onPressed: onShowAnnotations,
+                      onPressed: onBack,
+                      large: true,
                     ),
-                    if (annotationBadgeCount > 0)
-                      Positioned(
-                        top: -2,
-                        right: -2,
-                        child: IgnorePointer(
-                          child: Container(
-                            constraints: const BoxConstraints(minWidth: 16),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: settings.accentColor,
-                              borderRadius: BorderRadius.circular(99),
-                            ),
-                            child: Text(
-                              annotationBadgeCount > 99
-                                  ? '99+'
-                                  : '$annotationBadgeCount',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: ReaderReadingPalette.onAccentInk,
-                                fontSize: 10, // ignore: font_size_whitelist
-                                fontWeight: FontWeight.w700,
-                                height: 1.15,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: IgnorePointer(
+                        child: SizedBox(
+                          height: 64,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: compactModeLabels ? 180 : 300,
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    bookTitle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: foreground,
+                                      fontFamily: AppTypography.serifFamily,
+                                      fontFamilyFallback:
+                                          AppTypography.serifFamilyFallback,
+                                      fontSize:
+                                          17, // ignore: font_size_whitelist
+                                      fontWeight: FontWeight.w400,
+                                      height: 1.25,
+                                    ),
+                                  ),
+                                  if (chapterTitle.isNotEmpty)
+                                    Text(
+                                      chapterTitle,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: muted,
+                                        fontSize:
+                                            12, // ignore: font_size_whitelist
+                                        height: 1.3,
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ),
                         ),
                       ),
+                    ),
+                    if (pageModeEnabled) ...[
+                      _DesktopModeSwitch(
+                        settings: settings,
+                        foreground: foreground,
+                        bookMode: bookMode,
+                        iconOnly: compactModeLabels,
+                        onSettingsChanged: onSettingsChanged,
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                    _DesktopIconButton(
+                      icon: _ReaderTopIcon.search,
+                      label: '${l10n.readerSearchInBook} (/)',
+                      foreground: foreground,
+                      accent: settings.accentColor,
+                      bookMode: bookMode,
+                      selected: activePanel == ReaderPanelType.search,
+                      onPressed: onSearch,
+                    ),
+                    const SizedBox(width: 4),
+                    _DesktopIconButton(
+                      icon: _ReaderTopIcon.list2,
+                      label: '${l10n.readerTableOfContents} (T)',
+                      foreground: foreground,
+                      accent: settings.accentColor,
+                      bookMode: bookMode,
+                      selected: activePanel == ReaderPanelType.contents,
+                      onPressed: onShowContents,
+                    ),
+                    const SizedBox(width: 4),
+                    _DesktopIconButton(
+                      icon: _ReaderTopIcon.bookmark,
+                      filled: isBookmarked,
+                      label:
+                          isBookmarked
+                              ? l10n.readerRemoveBookmark
+                              : l10n.readerAddBookmark,
+                      foreground: foreground,
+                      accent: settings.accentColor,
+                      bookMode: bookMode,
+                      selected: isBookmarked,
+                      onPressed: onAddBookmark,
+                    ),
+                    const SizedBox(width: 4),
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        _DesktopIconButton(
+                          icon: _ReaderTopIcon.highlight,
+                          label: l10n.readerAnnotations,
+                          foreground: foreground,
+                          accent: settings.accentColor,
+                          bookMode: bookMode,
+                          selected: activePanel == ReaderPanelType.annotations,
+                          onPressed: onShowAnnotations,
+                        ),
+                        if (annotationBadgeCount > 0)
+                          Positioned(
+                            top: -2,
+                            right: -2,
+                            child: IgnorePointer(
+                              child: Container(
+                                constraints: const BoxConstraints(minWidth: 16),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: settings.accentColor,
+                                  borderRadius: BorderRadius.circular(99),
+                                ),
+                                child: Text(
+                                  annotationBadgeCount > 99
+                                      ? '99+'
+                                      : '$annotationBadgeCount',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: ReaderReadingPalette.onAccentInk,
+                                    fontSize: 10, // ignore: font_size_whitelist
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.15,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(width: 4),
+                    _DesktopIconButton(
+                      icon: _ReaderTopIcon.type,
+                      label: l10n.readerSettingsTitle,
+                      foreground: foreground,
+                      accent: settings.accentColor,
+                      bookMode: bookMode,
+                      selected: activePanel == ReaderPanelType.settings,
+                      onPressed: onShowSettings,
+                    ),
                   ],
                 ),
-                const SizedBox(width: 4),
-                _DesktopIconButton(
-                  icon: _ReaderTopIcon.type,
-                  label: l10n.readerSettingsTitle,
-                  foreground: foreground,
-                  accent: settings.accentColor,
-                  bookMode: bookMode,
-                  selected: activePanel == ReaderPanelType.settings,
-                  onPressed: onShowSettings,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

@@ -13,6 +13,7 @@ import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_lyrics.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   testWidgets('probe', (tester) async {
@@ -30,7 +31,7 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(
@@ -83,7 +84,7 @@ void main() {
       return UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(

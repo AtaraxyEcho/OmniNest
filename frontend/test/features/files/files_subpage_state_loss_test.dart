@@ -20,6 +20,7 @@ import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_repository.dart';
 import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _FakeFileRepository extends Mock implements FileRepository {}
 
@@ -280,7 +281,7 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp.router(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           routerConfig: router,

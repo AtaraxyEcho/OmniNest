@@ -9,6 +9,7 @@ import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_spectrum_frame.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/presentation/widgets/music_volume_button.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   testWidgets('悬停音量按钮后面板持续展开，不会反复收缩', (tester) async {
@@ -80,7 +81,7 @@ Future<TestGesture> _pumpHarness(WidgetTester tester) async {
   await tester.pumpWidget(
     MaterialApp(
       locale: const Locale('zh'),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       theme: ThemeData(
         tooltipTheme: const TooltipThemeData(

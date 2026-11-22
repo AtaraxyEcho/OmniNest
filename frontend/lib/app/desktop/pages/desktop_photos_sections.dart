@@ -197,10 +197,9 @@ class _TrashPhotoTile extends StatelessWidget {
                               onTap: onRestore,
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(999),
-                                child: BackdropFilter(
-                                  filter: ImageFilter.blur(
-                                    sigmaX: 14,
-                                    sigmaY: 14,
+                                child: BackdropFilter.grouped(
+                                  filterConfig: ImageFilterConfig(
+                                    ImageFilter.blur(sigmaX: 14, sigmaY: 14),
                                   ),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(

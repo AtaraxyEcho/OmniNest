@@ -16,6 +16,7 @@ import 'package:omninest/features/admin/presentation/pages/admin_group_pages.dar
 import 'package:omninest/features/admin/presentation/pages/admin_operations_pages.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_common_widgets.dart';
 import 'package:omninest/core/widgets/desktop_shell_scope.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _MockAdminOperationsApi extends Mock implements AdminOperationsApi {}
 
@@ -81,7 +82,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(body: const AdminTasksPage()),
@@ -125,7 +126,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(
@@ -200,7 +201,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(body: const AdminTasksPage()),
@@ -271,7 +272,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(body: const AdminTasksPage()),
@@ -353,7 +354,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(body: const AdminLogsPage()),
@@ -432,7 +433,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(body: const AdminLogsPage()),
@@ -516,7 +517,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(body: const AdminTasksPage()),
@@ -590,7 +591,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(body: const AdminTasksPage()),
@@ -670,7 +671,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(body: const AdminTasksPage()),
@@ -779,7 +780,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(body: const AdminTasksPage()),
@@ -858,7 +859,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(body: const AdminTasksPage()),

@@ -7,6 +7,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_player_center_controls.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_player_status_overlay.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   testWidgets('播放计划不可用时保留返回操作', (tester) async {
@@ -35,7 +36,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: OmniNestTheme.from(AppThemePalette.dark),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Stack(
           children: [

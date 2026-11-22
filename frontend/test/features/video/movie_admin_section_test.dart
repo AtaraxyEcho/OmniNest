@@ -16,6 +16,7 @@ import 'package:omninest/core/widgets/mobile_status_kit.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_management.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_filter_sort_bar.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   testWidgets('托管态影片管理用计数格与状态行，不落工位表', (tester) async {
@@ -165,7 +166,7 @@ Future<void> _pumpSection(
       container: container,
       child: MaterialApp(
         theme: OmniNestTheme.light(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: hosted ? MobileShellScope(hosted: true, child: section) : section,

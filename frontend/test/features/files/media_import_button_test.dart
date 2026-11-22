@@ -13,6 +13,7 @@ import 'package:omninest/features/files/application/media_import_service.dart';
 import 'package:omninest/features/files/data/file_api.dart';
 import 'package:omninest/features/files/presentation/widgets/media_import_button.dart';
 import 'package:omninest/features/tasks/data/task_api.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   Widget buildButton(
@@ -34,7 +35,7 @@ void main() {
           mediaImportServiceProvider.overrideWithValue(importService),
       ],
       child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: Navigator(

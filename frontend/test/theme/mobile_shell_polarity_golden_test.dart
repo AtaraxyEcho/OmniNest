@@ -19,6 +19,7 @@ import 'package:omninest/features/music/application/music_spectrum_frame.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 
 import '../support/golden_fonts.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _ZeroUnreadCount extends UnreadCountNotifier {
   @override
@@ -150,7 +151,7 @@ void main() {
                     ? OmniNestTheme.light()
                     : OmniNestTheme.dark(),
             routerConfig: router,
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('zh'),
           ),

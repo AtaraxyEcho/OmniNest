@@ -27,6 +27,7 @@ import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_repository.dart';
 import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 const _caps = UserCapabilities(
   canBrowseContent: true,
@@ -202,7 +203,7 @@ Future<_SectionsController> _pump(
           fileRepositoryProvider.overrideWithValue(repository),
       ],
       child: MaterialApp.router(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         routerConfig: router,

@@ -1,6 +1,7 @@
 import 'dart:ui' as ui show Image;
 
 import 'package:material_ui/material_ui.dart';
+import 'package:omninest/app/desktop/widgets/desktop_window_controls.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
@@ -50,8 +51,9 @@ class SlideshowIconButton extends StatelessWidget {
 
 /// Slideshow top bar: left close/title, center counter, right actions.
 ///
-/// Uses a Stack so Flexible/Spacer do not split free width and crowd
-/// desktop controls together.
+/// Uses a 64px Stack with a background DesktopWindowDragRegion so desktop
+/// window dragging works across empty space and ignored title text while
+/// side buttons remain clickable on the top layer.
 class PhotoSlideshowTopBar extends StatelessWidget {
   const PhotoSlideshowTopBar({
     required this.photo,
@@ -90,9 +92,6 @@ class PhotoSlideshowTopBar extends StatelessWidget {
     final showCenterCounter = width >= 720;
     final horizontalPadding = width >= 600 ? 24.0 : 16.0;
     final actionGap = width >= 600 ? 16.0 : 8.0;
-    // 关闭键是离开查看器的逃生控件：窄屏下整条高度随之下限，避免 48 命中
-    // 区被 36 的容器裁掉；桌面维持紧凑密度不变。
-    final barHeight = width >= 600 ? 36.0 : MobileLayoutTokens.minimumTarget;
     final counterText =
         '${(current + 1).toString().padLeft(2, '0')} / '
         '${total.toString().padLeft(2, '0')}';
@@ -158,21 +157,31 @@ class PhotoSlideshowTopBar extends StatelessWidget {
             duration: const Duration(milliseconds: 400),
             curve: Curves.ease,
             child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                horizontalPadding,
-                20 + MediaQuery.paddingOf(context).top,
-                horizontalPadding,
-                32,
-              ),
+              padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
               child: SizedBox(
-                height: barHeight,
+                height: 64,
                 child: Stack(
-                  alignment: Alignment.center,
+                  fit: StackFit.expand,
                   children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
+                    const DesktopWindowDragRegion(child: SizedBox.expand()),
+                    if (showCenterCounter)
+                      Center(
+                        child: IgnorePointer(
+                          child: Text(
+                            counterText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: counterStyle,
+                          ),
+                        ),
+                      ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: horizontalPadding,
+                      ),
                       child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           SlideshowIconButton(
                             tooltip: l10n.photosBackToPhotos,
@@ -185,49 +194,39 @@ class PhotoSlideshowTopBar extends StatelessWidget {
                           ),
                           if (showModuleTitle) ...[
                             const SizedBox(width: 8),
-                            ConstrainedBox(
-                              constraints: BoxConstraints(
-                                maxWidth: (width * 0.28).clamp(80, 220),
-                              ),
-                              child: Text(
-                                l10n.photosModuleDisplayName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.70),
-                                  fontSize: AppTypography.bodyMedium,
-                                  letterSpacing: 0.04,
+                            IgnorePointer(
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: (width * 0.28).clamp(80, 220),
+                                ),
+                                child: Text(
+                                  l10n.photosModuleDisplayName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.70),
+                                    fontSize: AppTypography.bodyMedium,
+                                    letterSpacing: 0.04,
+                                  ),
                                 ),
                               ),
                             ),
                           ],
-                        ],
-                      ),
-                    ),
-                    if (showCenterCounter)
-                      IgnorePointer(
-                        child: Text(
-                          counterText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: counterStyle,
-                        ),
-                      ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
                           if (!showCenterCounter) ...[
-                            Text(
-                              counterText,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: counterStyle,
+                            Expanded(
+                              child: IgnorePointer(
+                                child: Text(
+                                  counterText,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.right,
+                                  style: counterStyle,
+                                ),
+                              ),
                             ),
                             SizedBox(width: actionGap),
-                          ],
+                          ] else
+                            const Spacer(),
                           ...actionButtons,
                         ],
                       ),

@@ -56,6 +56,9 @@ Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 DECODE_MAX_SIDE = max(256, int(os.environ.get("AI_DECODE_MAX_SIDE", "2048")))
 
 MAX_CONCURRENT_INFERENCES = max(1, int(os.environ.get("AI_MAX_CONCURRENT_INFERENCES", "1")))
+SIDECAR_SLOT_WAIT_TIMEOUT_SEC = max(
+    0.5, float(os.environ.get("SIDECAR_SLOT_WAIT_TIMEOUT_SEC", "15.0"))
+)
 ORT_INTRA_THREADS = max(1, int(os.environ.get("AI_ORT_INTRA_THREADS", "2")))
 # GPU 开关：显式启用时才把 CUDA 放在 CPU 前；CUDA 不可用时 ORT 会回落到第二个 provider。
 VISION_ENABLE_GPU = os.environ.get("VISION_ENABLE_GPU", "false").strip().lower() in {
@@ -841,8 +844,25 @@ async def guard_analysis_uploads(request: Request, call_next):
             return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length"})
         if declared > MAX_IMAGE_BYTES + MULTIPART_OVERHEAD_BYTES:
             return JSONResponse(status_code=413, content={"detail": "Image exceeds size limit"})
-    async with inference_slots:
+    try:
+        await asyncio.wait_for(
+            inference_slots.acquire(),
+            timeout=SIDECAR_SLOT_WAIT_TIMEOUT_SEC,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "推理并发槽等待超时 (timeout=%.1fs)，拒绝当前请求",
+            SIDECAR_SLOT_WAIT_TIMEOUT_SEC,
+        )
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Vision sidecar inference slots busy"},
+            headers={"Retry-After": "5"},
+        )
+    try:
         return await call_next(request)
+    finally:
+        inference_slots.release()
 
 
 @app.get("/health")

@@ -6,6 +6,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/reader/domain/reader_item.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_hero.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_library_cards.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 书架封面的共享元素契约。
 ///
@@ -25,7 +26,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(

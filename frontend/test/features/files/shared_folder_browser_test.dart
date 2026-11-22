@@ -9,6 +9,7 @@ import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_repository.dart';
 import 'package:omninest/features/files/domain/public_share.dart';
 import 'package:omninest/features/files/presentation/widgets/shared_folder_browser.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 定向分享的接收人没有分享 token，只能按分享标识浏览；这里钉住
 /// "根目录 → 子目录 → 返回"的调用参数与列表内容，防止退回点开即报错的旧行为。
@@ -19,7 +20,7 @@ void main() {
       ProviderScope(
         overrides: [fileRepositoryProvider.overrideWithValue(repository)],
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           theme: OmniNestTheme.from(AppThemePalette.dark),
@@ -56,7 +57,7 @@ void main() {
       ProviderScope(
         overrides: [fileRepositoryProvider.overrideWithValue(repository)],
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           theme: OmniNestTheme.from(AppThemePalette.dark),

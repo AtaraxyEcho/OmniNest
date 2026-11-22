@@ -9,6 +9,7 @@ import 'package:omninest/features/reader/application/reader_image_provider.dart'
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_book_cover.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 封面卡渲染契约：真实封面整卡纯净渲染（不叠加书脊/字标/标题），
 /// 无封面与拉取失败退化为生成式封面（书脊 + 字标 + 标题作者）。
@@ -109,7 +110,7 @@ void main() {
           ),
         ],
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(

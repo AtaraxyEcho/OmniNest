@@ -9,6 +9,7 @@ import 'package:omninest/features/files/application/file_browser_controller.dart
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
 import 'package:omninest/features/files/presentation/widgets/file_env_glyph.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 文件模块移动首页（方案一：位置/分区卡）行为测试。
 void main() {
@@ -36,7 +37,7 @@ void main() {
       child: MaterialApp.router(
         routerConfig: router,
         theme: OmniNestTheme.light(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         builder:

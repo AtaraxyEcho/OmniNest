@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_overlays.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 Future<void> _pumpSegments(
   WidgetTester tester, {
@@ -10,7 +11,7 @@ Future<void> _pumpSegments(
 }) async {
   await tester.pumpWidget(
     MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       home: Scaffold(

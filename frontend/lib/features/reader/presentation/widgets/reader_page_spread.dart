@@ -19,6 +19,7 @@ class ReaderPageSpread extends StatefulWidget {
     this.progress = 0,
     this.curlOverlay,
     this.bookmarked = false,
+    this.bookmarkOnLeft = false,
     this.showPaperGrain = true,
     this.enableHoverTilt = false,
     this.seamlessSpine = false,
@@ -43,6 +44,9 @@ class ReaderPageSpread extends StatefulWidget {
   /// 整幅双页卷曲层（.curl-clip），覆盖左右两页允许纸页扫过书脊。
   final Widget? curlOverlay;
   final bool bookmarked;
+
+  /// 书签缎带挂在左叶外缘（RTL 日漫模式使用；默认 false 挂右叶外缘）。
+  final bool bookmarkOnLeft;
 
   /// 是否叠加纸纹噪点；漫画深色页可关闭避免 `multiply` 混合使画面发灰。
   final bool showPaperGrain;
@@ -279,7 +283,14 @@ class _ReaderPageSpreadState extends State<ReaderPageSpread> {
                                   children: [
                                     Positioned(
                                       top: -2,
-                                      right: c.maxWidth * 0.08,
+                                      left:
+                                          widget.bookmarkOnLeft
+                                              ? c.maxWidth * 0.08
+                                              : null,
+                                      right:
+                                          widget.bookmarkOnLeft
+                                              ? null
+                                              : c.maxWidth * 0.08,
                                       child: ClipPath(
                                         clipper: const _SpreadRibbonClipper(),
                                         child: Container(
@@ -304,6 +315,186 @@ class _ReaderPageSpreadState extends State<ReaderPageSpread> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 单页精装书壳组件：复用 [ReaderPageSpread] 同源硬壳封底、单侧动态纸叠、
+/// 双层桌面投影与书签缎带，供漫画单页 Book 模式呈现精装实体书质感。
+class ReaderSinglePageBookShell extends StatelessWidget {
+  const ReaderSinglePageBookShell({
+    required this.child,
+    required this.surfaceColor,
+    this.paperEdgeColor,
+    this.deskColor,
+    this.progress = 0,
+    this.bookmarked = false,
+    this.bookmarkOnLeft = false,
+    this.stackOnLeft = false,
+    this.showPaperGrain = false,
+    super.key,
+  });
+
+  final Widget child;
+  final Color surfaceColor;
+  final Color? paperEdgeColor;
+  final Color? deskColor;
+  final double progress;
+  final bool bookmarked;
+  final bool bookmarkOnLeft;
+  final bool stackOnLeft;
+  final bool showPaperGrain;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = progress.clamp(0.0, 1.0);
+    final stackW = 3.0 + (1.0 - p) * 11.0;
+    final edgeColor =
+        paperEdgeColor ?? Color.lerp(surfaceColor, Colors.black, 0.08)!;
+    final isDarkPaper =
+        ThemeData.estimateBrightnessForColor(surfaceColor) == Brightness.dark;
+    final effectiveDesk =
+        deskColor ?? Color.lerp(surfaceColor, Colors.black, 0.72)!;
+    final coverTop =
+        Color.lerp(effectiveDesk, ReaderReadingPalette.bookShellLeather, 0.45)!;
+    final coverBottom =
+        Color.lerp(effectiveDesk, ReaderReadingPalette.bookShellLeather, 0.38)!;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        // 同源硬壳封底底座
+        Positioned(
+          left: stackOnLeft ? -stackW - 4 : -4,
+          right: stackOnLeft ? -4 : -stackW - 4,
+          top: -4,
+          bottom: -6,
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [coverTop, coverBottom],
+                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.65),
+                    blurRadius: 56,
+                    spreadRadius: -14,
+                    offset: const Offset(0, 32),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // 单侧外挂纸叠
+        Positioned(
+          left: stackOnLeft ? -stackW + 2 : null,
+          right: stackOnLeft ? null : -stackW + 2,
+          top: 3,
+          bottom: 3,
+          width: stackW,
+          child: _PaperStack(
+            edgeColor: edgeColor,
+            paperColor: surfaceColor,
+            side: stackOnLeft ? _SpreadSide.left : _SpreadSide.right,
+          ),
+        ),
+        // 书本主体（6px 圆角 + 双层桌面投影）
+        DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(6),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.55),
+                blurRadius: 44,
+                spreadRadius: -26,
+                offset: const Offset(0, 22),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.28),
+                blurRadius: 12,
+                spreadRadius: -6,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ColoredBox(color: surfaceColor, child: child),
+                if (showPaperGrain)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: CustomPaint(painter: _PaperGrainOverlayPainter()),
+                    ),
+                  ),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: Colors.black.withValues(alpha: 0.12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 7,
+                  bottom: 7,
+                  width: 2,
+                  left: stackOnLeft ? 0 : null,
+                  right: stackOnLeft ? null : 0,
+                  child: IgnorePointer(
+                    child: ColoredBox(
+                      color: Colors.white.withValues(
+                        alpha: isDarkPaper ? 0.09 : 0.40,
+                      ),
+                    ),
+                  ),
+                ),
+                if (bookmarked)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: LayoutBuilder(
+                        builder:
+                            (context, c) => Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Positioned(
+                                  top: -2,
+                                  left:
+                                      bookmarkOnLeft ? c.maxWidth * 0.08 : null,
+                                  right:
+                                      bookmarkOnLeft ? null : c.maxWidth * 0.08,
+                                  child: ClipPath(
+                                    clipper: const _SpreadRibbonClipper(),
+                                    child: Container(
+                                      width: 16,
+                                      height: 40,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

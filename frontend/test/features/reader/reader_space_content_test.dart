@@ -4,6 +4,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_space_content.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 ReaderItem _item(String id, String title, String author, {double? progress}) {
   return ReaderItem(
@@ -18,7 +19,7 @@ ReaderItem _item(String id, String title, String author, {double? progress}) {
 
 Widget _host(ReaderSpaceContent content) {
   return MaterialApp(
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    localizationsDelegates: kOmniNestLocalizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     locale: const Locale('en'),
     home: Scaffold(body: SingleChildScrollView(child: content)),

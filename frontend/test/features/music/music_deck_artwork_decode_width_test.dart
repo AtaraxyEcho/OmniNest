@@ -6,6 +6,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 卡组封面的解码宽度必须按档位量化：宽度随窗口连续变化时，逐像素跟随会为同一张
 /// 封面生成大量内存解码键与磁盘缩放条目，并反复触发重解码。
@@ -18,7 +19,7 @@ Future<int?> _diskCacheWidthAt(WidgetTester tester, double width) async {
   await tester.pumpWidget(
     ProviderScope(
       child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         theme: OmniNestTheme.from(AppThemePalette.dark),
         home: Scaffold(

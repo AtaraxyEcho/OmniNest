@@ -18,6 +18,7 @@ import 'package:omninest/features/photos/data/photo_api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'desktop_test_harness.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -202,7 +203,7 @@ void main() {
         child: MaterialApp.router(
           routerConfig: router,
           theme: DesktopTheme.resolve(isDark: true, accent: DesktopAccent.sage),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('en'),
           builder:
@@ -280,7 +281,7 @@ void main() {
         child: MaterialApp.router(
           routerConfig: router,
           theme: DesktopTheme.resolve(isDark: true, accent: DesktopAccent.sage),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('en'),
           builder:

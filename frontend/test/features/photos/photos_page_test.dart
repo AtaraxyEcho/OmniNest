@@ -14,6 +14,7 @@ import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/pages/photos_page.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 伪造的照片中心控制器，返回空状态以避免网络请求
 class _FakePhotoCenterController extends PhotoCenterController {
@@ -77,7 +78,7 @@ void main() {
           ],
           child: MaterialApp.router(
             routerConfig: router,
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('en'),
             theme: OmniNestTheme.from(AppThemePalette.dark),
@@ -147,7 +148,7 @@ void main() {
             ],
             child: MaterialApp.router(
               routerConfig: router,
-              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              localizationsDelegates: kOmniNestLocalizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               locale: const Locale('en'),
               theme: OmniNestTheme.from(AppThemePalette.dark),
@@ -214,7 +215,7 @@ void main() {
           container: container,
           child: MaterialApp.router(
             routerConfig: router,
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('en'),
             theme: OmniNestTheme.from(AppThemePalette.dark),
@@ -292,7 +293,7 @@ void main() {
           ],
           child: MaterialApp.router(
             routerConfig: router,
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('en'),
             theme: OmniNestTheme.from(AppThemePalette.dark),
@@ -370,7 +371,7 @@ void main() {
           ],
           child: MaterialApp.router(
             routerConfig: router,
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('en'),
             theme: OmniNestTheme.from(AppThemePalette.dark),

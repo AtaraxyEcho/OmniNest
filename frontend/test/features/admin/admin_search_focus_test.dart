@@ -9,6 +9,7 @@ import 'package:omninest/core/widgets/top_bar_search_focus.dart';
 import 'package:omninest/features/admin/application/admin_console_controller.dart';
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_dashboard_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 顶栏搜索框 Ctrl/Cmd+F 聚焦：注册表路由、栈顶放行与窄屏对话框优先。
 AdminConsoleSummary _fakeSummary() {
@@ -87,7 +88,7 @@ Future<void> _pumpAdmin(
       ],
       child: MaterialApp(
         theme: OmniNestTheme.dark(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: const AdminDashboardPage(),

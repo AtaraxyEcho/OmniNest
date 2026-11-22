@@ -14,6 +14,7 @@ import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_scan_job_controller.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/presentation/pages/music_scan_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _FakeMusicCenter extends MusicCenterController {
   _FakeMusicCenter(this._state);
@@ -74,7 +75,7 @@ Future<_FakeScanJob> _pump(
       ],
       child: MaterialApp(
         theme: OmniNestTheme.from(AppThemePalette.dark),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: const MobileShellScope(

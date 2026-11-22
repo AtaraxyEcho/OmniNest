@@ -15,6 +15,7 @@ import 'package:omninest/features/video/data/movie_api.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/domain/series_play_target.dart';
 import 'package:omninest/features/video/presentation/pages/series_detail_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   testWidgets('系列详情页 EDIT 可编辑标题并触发中心数据回调刷新', (tester) async {
@@ -50,7 +51,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: ThemeData.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const SeriesDetailPage(seriesId: 'series-1'),

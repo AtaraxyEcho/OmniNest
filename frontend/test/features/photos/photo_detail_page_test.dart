@@ -27,6 +27,7 @@ import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.da
 import 'package:omninest/features/photos/presentation/widgets/photo_info_panel.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_viewer_chrome.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _MockPhotoRepository extends Mock implements PhotoRepository {}
 
@@ -340,7 +341,7 @@ _Harness _harness({
       ],
       child: MaterialApp.router(
         routerConfig: router,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: Locale(localeCode),
         theme:
@@ -495,7 +496,7 @@ void main() {
         child: _asWorkstation(
           MaterialApp.router(
             routerConfig: router,
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('zh'),
             theme: OmniNestTheme.from(AppThemePalette.dark),

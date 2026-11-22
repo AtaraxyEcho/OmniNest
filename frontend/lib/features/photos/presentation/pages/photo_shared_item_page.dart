@@ -13,6 +13,7 @@ import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/utils/download_url_opener.dart';
 import 'package:omninest/core/utils/image_decode_width.dart';
+import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/features/photos/application/photo_repository_providers.dart';
@@ -279,7 +280,7 @@ class _SharedItemContent extends StatelessWidget {
           height: 64 + MediaQuery.paddingOf(context).top,
           padding: EdgeInsets.only(
             left: 8,
-            right: 24,
+            right: isDesktopPlatform ? 24 + 148 : 24,
             top: MediaQuery.paddingOf(context).top,
           ),
           decoration: BoxDecoration(

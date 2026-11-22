@@ -8,6 +8,7 @@ import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_center_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_library_cards.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 书库网格虚拟化闸门。
 ///
@@ -76,7 +77,7 @@ Widget _host(ProviderContainer container) {
     child: MaterialApp.router(
       routerConfig: router,
       theme: OmniNestTheme.light(),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
     ),

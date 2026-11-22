@@ -24,6 +24,7 @@ import 'package:omninest/features/photos/presentation/pages/photo_album_photo_pi
 import 'package:omninest/features/photos/presentation/pages/photo_detail_page.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_hosted_chrome.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_viewer_chrome.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _MockPhotoRepository extends Mock implements PhotoRepository {}
 
@@ -157,7 +158,7 @@ Future<void> _pumpHostedPhone(
         hosted: true,
         child: MaterialApp.router(
           routerConfig: router,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('en'),
           theme: OmniNestTheme.from(AppThemePalette.dark),

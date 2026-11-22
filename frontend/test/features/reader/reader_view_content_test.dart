@@ -12,6 +12,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_selection_c
 import 'package:omninest/features/reader/presentation/widgets/reader_selection_key_actions.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// stripHtml 是 reader_html_parser.dart 中的顶层公共函数。
 /// _parseBlocks 是私有的，通过 widget 渲染间接测试。
@@ -56,7 +57,7 @@ void main() {
     }) {
       final settings = ReaderViewSettings();
       return MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('en'),
         theme: OmniNestTheme.from(AppThemePalette.dark),

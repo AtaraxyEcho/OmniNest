@@ -9,6 +9,7 @@ import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_timeline.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_timeline_view.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 PhotoItem _photo(String id) {
   return PhotoItem(
@@ -50,7 +51,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           theme: OmniNestTheme.from(AppThemePalette.light),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(

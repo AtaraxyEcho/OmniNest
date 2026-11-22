@@ -9,6 +9,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_control_lay
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 摘要：滚动范围必须与"当前构建了哪些项"无关。
 ///
@@ -68,7 +69,7 @@ void main() {
 
   group('滚动范围稳定性', () {
     Widget host(Widget child) => MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       theme: OmniNestTheme.from(AppThemePalette.dark),
       home: Scaffold(body: child),

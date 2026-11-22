@@ -9,6 +9,7 @@ import 'package:omninest/features/setup/application/initial_setup_controller.dar
 import 'package:omninest/features/setup/domain/initial_setup_status.dart';
 import 'package:omninest/features/setup/presentation/pages/initial_setup_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   // 语言默认跟随系统；测试环境（Ahem 字体、en 系统语言）固定为 zh 保证
@@ -115,7 +116,7 @@ class _LocaleHost extends ConsumerWidget {
     final language = ref.watch(localeControllerProvider);
     return MaterialApp(
       locale: Locale(language),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       theme: OmniNestTheme.light(),
       home: const InitialSetupPage(),

@@ -25,6 +25,7 @@ import 'package:omninest/features/music/presentation/deck/music_deck_mini_player
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_shell.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   testWidgets('移动端查看全部页面经常驻分段条返回首页', (tester) async {
@@ -52,7 +53,7 @@ void main() {
         ],
         child: MaterialApp(
           locale: const Locale('en'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: OmniNestTheme.from(AppThemePalette.dark),
           home: const MobileHostedRoute(child: MusicDeckShell()),
@@ -112,7 +113,7 @@ void main() {
         ],
         child: MaterialApp(
           locale: const Locale('zh'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: OmniNestTheme.from(AppThemePalette.dark),
           home: const MusicDeckShell(),
@@ -163,7 +164,7 @@ void main() {
         ],
         child: MaterialApp(
           locale: const Locale('zh'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: OmniNestTheme.from(AppThemePalette.dark),
           home: const MusicDeckShell(),
@@ -220,7 +221,7 @@ void main() {
         container: container,
         child: MaterialApp(
           locale: const Locale('zh'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: OmniNestTheme.from(AppThemePalette.dark),
           home: const MusicDeckShell(),
@@ -303,7 +304,7 @@ void main() {
         ],
         child: MaterialApp(
           locale: const Locale('zh'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: OmniNestTheme.from(AppThemePalette.dark),
           home: const MusicDeckShell(),
@@ -394,7 +395,7 @@ void main() {
         child: MaterialApp.router(
           routerConfig: router,
           locale: const Locale('zh'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: OmniNestTheme.from(AppThemePalette.dark),
         ),

@@ -8,6 +8,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/core/widgets/top_bar_search_focus.dart';
 import 'package:omninest/features/files/application/file_browser_controller.dart';
 import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 顶栏搜索槽 Ctrl/Cmd+F：支持搜索的分区聚焦，不支持的分区分区级放行。
 class _FixedSectionController extends FileBrowserController {
@@ -73,7 +74,7 @@ Future<void> _pumpFiles(WidgetTester tester, FileManagerSection section) async {
       child: MaterialApp.router(
         routerConfig: router,
         theme: OmniNestTheme.light(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
       ),

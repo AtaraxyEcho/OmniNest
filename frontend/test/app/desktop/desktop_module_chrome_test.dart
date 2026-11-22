@@ -5,6 +5,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_theme.dart';
 import 'package:omninest/core/widgets/desktop_chrome_only.dart';
 import 'package:omninest/core/widgets/desktop_shell_scope.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 Widget _host(Widget child, {required bool hosted}) {
   return MediaQuery(
@@ -12,7 +13,7 @@ Widget _host(Widget child, {required bool hosted}) {
     child: MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: DesktopTheme.resolve(isDark: true),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('en'),
       home: DesktopShellScope(hosted: hosted, child: Scaffold(body: child)),

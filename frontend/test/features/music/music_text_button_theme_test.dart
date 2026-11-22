@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// Music 模块文字按钮中性前景契约：模块内 TextButton（查看全部、重试、
 /// 对话框次要动作等）不得回落 colorScheme.primary（模块语境下为深绿）。
@@ -11,7 +12,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: MusicBackdropTheme.withNeutralTextButtons(OmniNestTheme.light()),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: const Scaffold(

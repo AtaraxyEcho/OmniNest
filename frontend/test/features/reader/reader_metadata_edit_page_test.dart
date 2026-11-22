@@ -9,6 +9,7 @@ import 'package:omninest/core/auth/auth_session_store_base.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_metadata_edit_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 ReaderItemDetail _detail({
   String author = '托尔斯泰',
@@ -44,7 +45,7 @@ Future<void> _pumpPage(WidgetTester tester, ReaderItemDetail detail) async {
         readerItemDetailProvider.overrideWith((ref, itemId) async => detail),
       ],
       child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         theme: OmniNestTheme.dark(),

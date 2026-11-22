@@ -6,6 +6,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_management_models.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_management.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 const _source = VideoLibrarySource(
   id: 'movie',
@@ -63,7 +64,7 @@ Future<void> _pump(
       ],
       child: MaterialApp(
         theme: OmniNestTheme.light(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: const Scaffold(
@@ -200,7 +201,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(

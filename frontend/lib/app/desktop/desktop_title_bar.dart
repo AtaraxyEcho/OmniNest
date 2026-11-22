@@ -36,7 +36,11 @@ class DesktopTitleBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
-    final shell = ref.watch(desktopShellProvider);
+    final sidebarExpanded = ref.watch(
+      desktopShellProvider.select((s) => s.sidebarExpanded),
+    );
+    final activePanel = ref.watch(desktopShellProvider.select((s) => s.panel));
+    final dockOpen = ref.watch(desktopShellProvider.select((s) => s.dockOpen));
     final history = ref.watch(desktopHistoryProvider);
     final shellController = ref.read(desktopShellProvider.notifier);
     final historyController = ref.read(desktopHistoryProvider.notifier);
@@ -69,7 +73,7 @@ class DesktopTitleBar extends ConsumerWidget {
               constraints.maxWidth <= DesktopMetrics.titleBarCompactBreakpoint;
           final left = _TitleBarLeft(
             l10n: l10n,
-            shell: shell,
+            sidebarExpanded: sidebarExpanded,
             history: history,
             onToggleSidebar: shellController.toggleSidebar,
             onBack: () {
@@ -92,7 +96,8 @@ class DesktopTitleBar extends ConsumerWidget {
           );
           final right = _TitleBarRight(
             l10n: l10n,
-            shell: shell,
+            activePanel: activePanel,
+            dockOpen: dockOpen,
             isDark: isDark,
             running: running,
             unread: unread,
@@ -182,7 +187,7 @@ class DesktopTitleBar extends ConsumerWidget {
 class _TitleBarLeft extends StatelessWidget {
   const _TitleBarLeft({
     required this.l10n,
-    required this.shell,
+    required this.sidebarExpanded,
     required this.history,
     required this.onToggleSidebar,
     required this.onBack,
@@ -190,7 +195,7 @@ class _TitleBarLeft extends StatelessWidget {
   });
 
   final AppLocalizations l10n;
-  final DesktopShellState shell;
+  final bool sidebarExpanded;
   final DesktopHistory history;
   final VoidCallback onToggleSidebar;
   final VoidCallback onBack;
@@ -209,7 +214,7 @@ class _TitleBarLeft extends StatelessWidget {
           icon: DesktopIcons.sidebar,
           tooltip: '${l10n.desktopToggleSidebar} (Ctrl+B)',
           onPressed: onToggleSidebar,
-          active: !shell.sidebarExpanded,
+          active: !sidebarExpanded,
         ),
         DesktopIconButton(
           icon: DesktopIcons.left,
@@ -229,7 +234,8 @@ class _TitleBarLeft extends StatelessWidget {
 class _TitleBarRight extends StatelessWidget {
   const _TitleBarRight({
     required this.l10n,
-    required this.shell,
+    required this.activePanel,
+    required this.dockOpen,
     required this.isDark,
     required this.running,
     required this.unread,
@@ -241,7 +247,8 @@ class _TitleBarRight extends StatelessWidget {
   });
 
   final AppLocalizations l10n;
-  final DesktopShellState shell;
+  final DesktopPanel activePanel;
+  final bool dockOpen;
   final bool isDark;
   final int running;
   final int unread;
@@ -266,7 +273,7 @@ class _TitleBarRight extends StatelessWidget {
         DesktopIconButton(
           icon: DesktopIcons.tasks,
           tooltip: l10n.desktopBackgroundTasks,
-          active: shell.panel == DesktopPanel.tasks,
+          active: activePanel == DesktopPanel.tasks,
           badge: running,
           badgeColor: running > 0 ? skin.warm : null,
           onPressed: onToggleTasks,
@@ -274,21 +281,21 @@ class _TitleBarRight extends StatelessWidget {
         DesktopIconButton(
           icon: DesktopIcons.bell,
           tooltip: l10n.desktopNotifications,
-          active: shell.panel == DesktopPanel.notifications,
+          active: activePanel == DesktopPanel.notifications,
           badge: unread,
           onPressed: onToggleNotifications,
         ),
         DesktopIconButton(
           icon: DesktopIcons.panel,
           tooltip: '${l10n.desktopDetailsPanel} (Ctrl+.)',
-          active: shell.dockOpen,
+          active: dockOpen,
           onPressed: onToggleDock,
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: _AvatarButton(
             key: const ValueKey<String>('desktop-account-button'),
-            active: shell.panel == DesktopPanel.account,
+            active: activePanel == DesktopPanel.account,
             onTap: onToggleAccount,
           ),
         ),

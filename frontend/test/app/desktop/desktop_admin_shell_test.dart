@@ -10,6 +10,7 @@ import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_shell.dart';
 
 import 'desktop_test_harness.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 管理台的分区可见性由权限码决定；测试里给一份覆盖所有分区的管理员会话。
 class _AdminSession extends AuthSessionNotifier {
@@ -50,7 +51,7 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: DesktopTheme.resolve(isDark: true),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('en'),
             home: DesktopShellScope(

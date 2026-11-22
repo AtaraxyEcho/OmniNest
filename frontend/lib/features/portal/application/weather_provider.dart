@@ -8,7 +8,6 @@ import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/features/portal/application/weather_preferences_controller.dart';
 import 'package:omninest/features/portal/data/weather_api.dart';
 import 'package:omninest/core/log/dev_log.dart';
-import 'package:omninest/core/utils/bounded_async_step.dart';
 
 /// 天气数据访问入口；应用层不直接持有 Dio。
 final weatherApiProvider = Provider<WeatherApi>((ref) {
@@ -288,26 +287,10 @@ final userLocationProvider = FutureProvider<String?>((ref) async {
       return null;
     }
 
-    // Windows/Linux 台式机没有 GNSS：`getCurrentPosition` 会一直挂到
-    // 10s 上限才降级，而 `realtimeWeatherProvider` 是 await 这个 provider
-    // 的，首屏天气卡就跟着转 10 秒。这两端只取系统记录的最近位置（有界
-    // 800ms，且 provider 销毁时自动摘掉计时器），取不到直接返回 null 交给
-    // 后端 fallback 链（用户偏好 > 配置中心）。不上报：无法判断新旧。
+    // Windows/Linux 桌面端普遍无 GNSS 且系统定位常阻塞直至超时：直接返回 null
+    // 交由后端 fallback 链（用户偏好 > 配置中心）处理，消除冷启动 800ms 超时阻塞。
     if (defaultTargetPlatform == TargetPlatform.windows ||
         defaultTargetPlatform == TargetPlatform.linux) {
-      try {
-        final lastKnown = await boundedAsyncStep(
-          ref,
-          Geolocator.getLastKnownPosition(),
-          const Duration(milliseconds: 800),
-        );
-        if (lastKnown != null) {
-          return '${lastKnown.longitude.toStringAsFixed(2)},'
-              '${lastKnown.latitude.toStringAsFixed(2)}';
-        }
-      } on Object catch (e) {
-        devLog('读取系统最近位置失败: $e');
-      }
       return null;
     }
 
@@ -373,15 +356,21 @@ final userLocationProvider = FutureProvider<String?>((ref) async {
 /// 实时天气 Provider（调用后端代理）
 ///
 /// 不在前端读取管理端配置：和风凭据与 weather.enabled 均由后端配置中心处理。
-/// 仅在有 GPS 数据时传 location 参数，否则由后端走 fallback 链。
+/// 优先读取用户偏好城市，已配置时直接跳过系统定位；否则才查询 GPS 并交由后端走 fallback 链。
 final realtimeWeatherProvider = FutureProvider<WeatherData>((ref) async {
-  // 所有依赖在首个 await 前同步订阅；并等待偏好城市从本地加载完成，
-  // 否则冷启动会用空字符串覆盖用户设置的城市而退回 IP 定位。
-  final locationFuture = ref.watch(userLocationProvider.future);
+  // 优先读取偏好城市；已配置偏好城市时直接跳过系统定位，避免不必要的定位权限/超时等待。
   final preferredCityFuture = ref.watch(weatherLocationProvider.future);
   final weatherApi = ref.watch(weatherApiProvider);
-  final location = await locationFuture;
   final preferredCity = (await preferredCityFuture)?.trim() ?? '';
+  if (!ref.mounted) {
+    return WeatherData.empty();
+  }
+  // 偏好城市已配置时完全跳过系统定位：此处只能 read（watch 不得跨 await），
+  // 一次性取未来值不建立重建依赖，与“已定位到偏好城市就不再跟随设备位置”一致。
+  final String? location =
+      preferredCity.isNotEmpty
+          ? null
+          : await ref.read(userLocationProvider.future);
   if (!ref.mounted) {
     return WeatherData.empty();
   }

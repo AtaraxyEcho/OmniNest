@@ -20,6 +20,7 @@ import 'package:omninest/features/files/presentation/pages/file_browser_page.dar
 import 'package:omninest/features/files/presentation/pages/file_preview_page.dart';
 import 'package:omninest/features/files/presentation/widgets/files_table_view.dart';
 import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 文件模块弹窗全量审计：每个桌面弹窗走「开启 → 尺寸有界（非全屏）→
 /// 提交或 Esc 关闭 → 退场动画完成后无任何框架异常」全链路。
@@ -83,7 +84,7 @@ void main() {
       child: MaterialApp.router(
         routerConfig: router,
         theme: OmniNestTheme.light(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: locale,
       ),

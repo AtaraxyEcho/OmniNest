@@ -24,6 +24,7 @@ import 'package:omninest/features/profile/application/profile_controller.dart';
 import 'package:omninest/features/profile/domain/user_session.dart';
 import 'package:omninest/features/profile/presentation/pages/profile_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _AuthedSessionNotifier extends AuthSessionNotifier {
   @override
@@ -112,7 +113,7 @@ void main() {
                   ? OmniNestTheme.dark()
                   : OmniNestTheme.light(),
           locale: const Locale('zh'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           routerConfig: router,
         ),

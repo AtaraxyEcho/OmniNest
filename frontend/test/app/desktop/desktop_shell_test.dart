@@ -19,6 +19,7 @@ import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'desktop_test_harness.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 记录全局播放键是否真的打到播放器上。
 class _CountingActions implements MusicPortalActions {
@@ -109,7 +110,7 @@ void main() {
             return MaterialApp.router(
               debugShowCheckedModeBanner: false,
               routerConfig: router,
-              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              localizationsDelegates: kOmniNestLocalizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               locale: const Locale('en'),
               builder: (context, child) {

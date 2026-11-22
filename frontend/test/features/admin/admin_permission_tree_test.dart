@@ -4,6 +4,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/features/admin/domain/admin_operations.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_permission_tree.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 const _permissions = [
   AdminPermissionDetail(
@@ -82,7 +83,7 @@ class _TreeHarnessState extends State<_TreeHarness> {
 Future<void> _pumpHarness(WidgetTester tester, Set<String> initial) {
   return tester.pumpWidget(
     MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       home: Scaffold(

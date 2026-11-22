@@ -17,6 +17,7 @@ import 'package:omninest/features/music/application/music_spectrum_frame.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/portal/presentation/pages/portal_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   group('PortalPage', () {
@@ -46,7 +47,7 @@ void main() {
             ),
           ],
           child: MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('en'),
             theme: OmniNestTheme.from(AppThemePalette.dark),
@@ -97,7 +98,7 @@ void main() {
             ),
           ],
           child: MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('en'),
             theme: OmniNestTheme.from(AppThemePalette.dark),

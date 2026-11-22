@@ -15,6 +15,7 @@ import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/app/mobile_shell/workspace_tools_page.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 表内全部行，按分组顺序。
 const _rows = <String>['我的分享', '合集', '观看历史', '本地资源', '影片管理', '年·月', '阅读管理'];
@@ -97,7 +98,7 @@ void main() {
         ],
         child: MaterialApp.router(
           theme: rootTheme,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           routerConfig: router,

@@ -27,6 +27,7 @@ import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_album.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   testWidgets('All 视图组合三类媒体区块，分段切换收敛到单区块', (tester) async {
@@ -49,7 +50,7 @@ void main() {
           ),
         ],
         child: MaterialApp.router(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           theme: OmniNestTheme.from(AppThemePalette.dark),
@@ -120,7 +121,7 @@ void main() {
           musicCenterControllerProvider.overrideWith(_EmptyMusicCenter.new),
         ],
         child: MaterialApp.router(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           theme: OmniNestTheme.from(AppThemePalette.dark),
@@ -167,7 +168,7 @@ void main() {
           ),
         ],
         child: MaterialApp.router(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           theme: OmniNestTheme.from(AppThemePalette.dark),
@@ -243,7 +244,7 @@ void main() {
           ),
         ],
         child: MaterialApp.router(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           theme: OmniNestTheme.from(AppThemePalette.dark),
@@ -304,7 +305,7 @@ void main() {
         child: MaterialApp.router(
           routerConfig: router,
           theme: OmniNestTheme.from(AppThemePalette.dark),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           builder:
@@ -425,7 +426,7 @@ Widget _hostLibrary({
       ),
     ],
     child: MaterialApp.router(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       theme: OmniNestTheme.from(AppThemePalette.dark),

@@ -14,6 +14,7 @@ import 'package:omninest/features/admin/data/admin_user_api.dart';
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
 import 'package:omninest/features/admin/domain/admin_user.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_dashboard_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _MockAdminUserApi extends Mock implements AdminUserApi {}
 
@@ -145,7 +146,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const AdminDashboardPage(initialSectionSegment: 'users'),
@@ -249,7 +250,7 @@ void main() {
         container: container,
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const AdminDashboardPage(initialSectionSegment: 'users'),

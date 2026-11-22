@@ -14,6 +14,7 @@ import 'package:omninest/features/reader/data/cached_book_handle.dart';
 import 'package:omninest/features/reader/data/reader_api.dart';
 import 'package:omninest/features/reader/domain/reader_item.dart';
 import 'package:omninest/features/reader/presentation/pages/pdf_reader_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// PDF 阅读器加载链路上的异步边界（缺陷报告 M-10）。
 ///
@@ -81,7 +82,7 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('en'),
           theme: OmniNestTheme.from(AppThemePalette.dark),

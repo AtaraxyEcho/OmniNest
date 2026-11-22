@@ -5,6 +5,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_player_sheets.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   for (final scenario in const [
@@ -28,7 +29,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: OmniNestTheme.from(AppThemePalette.dark),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           builder:
               (context, child) => MediaQuery(

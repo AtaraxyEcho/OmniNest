@@ -6,6 +6,7 @@ import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/widgets/file_list.dart';
 import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 行内操作钮原先固定 34×34，低于移动端 48 命中标准；命中区等于自身布局盒，
 /// 抬高会同时改变行高与横排占位，故在手机宽度与多选态下实测。
@@ -23,7 +24,7 @@ Future<void> _pumpList(
   await tester.pumpWidget(
     MaterialApp(
       theme: OmniNestTheme.from(AppThemePalette.dark),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       home: Scaffold(

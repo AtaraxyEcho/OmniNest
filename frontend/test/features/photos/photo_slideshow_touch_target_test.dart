@@ -6,6 +6,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_chrome.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 PhotoItem _photo() {
   return PhotoItem(
@@ -28,7 +29,7 @@ Future<void> _pumpBar(WidgetTester tester, double width) async {
   await tester.pumpWidget(
     MaterialApp(
       theme: OmniNestTheme.dark(),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       // 顶栏自身是 Positioned，必须由 Stack 直接承载（与查看器同构）。

@@ -12,6 +12,7 @@ import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/book_detail_space.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _FakeReaderLocalProgressStore implements ReaderLocalProgressStore {
   _FakeReaderLocalProgressStore({this.latest});
@@ -189,7 +190,7 @@ void main() {
         ],
         child: MaterialApp.router(
           routerConfig: router,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           theme: OmniNestTheme.dark(),

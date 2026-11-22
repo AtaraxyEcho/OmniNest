@@ -23,6 +23,7 @@ import 'package:omninest/features/photos/presentation/pages/photos_page.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/pages/movie_center_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 const _caps = UserCapabilities(
   canBrowseContent: true,
@@ -227,7 +228,7 @@ Widget _host(Widget child) {
       movieCenterControllerProvider.overrideWith(() => _FakeMovieCenter()),
     ],
     child: MaterialApp.router(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       builder: (context, child) {

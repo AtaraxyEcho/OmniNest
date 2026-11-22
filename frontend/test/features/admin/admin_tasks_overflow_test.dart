@@ -13,6 +13,7 @@ import 'package:omninest/features/admin/presentation/pages/admin_dashboard_page.
 import 'package:omninest/features/admin/presentation/pages/admin_operations_pages.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 AdminPage<AdminTaskRecord> _fakePage(int count) {
   return AdminPage<AdminTaskRecord>(
@@ -126,7 +127,7 @@ void main() {
           ],
           child: MaterialApp(
             theme: OmniNestTheme.dark(),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('zh'),
             home: const AdminDashboardPage(),
@@ -159,7 +160,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const AdminDashboardPage(initialSectionSegment: 'tasks'),
@@ -191,7 +192,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(body: AdminTasksPage()),
@@ -241,7 +242,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const AdminDashboardPage(initialSectionSegment: 'tasks'),

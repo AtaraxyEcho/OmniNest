@@ -15,6 +15,7 @@ import 'package:omninest/core/preferences/preference_snapshot.dart';
 import 'package:omninest/core/preferences/user_preferences_api.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   setUp(() {
@@ -42,7 +43,7 @@ void main() {
       ],
       child: MaterialApp(
         theme: ThemeData(useMaterial3: true),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: const Scaffold(body: Center(child: UserAvatarMenu())),

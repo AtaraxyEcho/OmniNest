@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_pager.dart';
@@ -42,8 +42,6 @@ class AdminCard extends StatelessWidget {
       blur: 24,
       saturation: 1.3,
       child: Container(
-        // 样例 `.card { padding: 22px 24px }`。
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
         decoration: BoxDecoration(
           // 原型 `.card` 使用半透明 panel；`raise` 会让管理页在背景库
           // 开启时退化成几乎不见的深色块，浅色主题也失去层次。
@@ -51,39 +49,48 @@ class AdminCard extends StatelessWidget {
           borderRadius: radius,
           border: Border.all(color: skin.line),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+        child: Material(
+          type: MaterialType.transparency,
+          borderRadius: radius,
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            // 样例 `.card { padding: 22px 24px }`。
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: Text.rich(
-                    TextSpan(
-                      text: title,
-                      style: DesktopType.cardTitle(skin.text),
-                      children: [
-                        if (count != null)
-                          TextSpan(
-                            text: ' · $count',
-                            style: DesktopType.caption(skin.text3),
-                          ),
-                      ],
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Text.rich(
+                        TextSpan(
+                          text: title,
+                          style: DesktopType.cardTitle(skin.text),
+                          children: [
+                            if (count != null)
+                              TextSpan(
+                                text: ' · $count',
+                                style: DesktopType.caption(skin.text3),
+                              ),
+                          ],
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    if (action != null) ...[const SizedBox(width: 12), action!],
+                  ],
                 ),
-                if (action != null) ...[const SizedBox(width: 12), action!],
+                if (subtitle != null) ...[
+                  const SizedBox(height: 6),
+                  Text(subtitle!, style: DesktopType.caption(skin.text3)),
+                ],
+                SizedBox(height: childGap),
+                child,
               ],
             ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 6),
-              Text(subtitle!, style: DesktopType.caption(skin.text3)),
-            ],
-            SizedBox(height: childGap),
-            child,
-          ],
+          ),
         ),
       ),
     );

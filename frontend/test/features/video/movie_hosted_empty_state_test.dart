@@ -20,6 +20,7 @@ import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/data/movie_api.dart';
 import 'package:omninest/features/video/presentation/pages/movie_center_page.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_empty_state.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _EmptyLibraryAdapter implements HttpClientAdapter {
   @override
@@ -97,7 +98,7 @@ Future<void> _pumpHostedLibrary(
       ],
       child: MaterialApp(
         theme: OmniNestTheme.from(AppThemePalette.dark),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: _HostedShell(child: MovieCenterPage(initialSection: section)),

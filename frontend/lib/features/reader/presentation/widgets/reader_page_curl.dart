@@ -352,6 +352,7 @@ class ReaderPageCurl extends StatelessWidget {
     this.progress,
     this.direction = CurlDirection.next,
     this.spread = false,
+    this.seamlessSpine = false,
     this.config = CurlGrabConfig.defaultNext,
     super.key,
   }) : assert(
@@ -366,6 +367,7 @@ class ReaderPageCurl extends StatelessWidget {
   final double? progress;
   final CurlDirection direction;
   final bool spread;
+  final bool seamlessSpine;
   final CurlGrabConfig config;
 
   @override
@@ -387,6 +389,7 @@ class ReaderPageCurl extends StatelessWidget {
           back: back,
           paper: paper,
           spread: spread,
+          seamlessSpine: seamlessSpine,
         ),
         size: Size.infinite,
       ),
@@ -401,6 +404,7 @@ class _CurlPainter extends CustomPainter {
     required this.back,
     required this.paper,
     required this.spread,
+    this.seamlessSpine = false,
   }) : super(repaint: frameListenable);
 
   final ValueListenable<CurlFrame> frameListenable;
@@ -408,26 +412,28 @@ class _CurlPainter extends CustomPainter {
   final ui.Image back;
   final Color paper;
   final bool spread;
+  final bool seamlessSpine;
 
-  /// 与静止态 `_SpreadPage` 完全一致的叶面圆角（外缘 9px、书脊内侧 2px）。
+  /// 与静止态 `_SpreadPage` 完全一致的叶面圆角（外缘 9px；无缝跨页内侧归零，常规书脊内侧 2px）。
   RRect _leafRRect(Rect rect, {required bool isRightLeaf}) {
     if (!spread) {
       return RRect.fromRectAndRadius(rect, Radius.zero);
     }
+    final innerRadius = seamlessSpine ? Radius.zero : const Radius.circular(2);
     return isRightLeaf
         ? RRect.fromRectAndCorners(
           rect,
           topRight: const Radius.circular(9),
           bottomRight: const Radius.circular(9),
-          topLeft: const Radius.circular(2),
-          bottomLeft: const Radius.circular(2),
+          topLeft: innerRadius,
+          bottomLeft: innerRadius,
         )
         : RRect.fromRectAndCorners(
           rect,
           topLeft: const Radius.circular(9),
           bottomLeft: const Radius.circular(9),
-          topRight: const Radius.circular(2),
-          bottomRight: const Radius.circular(2),
+          topRight: innerRadius,
+          bottomRight: innerRadius,
         );
   }
 
@@ -701,6 +707,7 @@ class _CurlPainter extends CustomPainter {
   }
 
   /// 纸缘描边仅在纸页真正拱起时随 arch 从 0 平滑淡入，移除静止态不存在的顶部白线与直角硬框。
+  /// [seamlessSpine] 开启时仅描外侧三边，避免书脊内侧出现割裂黑线。
   void _drawPaperRim(
     Canvas canvas,
     Rect rect, {
@@ -709,13 +716,45 @@ class _CurlPainter extends CustomPainter {
   }) {
     final fade = arch.clamp(0.0, 1.0);
     if (fade <= 0.002) return;
-    canvas.drawRRect(
-      _leafRRect(rect, isRightLeaf: isRightLeaf),
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.0
-        ..color = Colors.black.withValues(alpha: 0.12 * fade),
-    );
+    final strokePaint =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0
+          ..color = Colors.black.withValues(alpha: 0.12 * fade);
+    if (seamlessSpine && spread) {
+      const r = 9.0;
+      final path = Path();
+      if (isRightLeaf) {
+        path
+          ..moveTo(rect.left, rect.top)
+          ..lineTo(rect.right - r, rect.top)
+          ..quadraticBezierTo(rect.right, rect.top, rect.right, rect.top + r)
+          ..lineTo(rect.right, rect.bottom - r)
+          ..quadraticBezierTo(
+            rect.right,
+            rect.bottom,
+            rect.right - r,
+            rect.bottom,
+          )
+          ..lineTo(rect.left, rect.bottom);
+      } else {
+        path
+          ..moveTo(rect.right, rect.top)
+          ..lineTo(rect.left + r, rect.top)
+          ..quadraticBezierTo(rect.left, rect.top, rect.left, rect.top + r)
+          ..lineTo(rect.left, rect.bottom - r)
+          ..quadraticBezierTo(
+            rect.left,
+            rect.bottom,
+            rect.left + r,
+            rect.bottom,
+          )
+          ..lineTo(rect.right, rect.bottom);
+      }
+      canvas.drawPath(path, strokePaint);
+    } else {
+      canvas.drawRRect(_leafRRect(rect, isRightLeaf: isRightLeaf), strokePaint);
+    }
     final isDarkPaper =
         ThemeData.estimateBrightnessForColor(paper) == Brightness.dark;
     final sideHighlightAlpha = (isDarkPaper ? 0.09 : 0.40) * fade;
@@ -735,5 +774,6 @@ class _CurlPainter extends CustomPainter {
       oldDelegate.back != back ||
       oldDelegate.paper != paper ||
       oldDelegate.spread != spread ||
+      oldDelegate.seamlessSpine != seamlessSpine ||
       oldDelegate.frameListenable != frameListenable;
 }

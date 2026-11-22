@@ -50,34 +50,40 @@ class _SeasonEpisodes extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
+    final radius = BorderRadius.circular(DesktopMetrics.radiusCard);
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: skin.panel,
         border: Border.all(color: skin.line),
-        borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
+        borderRadius: radius,
       ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          initiallyExpanded: initiallyExpanded,
-          title: Text(
-            l10n.desktopSeriesSeasonTitle(season.seasonNumber),
-            style: DesktopType.bodyStrong(skin.text),
-          ),
-          subtitle: Text(
-            season.title?.isNotEmpty == true
-                ? season.title!
-                : l10n.videoSeriesEpisodeCount(season.episodeCount ?? 0),
-            style: DesktopType.caption(skin.text3),
-          ),
-          children: [
-            _SeasonEpisodeRows(
-              seriesId: seriesId,
-              seasonNumber: season.seasonNumber,
-              onPlay: onPlay,
+      child: Material(
+        type: MaterialType.transparency,
+        borderRadius: radius,
+        clipBehavior: Clip.antiAlias,
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            initiallyExpanded: initiallyExpanded,
+            title: Text(
+              l10n.desktopSeriesSeasonTitle(season.seasonNumber),
+              style: DesktopType.bodyStrong(skin.text),
             ),
-          ],
+            subtitle: Text(
+              season.title?.isNotEmpty == true
+                  ? season.title!
+                  : l10n.videoSeriesEpisodeCount(season.episodeCount ?? 0),
+              style: DesktopType.caption(skin.text3),
+            ),
+            children: [
+              _SeasonEpisodeRows(
+                seriesId: seriesId,
+                seasonNumber: season.seasonNumber,
+                onPlay: onPlay,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -250,41 +256,44 @@ class _FilesTab extends ConsumerWidget {
             actionLabel: null,
           );
         }
-        return Column(
-          children: [
-            for (final episode in episodes)
-              ListTile(
-                leading: Icon(
-                  DesktopIcons.film,
-                  color: episode.available ? skin.text2 : skin.bad,
-                ),
-                title: Text(
-                  episode.title,
-                  style: DesktopType.rowTitle(skin.text),
-                ),
-                subtitle: Text(
-                  [
-                        if (episode.versionLabel?.isNotEmpty == true)
-                          episode.versionLabel!,
-                        if (episode.containerFormat?.isNotEmpty == true)
-                          episode.containerFormat!,
-                        if (episode.videoCodec?.isNotEmpty == true)
-                          episode.videoCodec!,
-                      ]
-                      .join(' · ')
-                      .ifEmpty(l10n.desktopSeriesFileDetailsUnavailable),
-                  style: DesktopType.caption(skin.text3),
-                ),
-                trailing: Text(
-                  episode.available
-                      ? l10n.videoEpisodeAvailable
-                      : l10n.videoEpisodeSourceUnavailable,
-                  style: DesktopType.caption(
-                    episode.available ? skin.ok : skin.bad,
+        return Material(
+          type: MaterialType.transparency,
+          child: Column(
+            children: [
+              for (final episode in episodes)
+                ListTile(
+                  leading: Icon(
+                    DesktopIcons.film,
+                    color: episode.available ? skin.text2 : skin.bad,
+                  ),
+                  title: Text(
+                    episode.title,
+                    style: DesktopType.rowTitle(skin.text),
+                  ),
+                  subtitle: Text(
+                    [
+                          if (episode.versionLabel?.isNotEmpty == true)
+                            episode.versionLabel!,
+                          if (episode.containerFormat?.isNotEmpty == true)
+                            episode.containerFormat!,
+                          if (episode.videoCodec?.isNotEmpty == true)
+                            episode.videoCodec!,
+                        ]
+                        .join(' · ')
+                        .ifEmpty(l10n.desktopSeriesFileDetailsUnavailable),
+                    style: DesktopType.caption(skin.text3),
+                  ),
+                  trailing: Text(
+                    episode.available
+                        ? l10n.videoEpisodeAvailable
+                        : l10n.videoEpisodeSourceUnavailable,
+                    style: DesktopType.caption(
+                      episode.available ? skin.ok : skin.bad,
+                    ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         );
       },
     );

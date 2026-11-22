@@ -1,106 +1,6 @@
 part of 'comic_reader_view.dart';
 
-/// 单页或双页跨页渲染槽。
-class _ComicSpreadSlot {
-  const _ComicSpreadSlot(this.pageIndices);
-
-  final List<int> pageIndices;
-
-  int get startPageIndex => pageIndices.first;
-  int get endPageIndex => pageIndices.last;
-}
-
-class _ComicPageTurnCallbacks implements PageTurnCallbacks {
-  const _ComicPageTurnCallbacks({
-    required this.onPageChangedFn,
-    required this.onToggleControlsFn,
-  });
-
-  final ValueChanged<int> onPageChangedFn;
-  final VoidCallback onToggleControlsFn;
-
-  @override
-  void onPageChanged(int pageIndex) => onPageChangedFn(pageIndex);
-
-  @override
-  void onPreviousChapter() {}
-
-  @override
-  void onNextChapter() {}
-
-  @override
-  void onToggleControls() => onToggleControlsFn();
-}
-
-/// 离屏抓图首帧汇聚器：待当前槽位所有图片首帧绘制完成后派发一次就绪通知。
-class _ComicSnapshotSlotTracker {
-  _ComicSnapshotSlotTracker(this.expectedFrames);
-
-  final int expectedFrames;
-  int _painted = 0;
-  bool _dispatched = false;
-
-  void markPainted(BuildContext context) {
-    if (_dispatched) return;
-    _painted++;
-    if (_painted >= expectedFrames) {
-      _dispatched = true;
-      const ReaderSnapshotFrameReadyNotification().dispatch(context);
-    }
-  }
-}
-
-/// Book 模式左右悬浮圆形翻页按钮（48×48 圆形半透明，悬停放大 1.1x，与正文阅读器一致）。
-class _ComicBookFloatingArrow extends StatefulWidget {
-  const _ComicBookFloatingArrow({
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  State<_ComicBookFloatingArrow> createState() =>
-      _ComicBookFloatingArrowState();
-}
-
-class _ComicBookFloatingArrowState extends State<_ComicBookFloatingArrow> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: Tooltip(
-        message: widget.tooltip,
-        child: AnimatedScale(
-          scale: _hovered ? 1.1 : 1.0,
-          duration: MotionToken.reduced(context, MotionToken.pageSwitch),
-          curve: Curves.easeOutBack,
-          child: Material(
-            color: Colors.white.withValues(alpha: _hovered ? 0.18 : 0.08),
-            shape: const CircleBorder(),
-            child: InkWell(
-              onTap: widget.onTap,
-              customBorder: const CircleBorder(),
-              child: SizedBox(
-                width: 48,
-                height: 48,
-                child: Icon(widget.icon, size: 24, color: Colors.white),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 漫画阅读器的模式切换、双页拼合、独立缩放、书签、跳转与内容构建。
+/// 漫画阅读器的模式切换、双页拼合、独立缩放、旋转、书签、跳转与内容构建。
 extension _ComicReaderViewSections on ComicReaderViewState {
   /// 预加载当前页前后的图片。
   void _preloadAdjacent() {
@@ -119,9 +19,136 @@ extension _ComicReaderViewSections on ComicReaderViewState {
     );
   }
 
-  /// 离屏抓图前确保目标槽位的所有漫画页字节已载入内存缓存，
+  int _quarterTurnsForPage(ComicPage page) =>
+      (_pageQuarterTurns[page.id] ?? 0) % 4;
+
+  /// 客户端首帧解码实测像素尺寸回填：无元数据宽图在回填后自动重算双页槽位，
+  /// 并保持当前 `_anchor.pageIndex` 不跳页。
+  void _onPageIntrinsicSizeResolved(int pageIndex, Size size) {
+    if (!mounted || pageIndex < 0 || pageIndex >= _totalPages) return;
+    if (size.width <= 0 || size.height <= 0) return;
+    final prev = _resolvedPageSizes[pageIndex];
+    if (prev != null &&
+        (prev.width - size.width).abs() < 1.0 &&
+        (prev.height - size.height).abs() < 1.0) {
+      return;
+    }
+    final page = _pages[pageIndex];
+    final wasWide = _isWideSpreadPage(page);
+    _resolvedPageSizes[pageIndex] = size;
+    final nowWide = _isWideSpreadPage(page);
+    if (wasWide != nowWide) {
+      _update(() {});
+    }
+  }
+
+  bool _isWideSpreadPage(ComicPage page) {
+    final resolved = _resolvedPageSizes[page.pageIndex];
+    final rawW = resolved?.width ?? page.width?.toDouble();
+    final rawH = resolved?.height ?? page.height?.toDouble();
+    if (rawW == null || rawH == null || rawW <= 0 || rawH <= 0) {
+      return false;
+    }
+    final oddTurn = _quarterTurnsForPage(page).isOdd;
+    final w = oddTurn ? rawH : rawW;
+    final h = oddTurn ? rawW : rawH;
+    return w > h * 1.15;
+  }
+
+  /// 旋转当前主阅读页 90°（按 pageId 记忆 0/1/2/3），并刷新卷页缓存。
+  void _rotateCurrentPage([int delta = 1]) {
+    if (_totalPages <= 0 || _anchor.pageIndex >= _pages.length) return;
+    final page = _pages[_anchor.pageIndex];
+    final nextTurns = ((_pageQuarterTurns[page.id] ?? 0) + delta) % 4;
+    _resetCurrentSlotZoom();
+    _update(() {
+      if (nextTurns == 0) {
+        _pageQuarterTurns.remove(page.id);
+      } else {
+        _pageQuarterTurns[page.id] = nextTurns;
+      }
+      _rotationRevision++;
+    });
+  }
+
+  /// 离屏抓图前确保目标页图片字节已载入内存缓存，
   /// 并使用与 `ComicPageImage` 完全一致的 `ResizeImage` 缓存键精准预热。
-  Future<bool> _prepareComicSnapshotPage(
+  Future<bool> _prepareComicPageForSnapshot(
+    int pageIndex, {
+    required double targetLogicalWidth,
+  }) async {
+    if (pageIndex < 0 || pageIndex >= _totalPages) {
+      return false;
+    }
+    final loader = ref.read(comicImageLoaderProvider);
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final cacheWidth =
+        (targetLogicalWidth * dpr).round().clamp(1, 2560).toInt();
+    final page = _pages[pageIndex];
+    final bytes =
+        loader.getCachedBytesSync(
+          widget.itemId,
+          page.id,
+          sourcePath: page.sourcePath,
+        ) ??
+        await loader
+            .getImage(widget.itemId, page.sourcePath, pageId: page.id)
+            .catchError((_) => null);
+    if (!mounted || bytes == null || bytes.isEmpty) {
+      return false;
+    }
+    try {
+      await precacheImage(
+        ComicPageImage.resolveProvider(bytes, cacheWidth),
+        context,
+      );
+    } on Object {
+      // 解码失败仍允许降级由 ComicPageImage 错误态兜底。
+    }
+    return mounted;
+  }
+
+  /// 双页虚拟叶模式下的离屏抓图预热（`leafIndex = slotIndex * 2 + (isSecondLeaf ? 1 : 0)`）。
+  Future<bool> _prepareComicSpreadLeafSnapshot(
+    int leafIndex, {
+    required List<_ComicSpreadSlot> slots,
+    required double bookLogicalWidth,
+  }) async {
+    if (leafIndex < 0) return false;
+    final slotIndex = leafIndex ~/ 2;
+    if (slotIndex < 0 || slotIndex >= slots.length) {
+      return false;
+    }
+    final isSecondLeaf = leafIndex.isOdd;
+    final slot = slots[slotIndex];
+    if (slot.pageIndices.isEmpty) return false;
+
+    if (slot.isWideSpread) {
+      return _prepareComicPageForSnapshot(
+        slot.pageIndices.first,
+        targetLogicalWidth: bookLogicalWidth,
+      );
+    }
+    if (slot.pageIndices.length == 2) {
+      final pageIndex =
+          isSecondLeaf ? slot.pageIndices[1] : slot.pageIndices[0];
+      return _prepareComicPageForSnapshot(
+        pageIndex,
+        targetLogicalWidth: bookLogicalWidth / 2.0,
+      );
+    }
+    // 封面槽或奇数落单槽：对侧为纯封里纸面，无需等待图片下载解码。
+    if (isSecondLeaf) {
+      return true;
+    }
+    return _prepareComicPageForSnapshot(
+      slot.pageIndices.first,
+      targetLogicalWidth: bookLogicalWidth / 2.0,
+    );
+  }
+
+  /// 单页 Book 模式下的离屏抓图预热。
+  Future<bool> _prepareComicSingleSlotSnapshot(
     int slotIndex, {
     required List<_ComicSpreadSlot> slots,
     required double slotLogicalWidth,
@@ -130,43 +157,11 @@ extension _ComicReaderViewSections on ComicReaderViewState {
       return false;
     }
     final indices = slots[slotIndex].pageIndices;
-    if (indices.isEmpty) {
-      return false;
-    }
-    final loader = ref.read(comicImageLoaderProvider);
-    final dpr = MediaQuery.devicePixelRatioOf(context);
-    final leafLogicalWidth =
-        indices.length == 2 ? slotLogicalWidth / 2.0 : slotLogicalWidth;
-    final cacheWidth = (leafLogicalWidth * dpr).round().clamp(1, 2560).toInt();
-
-    for (final pageIndex in indices) {
-      if (pageIndex < 0 || pageIndex >= _totalPages) {
-        return false;
-      }
-      final page = _pages[pageIndex];
-      final bytes =
-          loader.getCachedBytesSync(
-            widget.itemId,
-            page.id,
-            sourcePath: page.sourcePath,
-          ) ??
-          await loader
-              .getImage(widget.itemId, page.sourcePath, pageId: page.id)
-              .catchError((_) => null);
-      if (!mounted || bytes == null || bytes.isEmpty) {
-        return false;
-      }
-      try {
-        await precacheImage(
-          ComicPageImage.resolveProvider(bytes, cacheWidth),
-          context,
-        );
-      } on Object {
-        // 解码失败仍允许降级由 ComicPageImage 错误态兜底。
-      }
-      if (!mounted) return false;
-    }
-    return mounted;
+    if (indices.isEmpty) return false;
+    return _prepareComicPageForSnapshot(
+      indices.first,
+      targetLogicalWidth: slotLogicalWidth,
+    );
   }
 
   BoxFit _resolveImageBoxFit() {
@@ -206,36 +201,44 @@ extension _ComicReaderViewSections on ComicReaderViewState {
   }
 
   /// 计算当前视口下的单/双页槽位列表（Book 与 Swipe 统一复用）：
-  /// - 首页封面单页居中；
-  /// - 跨页宽图（width > height * 1.15）自动独占整屏；
+  /// - 首页封面单页独占（标记 `isCover: true`）；
+  /// - 跨页宽图（width > height * 1.15，含客户端实测尺寸回填）独占整屏（标记 `isWideSpread: true`）；
   /// - 其余页按顺序两两配对。
   List<_ComicSpreadSlot> _buildSpreadSlots(double viewportWidth) {
     if (_totalPages <= 0) return const [];
-    final useDual =
-        _isPagedMode && _displaySettings.dualPage && viewportWidth >= 720;
+    final useDual = _displaySettings.resolveDualPage(
+      viewportWidth: viewportWidth,
+      mode: _modeName(_readingMode),
+    );
     if (!useDual) {
       return [
-        for (var i = 0; i < _totalPages; i++) _ComicSpreadSlot([i]),
+        for (var i = 0; i < _totalPages; i++)
+          _ComicSpreadSlot(
+            [i],
+            isCover: i == 0,
+            isWideSpread: _isWideSpreadPage(_pages[i]),
+          ),
       ];
-    }
-
-    bool isWideSpread(ComicPage page) {
-      final w = page.width;
-      final h = page.height;
-      return w != null && h != null && h > 0 && w > h * 1.15;
     }
 
     final slots = <_ComicSpreadSlot>[];
     var i = 0;
     while (i < _totalPages) {
       final current = _pages[i];
-      // 首页封面或跨页宽图独占整屏
-      if (i == 0 || isWideSpread(current)) {
-        slots.add(_ComicSpreadSlot([i]));
+      final currentWide = _isWideSpreadPage(current);
+      if (i == 0) {
+        slots.add(
+          _ComicSpreadSlot([i], isCover: true, isWideSpread: currentWide),
+        );
         i++;
         continue;
       }
-      if (i + 1 < _totalPages && !isWideSpread(_pages[i + 1])) {
+      if (currentWide) {
+        slots.add(_ComicSpreadSlot([i], isWideSpread: true));
+        i++;
+        continue;
+      }
+      if (i + 1 < _totalPages && !_isWideSpreadPage(_pages[i + 1])) {
         slots.add(_ComicSpreadSlot([i, i + 1]));
         i += 2;
       } else {
@@ -298,9 +301,6 @@ extension _ComicReaderViewSections on ComicReaderViewState {
       } else {
         _preloadAdjacent();
       }
-      _update(() {
-        _anchor = frozenAnchor;
-      });
     });
 
     _displaySettingsSaveTimer?.cancel();
@@ -362,7 +362,7 @@ extension _ComicReaderViewSections on ComicReaderViewState {
     }
   }
 
-  // ── 漫画书签 ──
+  // ── 漫画书签（双页模式遍历 activeSlot.pageIndices）──
 
   ReaderBookmark? _findBookmarkForPage(
     List<ReaderBookmark> bookmarks,
@@ -376,23 +376,41 @@ extension _ComicReaderViewSections on ComicReaderViewState {
     return null;
   }
 
-  Future<void> _toggleCurrentPageBookmark(
+  ReaderBookmark? _findBookmarkForSlot(
     List<ReaderBookmark> bookmarks,
-  ) async {
+    _ComicSpreadSlot? slot,
+  ) {
+    if (slot == null || slot.pageIndices.isEmpty) {
+      return _findBookmarkForPage(bookmarks, _anchor.pageIndex);
+    }
+    for (final pageIndex in slot.pageIndices) {
+      final found = _findBookmarkForPage(bookmarks, pageIndex);
+      if (found != null) {
+        return found;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _toggleCurrentPageBookmark(
+    List<ReaderBookmark> bookmarks, [
+    _ComicSpreadSlot? activeSlot,
+  ]) async {
     if (_totalPages <= 0) return;
     final dataManager = ref.read(readerDataManagerProvider);
-    final existing = _findBookmarkForPage(bookmarks, _anchor.pageIndex);
+    final existing = _findBookmarkForSlot(bookmarks, activeSlot);
     if (existing != null) {
       await dataManager.deleteBookmark(existing.id);
     } else {
-      final page = _pages[_anchor.pageIndex];
-      final progress = ((_anchor.pageIndex + 1) / _totalPages).clamp(0.0, 1.0);
+      final targetPageIndex = activeSlot?.startPageIndex ?? _anchor.pageIndex;
+      final page = _pages[targetPageIndex];
+      final progress = ((targetPageIndex + 1) / _totalPages).clamp(0.0, 1.0);
       await dataManager.createBookmark(
         itemId: widget.itemId,
-        charOffset: _anchor.pageIndex,
+        charOffset: targetPageIndex,
         progressPercent: progress,
         chapterId: page.catalogNodeId,
-        note: 'P.${_anchor.pageIndex + 1}',
+        note: 'P.${targetPageIndex + 1}',
       );
     }
     if (mounted) {
@@ -507,7 +525,7 @@ extension _ComicReaderViewSections on ComicReaderViewState {
     if (event is KeyRepeatEvent && !_isRepeatableCommand(command)) {
       return KeyEventResult.handled;
     }
-    if (_requiresCommandGate(command) && !_commandGate.accept()) {
+    if (!_acceptCommandGate(command)) {
       return KeyEventResult.handled;
     }
     _executeCommand(command);
@@ -521,10 +539,18 @@ extension _ComicReaderViewSections on ComicReaderViewState {
         command == ReaderCommand.scrollBackward;
   }
 
-  bool _requiresCommandGate(ReaderCommand command) {
-    return command == ReaderCommand.nextPage ||
-        command == ReaderCommand.previousPage ||
-        command == ReaderCommand.toggleReadingMode;
+  bool _acceptCommandGate(ReaderCommand command) {
+    if (command == ReaderCommand.toggleReadingMode) {
+      return _commandGate.accept();
+    }
+    if (command == ReaderCommand.nextPage ||
+        command == ReaderCommand.previousPage) {
+      if (_readingMode == ComicReadingMode.book) {
+        return _bookPageCommandGate.accept();
+      }
+      return _commandGate.accept();
+    }
+    return true;
   }
 
   void _executeCommand(ReaderCommand command) {
@@ -542,7 +568,13 @@ extension _ComicReaderViewSections on ComicReaderViewState {
                 .asData
                 ?.value ??
             const <ReaderBookmark>[];
-        unawaited(_toggleCurrentPageBookmark(bms));
+        final slots = _buildSpreadSlots(MediaQuery.sizeOf(context).width);
+        final activeSlotIndex = _slotIndexForPage(slots, _anchor.pageIndex);
+        final activeSlot =
+            (activeSlotIndex >= 0 && activeSlotIndex < slots.length)
+                ? slots[activeSlotIndex]
+                : null;
+        unawaited(_toggleCurrentPageBookmark(bms, activeSlot));
         return;
       case ReaderCommand.toggleImmersive:
         _toggleControls();
@@ -643,7 +675,7 @@ extension _ComicReaderViewSections on ComicReaderViewState {
     }
   }
 
-  // ── 每页独立缩放控制器（仅 Swipe 模式使用，Book 模式无 InteractiveViewer 杜绝手势冲突） ──
+  // ── 每槽位独立缩放控制器（Book 与 Swipe 均支持，放大 > 1.02 时自动锁翻页拖拽） ──
 
   TransformationController _controllerForSlot(int slotIndex) {
     return _slotTransformControllers.putIfAbsent(
@@ -692,7 +724,7 @@ extension _ComicReaderViewSections on ComicReaderViewState {
   }
 
   void _resetCurrentSlotZoom() {
-    if (_readingMode != ComicReadingMode.page) return;
+    if (!_isPagedMode) return;
     final slots = _buildSpreadSlots(MediaQuery.sizeOf(context).width);
     final activeSlotIndex = _slotIndexForPage(slots, _anchor.pageIndex);
     final ctrl = _slotTransformControllers[activeSlotIndex];
@@ -746,7 +778,7 @@ extension _ComicReaderViewSections on ComicReaderViewState {
   }
 
   void _zoomByStep(double delta) {
-    if (_readingMode != ComicReadingMode.page) return;
+    if (!_isPagedMode) return;
     final slots = _buildSpreadSlots(MediaQuery.sizeOf(context).width);
     final activeSlotIndex = _slotIndexForPage(slots, _anchor.pageIndex);
     _applyZoomScaleToSlot(activeSlotIndex, _currentZoomScale + delta);
@@ -791,387 +823,6 @@ extension _ComicReaderViewSections on ComicReaderViewState {
       target.clamp(0.0, position.maxScrollExtent),
       duration: MotionToken.reduced(context, const Duration(milliseconds: 220)),
       curve: Curves.easeOut,
-    );
-  }
-
-  /// 构建漫画内容。
-  Widget _buildContent({
-    required List<_ComicSpreadSlot> slots,
-    required int activeSlotIndex,
-    required bool isBookmarked,
-    required Color pageSurfaceBg,
-  }) {
-    if (_totalPages <= 0) {
-      return Center(
-        child: Text(
-          AppLocalizations.of(context).readerNoContent,
-          style: TextStyle(color: _settings.onSurfaceVariantColor),
-        ),
-      );
-    }
-    if (_readingMode == ComicReadingMode.scroll) {
-      return ReaderTapDetector(
-        onTap: _handleScrollContentTap,
-        child: _buildScrollMode(pageSurfaceBg),
-      );
-    }
-    if (_readingMode == ComicReadingMode.book) {
-      return _buildBookMode(
-        slots: slots,
-        activeSlotIndex: activeSlotIndex,
-        isBookmarked: isBookmarked,
-        pageSurfaceBg: pageSurfaceBg,
-      );
-    }
-    return _buildSwipeMode(
-      slots: slots,
-      activeSlotIndex: activeSlotIndex,
-      isBookmarked: isBookmarked,
-      pageSurfaceBg: pageSurfaceBg,
-    );
-  }
-
-  /// 竖向连续滚动模式。
-  Widget _buildScrollMode(Color pageSurfaceBg) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final viewport = Size(
-          constraints.maxWidth,
-          constraints.maxHeight.isFinite
-              ? constraints.maxHeight
-              : MediaQuery.sizeOf(context).height,
-        );
-        final layout = _resolveLayout(viewport);
-        _layoutIndex.updateContentWidth(layout.contentWidth);
-        return ListView.builder(
-          controller: _scrollController,
-          padding: EdgeInsets.symmetric(
-            horizontal: layout.horizontalPadding,
-            vertical: _displaySettings.pageGap,
-          ),
-          itemCount: _totalPages,
-          itemBuilder: (context, index) {
-            return Center(
-              child: SizedBox(
-                width: layout.contentWidth,
-                child: Padding(
-                  padding: EdgeInsets.only(bottom: _displaySettings.pageGap),
-                  child: ComicPageImage(
-                    page: _pages[index],
-                    itemId: widget.itemId,
-                    surfaceColor: pageSurfaceBg,
-                    layout: ComicPageImageLayout.continuous,
-                    onLayout:
-                        (pageIndex, height) => _onPageLayout(
-                          pageIndex,
-                          height + _displaySettings.pageGap,
-                        ),
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  /// Book 3D 仿真翻页模式：与 Swipe 统一复用 `_buildSpreadSlots`（封面独占 + 宽图独占），
-  /// 双页通过 `ReaderPageSpread(seamlessSpine: true)` + 左右向中缝对齐实现 0px 无缝跨页，
-  /// 并接入精准 `ResizeImage` 缓存预热与首帧就绪回调。
-  Widget _buildBookMode({
-    required List<_ComicSpreadSlot> slots,
-    required int activeSlotIndex,
-    required bool isBookmarked,
-    required Color pageSurfaceBg,
-  }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final viewport = Size(
-          constraints.maxWidth,
-          constraints.maxHeight.isFinite
-              ? constraints.maxHeight
-              : MediaQuery.sizeOf(context).height,
-        );
-        final useSpread = _displaySettings.dualPage && viewport.width >= 720;
-        final horizontalInset =
-            viewport.width >= 960 ? 88.0 : (useSpread ? 32.0 : 16.0);
-        final verticalInset =
-            viewport.width >= 960 ? 52.0 : (useSpread ? 36.0 : 24.0);
-        final availW = math.max(240.0, viewport.width - horizontalInset * 2);
-        final availH = math.max(320.0, viewport.height - verticalInset * 2);
-        final maxBookW = useSpread ? 1280.0 : 720.0;
-        final targetAspect = useSpread ? 1.44 : 0.72;
-        var bookW = math.min(availW, maxBookW);
-        var bookH = bookW / targetAspect;
-        if (bookH > availH) {
-          bookH = availH;
-          bookW = math.min(availW, bookH * targetAspect);
-        }
-
-        final imageFit = _resolveImageBoxFit();
-        final deskBg = _controlSettings.bookDeskColor;
-
-        Widget? buildBookSlot(int slotIndex, {bool forSnapshot = false}) {
-          if (slotIndex < 0 || slotIndex >= slots.length) return null;
-          final slot = slots[slotIndex];
-          final indices = slot.pageIndices;
-          if (indices.isEmpty) return null;
-
-          final tracker =
-              forSnapshot ? _ComicSnapshotSlotTracker(indices.length) : null;
-
-          Widget buildLeafImage(
-            int pageIndex, {
-            required AlignmentGeometry alignment,
-          }) {
-            return Builder(
-              builder:
-                  (leafContext) => ComicPageImage(
-                    key: ValueKey(
-                      'comic-book-page-${_pages[pageIndex].id}'
-                      '${forSnapshot ? '-snap' : ''}',
-                    ),
-                    page: _pages[pageIndex],
-                    itemId: widget.itemId,
-                    surfaceColor: pageSurfaceBg,
-                    layout: ComicPageImageLayout.paged,
-                    fit: imageFit,
-                    alignment: alignment,
-                    onFirstFramePainted:
-                        tracker == null
-                            ? null
-                            : () => tracker.markPainted(leafContext),
-                  ),
-            );
-          }
-
-          if (indices.length == 1) {
-            return ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: buildLeafImage(indices.first, alignment: Alignment.center),
-            );
-          }
-
-          final ordered = _isRtl ? [indices[1], indices[0]] : indices;
-          final lastSlot = slots.length <= 1 ? 1 : slots.length - 1;
-          final rawProgress = (slotIndex / lastSlot).clamp(0.0, 1.0);
-          return ReaderPageSpread(
-            left: buildLeafImage(ordered[0], alignment: Alignment.centerRight),
-            right: buildLeafImage(ordered[1], alignment: Alignment.centerLeft),
-            surfaceColor: pageSurfaceBg,
-            paperEdgeColor: _controlSettings.paperEdgeColor,
-            deskColor: deskBg,
-            showPaperGrain: false,
-            seamlessSpine: true,
-            bookmarked: !forSnapshot && isBookmarked,
-            progress: _isRtl ? (1.0 - rawProgress) : rawProgress,
-          );
-        }
-
-        return Center(
-          child: SizedBox(
-            width: bookW,
-            height: bookH,
-            child: ReaderPageView(
-              key: ValueKey('comic-book-view-${widget.itemId}'),
-              turnMode: PageTurnMode.cover,
-              reverse: _isRtl,
-              dragEnabled: true,
-              allowMouseDrag: true,
-              spread: false,
-              showPaperGrain: false,
-              surfaceColor: pageSurfaceBg,
-              paperEdgeColor: _controlSettings.paperEdgeColor,
-              bookmarked: isBookmarked,
-              controller: _pageTurnController,
-              prepareSnapshotPage:
-                  (slotIndex) => _prepareComicSnapshotPage(
-                    slotIndex,
-                    slots: slots,
-                    slotLogicalWidth: bookW,
-                  ),
-              contentRevision: Object.hash(
-                _displaySettings.dualPage,
-                _displaySettings.imageFit,
-                _isRtl,
-                _settings.themeIndex,
-                useSpread,
-              ),
-              state: PagedState(
-                chapterId: widget.itemId,
-                pageIndex: activeSlotIndex,
-                pageCount: slots.length,
-                hasMore: false,
-              ),
-              pageBuilder: (slotIndex) => buildBookSlot(slotIndex),
-              snapshotPageBuilder:
-                  (slotIndex) => buildBookSlot(slotIndex, forSnapshot: true),
-              callbacks: _ComicPageTurnCallbacks(
-                onPageChangedFn: (newSlotIndex) {
-                  if (newSlotIndex < 0 || newSlotIndex >= slots.length) return;
-                  _onPageChanged(slots[newSlotIndex].startPageIndex);
-                },
-                onToggleControlsFn: _toggleControls,
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  /// Swipe 水平滑动模式：保留双页槽位、0px 无缝跨页与每页独立 `InteractiveViewer` 缩放。
-  Widget _buildSwipeMode({
-    required List<_ComicSpreadSlot> slots,
-    required int activeSlotIndex,
-    required bool isBookmarked,
-    required Color pageSurfaceBg,
-  }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final viewport = Size(
-          constraints.maxWidth,
-          constraints.maxHeight.isFinite
-              ? constraints.maxHeight
-              : MediaQuery.sizeOf(context).height,
-        );
-        final layout = _resolveLayout(viewport);
-        return ReaderPageView(
-          key: ValueKey('comic-swipe-view-${widget.itemId}'),
-          turnMode: PageTurnMode.slide,
-          reverse: _isRtl,
-          dragEnabled: !_imageZoomed,
-          allowMouseDrag: true,
-          spread: false,
-          showPaperGrain: false,
-          surfaceColor: pageSurfaceBg,
-          paperEdgeColor: _controlSettings.paperEdgeColor,
-          bookmarked: isBookmarked,
-          controller: _pageTurnController,
-          contentRevision: Object.hash(
-            _displaySettings.dualPage,
-            _displaySettings.imageFit,
-            _isRtl,
-            _settings.themeIndex,
-          ),
-          state: PagedState(
-            chapterId: widget.itemId,
-            pageIndex: activeSlotIndex,
-            pageCount: slots.length,
-            hasMore: false,
-          ),
-          pageBuilder: (slotIndex) {
-            if (slotIndex < 0 || slotIndex >= slots.length) return null;
-            return _buildSlotPage(
-              slotIndex: slotIndex,
-              slot: slots[slotIndex],
-              layout: layout,
-              slotSize: viewport,
-              pageSurfaceBg: pageSurfaceBg,
-              interactive: true,
-            );
-          },
-          snapshotPageBuilder: (slotIndex) {
-            if (slotIndex < 0 || slotIndex >= slots.length) return null;
-            return _buildSlotPage(
-              slotIndex: slotIndex,
-              slot: slots[slotIndex],
-              layout: layout,
-              slotSize: viewport,
-              pageSurfaceBg: pageSurfaceBg,
-              interactive: false,
-            );
-          },
-          callbacks: _ComicPageTurnCallbacks(
-            onPageChangedFn: (newSlotIndex) {
-              if (newSlotIndex < 0 || newSlotIndex >= slots.length) return;
-              _resetOffscreenSlotTransforms(newSlotIndex);
-              _onPageChanged(slots[newSlotIndex].startPageIndex);
-            },
-            onToggleControlsFn: _toggleControls,
-          ),
-        );
-      },
-    );
-  }
-
-  /// 构建 Swipe 模式的单页或双页跨页内容（支持 LTR/RTL 拼合顺序、0px 无缝跨页、图片适应模式与独立缩放）。
-  Widget _buildSlotPage({
-    required int slotIndex,
-    required _ComicSpreadSlot slot,
-    required ComicReaderLayout layout,
-    required Size slotSize,
-    required Color pageSurfaceBg,
-    required bool interactive,
-  }) {
-    final indices = slot.pageIndices;
-    final orderedIndices =
-        indices.length == 2 && _isRtl ? [indices[1], indices[0]] : indices;
-    final imageFit = _resolveImageBoxFit();
-
-    Widget buildFittedImage(
-      int pageIndex, {
-      AlignmentGeometry alignment = Alignment.center,
-    }) {
-      return ComicPageImage(
-        key: ValueKey('comic-swipe-page-${_pages[pageIndex].id}'),
-        page: _pages[pageIndex],
-        itemId: widget.itemId,
-        surfaceColor: pageSurfaceBg,
-        layout: ComicPageImageLayout.paged,
-        fit: imageFit,
-        alignment: alignment,
-      );
-    }
-
-    final Widget composed =
-        orderedIndices.length == 1
-            ? buildFittedImage(orderedIndices.first)
-            : Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: buildFittedImage(
-                    orderedIndices[0],
-                    alignment: Alignment.centerRight,
-                  ),
-                ),
-                Expanded(
-                  child: buildFittedImage(
-                    orderedIndices[1],
-                    alignment: Alignment.centerLeft,
-                  ),
-                ),
-              ],
-            );
-
-    final padded = Padding(padding: layout.pagedPadding, child: composed);
-    if (!interactive) {
-      return ColoredBox(color: pageSurfaceBg, child: padded);
-    }
-
-    final controller = _controllerForSlot(slotIndex);
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerSignal:
-          (event) => _handleCtrlWheelZoom(event, slotIndex, slotSize),
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onDoubleTapDown:
-            (details) => _lastDoubleTapLocalPosition = details.localPosition,
-        onDoubleTap: () => _toggleDoubleTapZoom(slotIndex, slotSize),
-        child: InteractiveViewer(
-          transformationController: controller,
-          minScale: 1.0,
-          maxScale: 4.0,
-          panEnabled: _imageZoomed,
-          scaleEnabled: true,
-          onInteractionUpdate: (_) => _syncSlotZoomScale(slotIndex),
-          onInteractionEnd: (_) => _syncSlotZoomScale(slotIndex),
-          child: padded,
-        ),
-      ),
     );
   }
 }

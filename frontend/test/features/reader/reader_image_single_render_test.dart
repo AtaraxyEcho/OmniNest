@@ -10,6 +10,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_pagination_
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 摘要：页面内容所有权唯一化回归（方案 Commit 2，验收矩阵 B 组）。
 /// 一个 DOM img 只能由一条解析路径消费；一个 ImageBlock 只能属于一个
@@ -189,7 +190,7 @@ void main() {
       for (final blocks in pageBlocks) {
         await tester.pumpWidget(
           MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             home: Scaffold(
               body: ReaderViewContent(
@@ -223,7 +224,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: ReaderCoverPage(

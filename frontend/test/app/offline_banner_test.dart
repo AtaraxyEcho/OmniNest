@@ -8,6 +8,7 @@ import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/core/widgets/offline_banner.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 离线横幅的三条主张：断网要出现、在线不出现、**首帧前也不出现**。
 ///
@@ -28,7 +29,7 @@ void main() {
             appOnlineStatusProvider.overrideWith((_) => status),
         ],
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           theme: OmniNestTheme.from(AppThemePalette.light),

@@ -14,6 +14,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
 
 import 'desktop_test_harness.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 中键字形只看 `WindowChromeState.isMaximized`；真实控制器要靠原生事件
 /// 取这个值，测试里直接把状态种成「已最大化」，跳过平台通道。
@@ -63,7 +64,7 @@ void main() {
         child: MaterialApp.router(
           debugShowCheckedModeBanner: false,
           routerConfig: router,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('en'),
           builder:

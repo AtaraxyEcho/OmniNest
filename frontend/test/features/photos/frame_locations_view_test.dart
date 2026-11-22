@@ -11,6 +11,7 @@ import 'package:omninest/features/photos/domain/photo_group.dart';
 import 'package:omninest/features/photos/domain/photo_repository.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_locations_view.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _MockPhotoRepository extends Mock implements PhotoRepository {}
 
@@ -53,7 +54,7 @@ PhotoGroup _group(String key, int count, List<PhotoItem> previews) {
 
 Widget _materialApp(Widget child) {
   return MaterialApp(
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    localizationsDelegates: kOmniNestLocalizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     locale: const Locale('zh'),
     theme: OmniNestTheme.from(AppThemePalette.dark),

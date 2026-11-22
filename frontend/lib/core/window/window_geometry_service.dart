@@ -174,11 +174,12 @@ class WindowGeometryService with WindowListener {
     // 窗口就会露出系统描边。
     final chromeApplied = await applyFramelessWindowChrome();
     try {
-      final prefs = await SharedPreferences.getInstance();
+      // 并行读取本地持久化与显示器工作区列表，消除启动期两次串行通道等待。
+      final (prefs, visibleAreas) =
+          await (SharedPreferences.getInstance(), _loadVisibleAreas()).wait;
       final saved = WindowBoundsSnapshot.tryDecode(
         prefs.getString(_geometryPrefsKey),
       );
-      final visibleAreas = await _loadVisibleAreas();
       final plan = computeStartupGeometry(
         saved: saved,
         visibleAreas: visibleAreas,
@@ -198,9 +199,18 @@ class WindowGeometryService with WindowListener {
       // 在 --start-paused 等首帧先于钩子的场景下会永远等不到触发。这里
       // 改为在窗口隐藏期间直接下发全部几何，再主动展示，链路完全确定。
       await windowManager.setMinimumSize(kMinimumWindowSize);
-      await windowManager.setSize(plan.size);
+      // 合并位置与尺寸为单次 setBounds 调用，减少一次原生窗口重排与通道往返。
       if (planPosition != null) {
-        await windowManager.setBounds(null, position: planPosition);
+        await windowManager.setBounds(
+          Rect.fromLTWH(
+            planPosition.dx,
+            planPosition.dy,
+            plan.size.width,
+            plan.size.height,
+          ),
+        );
+      } else {
+        await windowManager.setSize(plan.size);
       }
       if (plan.maximize) {
         await windowManager.maximize();

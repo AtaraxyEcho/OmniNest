@@ -9,6 +9,7 @@ import 'package:omninest/core/window/desktop_close_action.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_appearance_panel.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_desktop_shell.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   setUp(() {
@@ -21,7 +22,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         locale: const Locale('zh'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         theme: OmniNestTheme.light(),
         home: Scaffold(
@@ -62,7 +63,7 @@ void main() {
         ],
         child: MaterialApp(
           locale: const Locale('zh'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: OmniNestTheme.light(),
           home: ProfileDesktopShell(
@@ -98,7 +99,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         locale: const Locale('zh'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         theme: OmniNestTheme.light(),
         home: Scaffold(
@@ -134,7 +135,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         locale: const Locale('zh'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         theme: OmniNestTheme.light(),
         home: Scaffold(

@@ -11,6 +11,7 @@ import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_repository.dart';
 import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 根治回归：自操作（建夹等）登记的回声在窗口内命中抑制；
 /// 他端变更（无本地登记）不命中，仍走全量刷新。
@@ -40,7 +41,7 @@ void main() {
       child: MaterialApp.router(
         routerConfig: router,
         theme: OmniNestTheme.light(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
       ),

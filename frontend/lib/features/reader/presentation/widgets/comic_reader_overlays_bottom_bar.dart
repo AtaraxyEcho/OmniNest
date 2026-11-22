@@ -1,7 +1,7 @@
 part of 'comic_reader_overlays.dart';
 
 /// 漫画阅读器的统一底部控制栏（对齐 `.bk-foot` 单行居中样式，RTL 自动反转进度条，
-/// 支持拖动进度条实时预览页码与百分比，双页显示 `Pages X–Y of TOTAL`）。
+/// 支持拖动进度条实时预览页码区间与百分比，双页显示 `Pages X–Y of TOTAL`）。
 class ComicReaderBottomBar extends StatefulWidget {
   const ComicReaderBottomBar({
     required this.currentPageIndex,
@@ -17,6 +17,7 @@ class ComicReaderBottomBar extends StatefulWidget {
     this.isRtl = false,
     this.isDualPage = false,
     this.visibleEndPageIndex,
+    this.resolvePreviewPageRange,
     this.zoomScale = 1.0,
     this.onResetZoom,
     super.key,
@@ -43,6 +44,9 @@ class ComicReaderBottomBar extends StatefulWidget {
 
   /// 当前跨页可见末页索引（0-based）。
   final int? visibleEndPageIndex;
+
+  /// 拖动预览页码解析为所在跨页槽的起止页索引，保持与静止态双页区间口径完全一致。
+  final ({int start, int end}) Function(int pageIndex)? resolvePreviewPageRange;
 
   /// 当前缩放倍率（> 1.02 时展示可点击复位徽标）。
   final double zoomScale;
@@ -81,28 +85,54 @@ class _ComicReaderBottomBarState extends State<ComicReaderBottomBar> {
             ? settings.bookDeskTextColor.withValues(alpha: 0.72)
             : settings.onSurfaceVariantColor;
     final isPreviewing = _previewPageIndex != null;
-    final displayPageIndex =
+    final clampedRaw =
         (_previewPageIndex ?? widget.currentPageIndex)
             .clamp(0, math.max(0, totalPages - 1))
             .toInt();
-    final endIndex =
-        isPreviewing
-            ? displayPageIndex
-            : (widget.visibleEndPageIndex ?? displayPageIndex);
+    final int displayStartIndex;
+    final int displayEndIndex;
+    if (isPreviewing) {
+      final range = widget.resolvePreviewPageRange?.call(clampedRaw);
+      displayStartIndex =
+          (range?.start ?? clampedRaw)
+              .clamp(0, math.max(0, totalPages - 1))
+              .toInt();
+      displayEndIndex =
+          math
+              .max(displayStartIndex, range?.end ?? clampedRaw)
+              .clamp(0, math.max(0, totalPages - 1))
+              .toInt();
+    } else {
+      displayStartIndex = clampedRaw;
+      displayEndIndex =
+          math
+              .max(
+                displayStartIndex,
+                widget.visibleEndPageIndex ?? displayStartIndex,
+              )
+              .clamp(0, math.max(0, totalPages - 1))
+              .toInt();
+    }
+    final showDualRange =
+        (isPreviewing
+            ? widget.resolvePreviewPageRange != null
+            : widget.isDualPage) &&
+        displayEndIndex > displayStartIndex;
     final pageLabel =
         totalPages <= 0
             ? '0 / 0'
-            : (!isPreviewing && widget.isDualPage && endIndex > displayPageIndex
+            : (showDualRange
                 ? l10n.readerPageRange(
-                  displayPageIndex + 1,
-                  math.min(totalPages, endIndex + 1),
+                  displayStartIndex + 1,
+                  math.min(totalPages, displayEndIndex + 1),
                   totalPages,
                 )
-                : l10n.readerPageOf(displayPageIndex + 1, totalPages));
+                : l10n.readerPageOf(displayStartIndex + 1, totalPages));
     final percent =
         totalPages <= 0
             ? 0
-            : (((endIndex + 1) / totalPages).clamp(0.0, 1.0) * 100).round();
+            : (((displayEndIndex + 1) / totalPages).clamp(0.0, 1.0) * 100)
+                .round();
 
     return Positioned(
       left: 0,
@@ -185,7 +215,7 @@ class _ComicReaderBottomBarState extends State<ComicReaderBottomBar> {
                                             ? TextDirection.rtl
                                             : TextDirection.ltr,
                                     child: _ComicPageSlider(
-                                      currentPageIndex: widget.currentPageIndex,
+                                      currentPageIndex: displayEndIndex,
                                       totalPages: totalPages,
                                       maxPage: maxPage,
                                       settings: settings,
@@ -265,7 +295,7 @@ class _ComicReaderBottomBarState extends State<ComicReaderBottomBar> {
                                       ? TextDirection.rtl
                                       : TextDirection.ltr,
                               child: _ComicPageSlider(
-                                currentPageIndex: widget.currentPageIndex,
+                                currentPageIndex: displayEndIndex,
                                 totalPages: totalPages,
                                 maxPage: maxPage,
                                 settings: settings,
@@ -293,11 +323,9 @@ class _ComicReaderBottomBarState extends State<ComicReaderBottomBar> {
                                     child: Text(
                                       totalPages <= 0
                                           ? '0 / 0'
-                                          : (!isPreviewing &&
-                                                  widget.isDualPage &&
-                                                  endIndex > displayPageIndex
-                                              ? '${displayPageIndex + 1}–${endIndex + 1} / $totalPages'
-                                              : '${displayPageIndex + 1} / $totalPages'),
+                                          : (showDualRange
+                                              ? '${displayStartIndex + 1}–${displayEndIndex + 1} / $totalPages'
+                                              : '${displayStartIndex + 1} / $totalPages'),
                                       textAlign: TextAlign.center,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -452,7 +480,10 @@ class ComicPageIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final endIndex = visibleEndPageIndex ?? currentPageIndex;
+    final endIndex = math.max(
+      currentPageIndex,
+      visibleEndPageIndex ?? currentPageIndex,
+    );
     final label =
         totalPages <= 0
             ? '0 / 0'

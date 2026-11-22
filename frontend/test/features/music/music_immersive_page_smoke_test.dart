@@ -20,6 +20,7 @@ import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_player.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 不依赖原生音频引擎的播放器替身，供页面冒烟测试使用。
 class _SilentMusicAudioPlayback implements MusicAudioPlayback {
@@ -134,7 +135,7 @@ void main() {
           ),
         ],
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(body: MusicImmersivePlayer()),
@@ -195,7 +196,7 @@ void main() {
           ),
         ],
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(body: MusicImmersivePlayer()),
@@ -233,7 +234,7 @@ void main() {
                 brightness == Brightness.light
                     ? OmniNestTheme.light()
                     : OmniNestTheme.dark(),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('zh'),
             home: const Scaffold(body: MusicImmersivePlayer()),
@@ -354,7 +355,7 @@ void main() {
         container: container,
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(body: MusicImmersivePlayer()),
@@ -440,7 +441,7 @@ void main() {
         container: container,
         child: MaterialApp(
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(body: MusicImmersivePlayer()),

@@ -6,6 +6,7 @@ import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/widgets/file_grid.dart';
 import 'package:omninest/features/files/presentation/widgets/file_list.dart';
 import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 FileNode _file(String id) {
   return FileNode(
@@ -27,7 +28,7 @@ Future<void> _pump(WidgetTester tester, Widget child) async {
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
     MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       theme: OmniNestTheme.light(),

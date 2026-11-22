@@ -14,6 +14,7 @@ import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_timeline.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_groups_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _FakePhotoCenter extends PhotoCenterController {
   _FakePhotoCenter(this._timeline);
@@ -83,7 +84,7 @@ Future<void> _pump(WidgetTester tester, PhotoTimeline? timeline) async {
       ],
       child: MaterialApp.router(
         theme: OmniNestTheme.from(AppThemePalette.dark),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         routerConfig: router,

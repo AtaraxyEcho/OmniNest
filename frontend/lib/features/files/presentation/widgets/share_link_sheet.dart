@@ -185,29 +185,32 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
         widget.existingShare ?? (shareState.hasValue ? shareState.value : null);
     final hosted = !widget.embedded && MobileShellScope.isHosted(context);
 
-    return Material(
-      // 托管贴底面板由 sheet 路由绘制实底圆角表面，内层保持透明避免
-      // 再叠一层半透明玻璃底。
-      color: hosted ? Colors.transparent : context.filesColors.surfaceContainer,
-      child: Container(
-        decoration: BoxDecoration(
-          // 桌面嵌入弹窗形态由外层弹窗壳描边，内层再加边框会形成双线；
-          // 仅贴底抽屉形态保留顶部分隔线。
-          border:
-              widget.embedded
-                  ? null
-                  : Border(
-                    top: BorderSide(
-                      color:
-                          hosted
-                              ? context.env.line13
-                              : context.filesColors.outlineVariant,
-                    ),
+    return Container(
+      decoration: BoxDecoration(
+        // 托管贴底面板由 sheet 路由绘制实底圆角表面，内层保持透明避免
+        // 再叠一层半透明玻璃底。
+        color:
+            hosted ? Colors.transparent : context.filesColors.surfaceContainer,
+        // 桌面嵌入弹窗形态由外层弹窗壳描边，内层再加边框会形成双线；
+        // 仅贴底抽屉形态保留顶部分隔线。
+        border:
+            widget.embedded
+                ? null
+                : Border(
+                  top: BorderSide(
+                    color:
+                        hosted
+                            ? context.env.line13
+                            : context.filesColors.outlineVariant,
                   ),
-        ),
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
+                ),
+      ),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        clipBehavior: Clip.antiAlias,
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
           child: Column(

@@ -9,6 +9,7 @@ import 'package:omninest/features/files/application/file_browser_controller.dart
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
 import 'package:omninest/features/files/presentation/widgets/file_env_glyph.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 目录原地展开态的列表虚拟化闸门。
 ///
@@ -61,7 +62,7 @@ Widget _host(ProviderContainer container) {
     child: MaterialApp.router(
       routerConfig: router,
       theme: OmniNestTheme.light(),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       builder:

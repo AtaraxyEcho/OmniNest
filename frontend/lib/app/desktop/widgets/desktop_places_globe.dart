@@ -429,8 +429,10 @@ class _GlobeZoomCapsule extends StatelessWidget {
     final skin = DesktopSkin.of(context);
     return ClipRRect(
       borderRadius: BorderRadius.circular(999),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+      child: BackdropFilter.grouped(
+        filterConfig: ImageFilterConfig(
+          ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        ),
         child: Container(
           height: 30,
           padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -613,8 +615,10 @@ class _GlobePin extends StatelessWidget {
                       scale: showCard ? 1.0 : 0.9,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(14),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                        child: BackdropFilter.grouped(
+                          filterConfig: ImageFilterConfig(
+                            ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                          ),
                           child: Container(
                             padding: const EdgeInsets.fromLTRB(6, 6, 12, 6),
                             decoration: BoxDecoration(

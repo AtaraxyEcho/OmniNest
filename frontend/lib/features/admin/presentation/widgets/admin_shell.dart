@@ -751,48 +751,52 @@ class _MobileAdminSectionSheet extends ConsumerWidget {
         color: scheme.surfaceContainer,
         border: Border(top: BorderSide(color: scheme.outline)),
       ),
-      child: SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.78,
-          ),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            children: [
-              for (final item in AdminSection.visiblePrimary(permissions))
-                ListTile(
-                  minTileHeight: 48,
-                  leading: Icon(
-                    _iconFor(item),
-                    color:
-                        item.group == selected.group
-                            ? scheme.onSurface
-                            : scheme.onSurfaceVariant,
-                  ),
-                  title: Text(
-                    _sectionGroupLabel(l10n, item.group),
-                    style: TextStyle(
-                      color: scheme.onSurface,
-                      fontWeight:
+      child: Material(
+        type: MaterialType.transparency,
+        clipBehavior: Clip.antiAlias,
+        child: SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.78,
+            ),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              children: [
+                for (final item in AdminSection.visiblePrimary(permissions))
+                  ListTile(
+                    minTileHeight: 48,
+                    leading: Icon(
+                      _iconFor(item),
+                      color:
                           item.group == selected.group
-                              ? FontWeight.w700
-                              : FontWeight.w500,
+                              ? scheme.onSurface
+                              : scheme.onSurfaceVariant,
                     ),
-                  ),
-                  selected: item.group == selected.group,
-                  selectedTileColor: scheme.surfaceContainerHighest,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(
-                      AppControlTokens.controlRadius,
+                    title: Text(
+                      _sectionGroupLabel(l10n, item.group),
+                      style: TextStyle(
+                        color: scheme.onSurface,
+                        fontWeight:
+                            item.group == selected.group
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                      ),
                     ),
+                    selected: item.group == selected.group,
+                    selectedTileColor: scheme.surfaceContainerHighest,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        AppControlTokens.controlRadius,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      // 分区深链：/admin/:section，由 AdminDashboardPage 解析。
+                      context.go(item.group.location);
+                    },
                   ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    // 分区深链：/admin/:section，由 AdminDashboardPage 解析。
-                    context.go(item.group.location);
-                  },
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

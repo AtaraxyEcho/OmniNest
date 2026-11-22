@@ -11,6 +11,7 @@ import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/widgets/music_platform_login.dart';
 import 'package:omninest/features/music/presentation/widgets/music_platform_qr_panel.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 平台账号窗口的交互契约：登录方式切换、验证码路径、内联二维码与断开确认。
 
@@ -41,7 +42,7 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: const Scaffold(body: PlatformLoginSheet()),
@@ -61,7 +62,7 @@ void main() {
         container: container,
         child: MaterialApp(
           theme: theme,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(

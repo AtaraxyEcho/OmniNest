@@ -11,6 +11,7 @@ import 'package:omninest/features/files/presentation/widgets/file_node_actions.d
 import 'package:omninest/features/files/presentation/widgets/files_check_mark.dart';
 import 'package:omninest/features/files/presentation/widgets/files_table_view.dart';
 import 'package:omninest/features/files/presentation/theme/files_workstation_theme.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 Future<void> _pumpTable(
   WidgetTester tester, {
@@ -46,7 +47,7 @@ Future<void> _pumpTable(
   await tester.pumpWidget(
     MaterialApp(
       theme: OmniNestTheme.from(AppThemePalette.dark),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       home: Scaffold(

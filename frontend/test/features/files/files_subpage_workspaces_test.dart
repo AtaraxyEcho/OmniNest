@@ -9,6 +9,7 @@ import 'package:omninest/features/files/application/file_browser_controller.dart
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 桌面态全部子页工作区的页面级冒烟测试。
 ///
@@ -40,7 +41,7 @@ void main() {
       child: MaterialApp.router(
         routerConfig: router,
         theme: OmniNestTheme.light(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
       ),

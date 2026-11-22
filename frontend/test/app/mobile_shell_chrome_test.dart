@@ -19,6 +19,7 @@ import 'package:omninest/features/music/application/music_playback_session.dart'
 import 'package:omninest/features/music/application/music_spectrum_frame.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 移动端壳层 chrome 规范测试（360×860 视口，配色取自设计原型）：
 /// - 一级导航为四个空间：首页·媒体库·阅读·文件（浮动胶囊底栏）；
@@ -97,7 +98,7 @@ void main() {
                 ? OmniNestTheme.light()
                 : OmniNestTheme.dark(),
         routerConfig: router,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
       ),

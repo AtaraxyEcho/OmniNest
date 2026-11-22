@@ -16,6 +16,7 @@ import 'package:omninest/features/reader/domain/parsed_book.dart';
 import 'package:omninest/features/reader/reader_dashboard.dart';
 
 import 'desktop_test_harness.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -53,7 +54,7 @@ void main() {
           child: MaterialApp.router(
             routerConfig: router,
             theme: theme,
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('en'),
           ),
@@ -131,7 +132,7 @@ void main() {
               isDark: true,
               accent: DesktopAccent.sage,
             ),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('en'),
           ),
@@ -185,7 +186,7 @@ void main() {
               isDark: true,
               accent: DesktopAccent.sage,
             ),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('en'),
           ),

@@ -35,6 +35,7 @@ import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/music/music_portal.dart';
 
 part 'desktop_now_playing_deck.dart';
+part 'desktop_now_playing_wallpaper.dart';
 part 'desktop_now_playing_deck_parts.dart';
 part 'desktop_now_playing_panels.dart';
 part 'desktop_now_playing_transport.dart';

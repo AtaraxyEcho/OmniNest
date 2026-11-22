@@ -298,8 +298,10 @@ class _DesktopStickySliverDelegate extends SliverPersistentHeaderDelegate {
                   duration: duration,
                   curve: DesktopMotion.ease,
                   child: ClipRect(
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                    child: BackdropFilter.grouped(
+                      filterConfig: ImageFilterConfig(
+                        ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                      ),
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: skin.bg.withValues(alpha: 0.78),
@@ -608,43 +610,51 @@ class DesktopCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
+    final radius = BorderRadius.circular(DesktopMetrics.radiusCard);
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
+        borderRadius: radius,
         child: BackdropFilter.grouped(
           filterConfig: ImageFilterConfig(
             desktopGlassFilter(blur: 24, saturation: 1.3),
           ),
           child: RepaintBoundary(
             child: Container(
-              padding: padding,
               decoration: BoxDecoration(
                 color: skin.panel,
-                borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
+                borderRadius: radius,
                 border: Border.all(color: skin.line),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (title != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              title!,
-                              style: DesktopType.cardTitle(skin.text),
-                            ),
+              child: Material(
+                type: MaterialType.transparency,
+                borderRadius: radius,
+                clipBehavior: Clip.antiAlias,
+                child: Padding(
+                  padding: padding,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (title != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  title!,
+                                  style: DesktopType.cardTitle(skin.text),
+                                ),
+                              ),
+                              if (action != null) action!,
+                            ],
                           ),
-                          if (action != null) action!,
-                        ],
-                      ),
-                    ),
-                  child,
-                ],
+                        ),
+                      child,
+                    ],
+                  ),
+                ),
               ),
             ),
           ),

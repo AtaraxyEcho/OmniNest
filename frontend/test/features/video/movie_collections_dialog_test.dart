@@ -13,6 +13,7 @@ import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/data/movie_api.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_collections.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   testWidgets('合集弹窗在条目数据到达后自动渲染列表', (tester) async {
@@ -120,7 +121,7 @@ Widget _host(_CollectionApiAdapter adapter) {
     ],
     child: MaterialApp(
       theme: OmniNestTheme.light(),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       home: const Scaffold(

@@ -7,6 +7,7 @@ import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/core/widgets/env_empty_state.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 Future<void> _pump(WidgetTester tester, {required bool hosted}) async {
   tester.view.devicePixelRatio = 1;
@@ -16,7 +17,7 @@ Future<void> _pump(WidgetTester tester, {required bool hosted}) async {
 
   await tester.pumpWidget(
     MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       theme: OmniNestTheme.from(AppThemePalette.dark),

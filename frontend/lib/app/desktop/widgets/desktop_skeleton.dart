@@ -550,8 +550,10 @@ class DesktopOverlayLoader extends StatelessWidget {
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
     return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+      child: BackdropFilter.grouped(
+        filterConfig: ImageFilterConfig(
+          ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+        ),
         child: ColoredBox(
           color: skin.bg.withValues(alpha: 0.56),
           child: Center(

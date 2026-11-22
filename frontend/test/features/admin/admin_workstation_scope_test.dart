@@ -9,11 +9,12 @@ import 'package:omninest/core/widgets/workstation_controls.dart';
 import 'package:omninest/features/admin/presentation/theme/admin_workstation_theme.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_common_widgets.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_list_components.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 Widget _wrap(Widget child, {Brightness brightness = Brightness.dark}) {
   return MaterialApp(
     theme: ThemeData(brightness: brightness, useMaterial3: true),
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    localizationsDelegates: kOmniNestLocalizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(body: AdminWorkstationScope(child: child)),
   );
@@ -302,7 +303,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: ThemeData(brightness: Brightness.dark, useMaterial3: true),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: Center(

@@ -149,36 +149,11 @@ class _SidePanel extends ConsumerWidget {
             ),
             if (tab == 0 && hasTranslation) ...[
               const SizedBox(width: 10),
-              GestureDetector(
+              _TranslationToggleChip(
+                active: showTranslation,
+                accent: skin.accent,
+                isZh: isZh,
                 onTap: onToggleTranslation,
-                behavior: HitTestBehavior.opaque,
-                child: AnimatedContainer(
-                  duration: DesktopMotion.of(context, DesktopMotion.fast),
-                  height: 28,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color:
-                        showTranslation
-                            ? Colors.white
-                            : Colors.white.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color:
-                          showTranslation
-                              ? Colors.white
-                              : Colors.white.withValues(alpha: 0.18),
-                    ),
-                  ),
-                  child: Text(
-                    '译',
-                    style: DesktopType.chip(
-                      showTranslation
-                          ? const Color(0xFF0A0C0E)
-                          : Colors.white.withValues(alpha: 0.8),
-                    ).copyWith(fontWeight: FontWeight.w600),
-                  ),
-                ),
               ),
             ],
           ],
@@ -632,6 +607,87 @@ class _NowPlayingAbout extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 歌词双语翻译切换按钮：32px 与 `DesktopSeg(small: true)` 齐平，
+/// 圆角 `DesktopMetrics.radiusIconButton`（9px），强调色半透底+描边，
+/// 具备悬停反馈、指针手型、Tooltip、语义状态与中英文光学居中。
+class _TranslationToggleChip extends StatelessWidget {
+  const _TranslationToggleChip({
+    required this.active,
+    required this.accent,
+    required this.isZh,
+    required this.onTap,
+  });
+
+  final bool active;
+  final Color accent;
+  final bool isZh;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tooltip =
+        isZh
+            ? (active ? '隐藏歌词翻译' : '显示歌词翻译')
+            : (active ? 'Hide translation' : 'Show translation');
+    return Semantics(
+      button: true,
+      toggled: active,
+      label: tooltip,
+      child: Tooltip(
+        message: tooltip,
+        child: DesktopHover(
+          cursor: SystemMouseCursors.click,
+          builder: (context, hovered) {
+            final bgColor =
+                active
+                    ? accent.withValues(alpha: hovered ? 0.24 : 0.18)
+                    : Colors.white.withValues(alpha: hovered ? 0.14 : 0.08);
+            final borderColor =
+                active
+                    ? accent.withValues(alpha: hovered ? 0.72 : 0.55)
+                    : Colors.white.withValues(alpha: hovered ? 0.28 : 0.16);
+            final fgColor =
+                active
+                    ? accent
+                    : Colors.white.withValues(alpha: hovered ? 0.92 : 0.72);
+            return GestureDetector(
+              onTap: onTap,
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedContainer(
+                duration: DesktopMotion.of(context, DesktopMotion.fast),
+                curve: DesktopMotion.ease,
+                height: 32,
+                constraints: const BoxConstraints(minWidth: 32),
+                padding: EdgeInsets.symmetric(horizontal: isZh ? 9 : 10),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(
+                    DesktopMetrics.radiusIconButton,
+                  ),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Text(
+                  isZh ? '译' : 'TR',
+                  textHeightBehavior: const TextHeightBehavior(
+                    applyHeightToFirstAscent: false,
+                    applyHeightToLastDescent: false,
+                  ),
+                  style: DesktopType.chip(fgColor).copyWith(
+                    fontWeight: FontWeight.w600,
+                    height: 1.0,
+                    letterSpacing: isZh ? 0.0 : 0.4,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }

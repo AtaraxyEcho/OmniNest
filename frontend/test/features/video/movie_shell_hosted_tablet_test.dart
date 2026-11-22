@@ -9,6 +9,7 @@ import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_shell.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 托管平板宽度（≥1024）的媒体页布局门控测试：
 /// 托管态与 Photos/Music/Reader 同规则一律走触屏布局，
@@ -26,7 +27,7 @@ void main() {
           authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
         ],
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           theme: OmniNestTheme.dark(),
@@ -80,7 +81,7 @@ void main() {
           authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
         ],
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           theme: OmniNestTheme.dark(),
@@ -118,7 +119,7 @@ void main() {
           authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
         ],
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           theme: OmniNestTheme.dark(),
@@ -156,7 +157,7 @@ void main() {
           authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
         ],
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           theme: OmniNestTheme.dark(),

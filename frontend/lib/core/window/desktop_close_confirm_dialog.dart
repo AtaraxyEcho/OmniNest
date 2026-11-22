@@ -100,7 +100,12 @@ class _DesktopCloseConfirmDialogState extends State<DesktopCloseConfirmDialog> {
                           child: Checkbox(
                             value: _remember,
                             onChanged: _toggleRemember,
-                            activeColor: skin.accent,
+                            fillColor: WidgetStateProperty.resolveWith<Color?>(
+                              (states) =>
+                                  states.contains(WidgetState.selected)
+                                      ? skin.accent
+                                      : null,
+                            ),
                             checkColor: skin.accentInk,
                             side: BorderSide(color: skin.line2, width: 1.5),
                             shape: RoundedRectangleBorder(

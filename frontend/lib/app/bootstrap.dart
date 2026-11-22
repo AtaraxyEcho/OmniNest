@@ -5,12 +5,14 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/preferences/app_bootstrap_data.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 import 'package:omninest/core/services/app_image_cache_policy.dart';
+import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/window/window_geometry_service.dart';
 import 'package:omninest/platform/desktop/desktop_shell_bootstrap.dart';
@@ -147,25 +149,30 @@ class _AppBootstrapGateState extends State<AppBootstrapGate> {
       _data = null;
       _error = null;
     });
-    // 数据加载通常远快于入场动画（字体已在 bootstrap_web 预热、偏好读取是
-    // 本地同步量级），不设下限就会出现「品牌页闪一帧」。这里与加载并行
-    // 计时，不叠加额外等待；错误路径不等，尽快把失败原因交出去。
-    //
-    // 关闭系统动效的用户看到的是一张静止画面，按动画时长拖住没有意义，
-    // 只留一帧确认。此处读平台能力而非 MediaQuery：本方法在 initState
-    // 栈内启动，尚不能建立 InheritedWidget 依赖。
-    final reduceMotion =
-        WidgetsBinding
-            .instance
-            .platformDispatcher
-            .accessibilityFeatures
-            .disableAnimations;
-    final minVisible = Future<void>.delayed(
-      reduceMotion ? _splashMinVisibleReduced : _splashMinVisible,
-    );
+    // 桌面端窗口在首帧即由原生层隐藏至几何就绪后展示，再人为等待 640ms
+    // 品牌页纯属冷启动空等；仅 Web 与移动端保留最短可见下限防闪帧。
+    final Future<void>? minVisible;
+    if (isDesktopPlatform) {
+      minVisible = null;
+    } else {
+      // 关闭系统动效的用户看到的是一张静止画面，按动画时长拖住没有意义，
+      // 只留一帧确认。此处读平台能力而非 MediaQuery：本方法在 initState
+      // 栈内启动，尚不能建立 InheritedWidget 依赖。
+      final reduceMotion =
+          WidgetsBinding
+              .instance
+              .platformDispatcher
+              .accessibilityFeatures
+              .disableAnimations;
+      minVisible = Future<void>.delayed(
+        reduceMotion ? _splashMinVisibleReduced : _splashMinVisible,
+      );
+    }
     try {
       final data = await widget.loader();
-      await minVisible;
+      if (minVisible != null) {
+        await minVisible;
+      }
       if (!mounted || generation != _generation) {
         return;
       }
@@ -202,7 +209,7 @@ class _BootstrapStatusApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       initialRoute: '/',
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       theme: OmniNestTheme.light(),
       darkTheme: OmniNestTheme.dark(),

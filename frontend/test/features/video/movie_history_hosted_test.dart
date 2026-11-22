@@ -14,6 +14,7 @@ import 'package:omninest/features/video/application/movie_center_state.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_history.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_history_row.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 MovieWatchHistory _history({
   required String videoItemId,
@@ -43,7 +44,7 @@ Future<void> _pump(
   await tester.pumpWidget(
     MaterialApp(
       theme: OmniNestTheme.from(AppThemePalette.dark),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       home: MobileShellScope(

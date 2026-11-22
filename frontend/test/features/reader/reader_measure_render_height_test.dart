@@ -9,6 +9,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_html_parser
 import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 摘要：块测量高度必须等于该块在真实渲染里占据的高度。
 ///
@@ -23,7 +24,7 @@ void main() {
   );
 
   Widget host(Widget child) => MaterialApp(
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    localizationsDelegates: kOmniNestLocalizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     locale: const Locale('en'),
     theme: OmniNestTheme.from(AppThemePalette.dark),

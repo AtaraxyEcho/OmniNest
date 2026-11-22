@@ -44,7 +44,6 @@ class DesktopPlayerBar extends ConsumerStatefulWidget {
 }
 
 class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
-  double? _scrubSeconds;
   double _lastAudibleVolume = 100;
 
   @override
@@ -86,11 +85,9 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
     final current = centerTrack;
     final durationSeconds = current?.durationSeconds ?? 0;
     final favorite = current?.favorite ?? false;
-    // 时间轴与音量都要读播放引擎，而引擎是 autoDispose 的：空闲态一律
-    // 不订阅，否则壳层一启动就会初始化音频设备与系统媒体会话——用户
-    // 可能整场都不碰音乐。有曲目时才接上真实播放状态。
-    final timeline =
-        track == null ? null : ref.watch(musicPortalPlaybackTimelineProvider);
+    // 时间轴订阅已隔离至 `_IsolatedPlayerSeekBar` 内部：此处不再于顶层
+    // 订阅 `musicPortalPlaybackTimelineProvider`，避免播放期间每帧进度
+    // tick 触发外层 36σ 毛玻璃容器整条重建。
     final actions = ref.watch(musicPortalActionsProvider);
     final shellState = ref.watch(desktopShellProvider);
     final shellController = ref.read(desktopShellProvider.notifier);
@@ -304,28 +301,9 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
                                             // 连带玻璃面板的 child 每帧换新，backdrop 层也跟着重录。
                                             Transform.translate(
                                               offset: const Offset(0, -2),
-                                              child: _PlayerSeekBar(
-                                                timeline: timeline!,
-                                                scrubSeconds: _scrubSeconds,
+                                              child: _IsolatedPlayerSeekBar(
                                                 durationSeconds:
                                                     durationSeconds,
-                                                onScrub:
-                                                    (value) => setState(
-                                                      () =>
-                                                          _scrubSeconds = value,
-                                                    ),
-                                                onCommit: (value) {
-                                                  setState(
-                                                    () => _scrubSeconds = null,
-                                                  );
-                                                  timeline.seek(
-                                                    Duration(
-                                                      milliseconds:
-                                                          (value * 1000)
-                                                              .round(),
-                                                    ),
-                                                  );
-                                                },
                                               ),
                                             ),
                                           ],
@@ -631,6 +609,41 @@ class _SpinningArtState extends State<_SpinningArt>
             ),
         ],
       ),
+    );
+  }
+}
+
+/// 独立订阅 `musicPortalPlaybackTimelineProvider` 的进度条与时间文案容器：
+/// 将时间轴订阅与拖拽态（`_scrubSeconds`）隔离在独立 `Consumer` 子树内，
+/// 避免播放期间每帧进度 tick 或拖拽导致外层 36σ 毛玻璃播放栏整条重建。
+class _IsolatedPlayerSeekBar extends StatefulWidget {
+  const _IsolatedPlayerSeekBar({required this.durationSeconds});
+
+  final int durationSeconds;
+
+  @override
+  State<_IsolatedPlayerSeekBar> createState() => _IsolatedPlayerSeekBarState();
+}
+
+class _IsolatedPlayerSeekBarState extends State<_IsolatedPlayerSeekBar> {
+  double? _scrubSeconds;
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer(
+      builder: (context, ref, _) {
+        final timeline = ref.watch(musicPortalPlaybackTimelineProvider);
+        return _PlayerSeekBar(
+          timeline: timeline,
+          scrubSeconds: _scrubSeconds,
+          durationSeconds: widget.durationSeconds,
+          onScrub: (value) => setState(() => _scrubSeconds = value),
+          onCommit: (value) {
+            setState(() => _scrubSeconds = null);
+            timeline.seek(Duration(milliseconds: (value * 1000).round()));
+          },
+        );
+      },
     );
   }
 }

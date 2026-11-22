@@ -11,6 +11,7 @@ import 'package:omninest/features/reader/application/reader_comic_service.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_item_detail_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 final _user = UserProfile(
   id: 'u1',
@@ -101,7 +102,7 @@ Future<void> _pumpReader(
       ],
       child: MaterialApp(
         locale: const Locale('en'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         theme: OmniNestTheme.light(),
         home: const ReaderItemDetailPage(itemId: 'comic-1'),
@@ -176,7 +177,7 @@ void main() {
         overrides: overrides,
         child: MaterialApp(
           locale: const Locale('en'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: OmniNestTheme.light(),
           home: const ReaderItemDetailPage(itemId: 'comic-1'),

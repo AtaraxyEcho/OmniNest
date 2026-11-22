@@ -10,6 +10,7 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_metadata_section.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 import 'package:toastification/toastification.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 记录删除调用的中心控制器桩：只替换删除入口涉及的状态与网络流程。
 class _RecordingReaderCenterController extends ReaderCenterController {
@@ -61,7 +62,7 @@ Widget _wrap(Widget child, _RecordingReaderCenterController controller) {
     child: ToastificationWrapper(
       config: omniFeedbackToastConfig,
       child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('en'),
         theme: OmniNestTheme.dark(),

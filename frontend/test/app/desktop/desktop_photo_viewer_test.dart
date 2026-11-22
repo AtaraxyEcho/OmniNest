@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/desktop/pages/desktop_photo_viewer_page.dart';
+import 'package:omninest/app/theme/feature/photos_chrome_colors.dart';
 import 'package:omninest/features/photos/photo_dashboard.dart';
 
 import 'desktop_test_harness.dart';
@@ -50,14 +51,14 @@ void main() {
     await pumpViewer(tester);
 
     final darkFilmstrip = find.byWidgetPredicate((widget) {
-      if (widget is! Container) return false;
+      if (widget is! DecoratedBox) return false;
       final decoration = widget.decoration;
       if (decoration is! BoxDecoration) return false;
       final gradient = decoration.gradient;
       return gradient is LinearGradient &&
-          gradient.colors.length == 2 &&
-          gradient.colors.first == Colors.transparent &&
-          gradient.colors.last == const Color(0x59000000);
+          gradient.begin == Alignment.bottomCenter &&
+          gradient.colors.first == PhotosChromeColors.scrimB8 &&
+          gradient.colors.last == Colors.transparent;
     });
     expect(darkFilmstrip, findsOneWidget);
   });

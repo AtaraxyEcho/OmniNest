@@ -22,6 +22,7 @@ import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/data/movie_api.dart';
 import 'package:omninest/features/video/presentation/pages/movie_center_page.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_mobile_chips.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 Map<String, Object> _movieJson({
   required String id,
@@ -144,7 +145,7 @@ Future<void> _pumpHostedForYou(
       ],
       child: MaterialApp(
         theme: OmniNestTheme.from(AppThemePalette.dark),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         // 托管标记由壳层提供，与 MobileHostedRoute 同形态。
@@ -185,7 +186,7 @@ Future<void> _pumpHero(
   await tester.pumpWidget(
     MaterialApp(
       theme: OmniNestTheme.dark(),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       home: MobileShellScope(

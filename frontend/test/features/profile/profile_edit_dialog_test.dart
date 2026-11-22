@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_account_panel.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 编辑个人资料窗口契约：
 /// - 由账号卡「编辑资料」入口打开，字段预填当前值；
@@ -16,7 +17,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: OmniNestTheme.dark(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: Scaffold(

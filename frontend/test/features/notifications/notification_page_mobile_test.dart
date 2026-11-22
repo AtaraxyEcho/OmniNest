@@ -12,6 +12,7 @@ import 'package:omninest/core/widgets/workstation_portal_link.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
 import 'package:omninest/features/notifications/domain/notification_models.dart';
 import 'package:omninest/features/notifications/presentation/pages/notification_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 通知中心移动形态回归：MobileShellScope 托管态渲染移动面板
 /// （玻璃横幅语义下的两档分段 + 按天分组 + 全部已读 + 权限门控），
@@ -112,7 +113,7 @@ void main() {
     addTearDown(router.dispose);
     return MaterialApp.router(
       theme: OmniNestTheme.dark(),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       routerConfig: router,
@@ -258,7 +259,7 @@ void main() {
         child: MaterialApp.router(
           routerConfig: router,
           theme: OmniNestTheme.dark(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
         ),

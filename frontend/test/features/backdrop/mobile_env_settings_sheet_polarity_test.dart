@@ -16,6 +16,7 @@ import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 import 'package:omninest/features/backdrop/presentation/mobile_env_settings_sheet.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 const ValueKey<String> _sheetSurfaceKey = ValueKey<String>(
   'omninest.envSheet.surface',
@@ -62,7 +63,7 @@ Widget _harness(ProviderContainer container) {
         final mode = ref.watch(appearanceControllerProvider);
         return MaterialApp(
           locale: const Locale('zh'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: OmniNestTheme.light(),
           darkTheme: OmniNestTheme.dark(),

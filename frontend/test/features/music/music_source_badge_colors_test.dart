@@ -4,6 +4,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 来源徽章配色契约：常规徽章为胶囊描边形态——中性微底 + 平台色描边
 /// 与平台色文字；覆盖形态沿用近实底表面 + 平台色文字描边。
@@ -20,7 +21,7 @@ void main() {
             brightness == Brightness.light
                 ? OmniNestTheme.light()
                 : OmniNestTheme.dark(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: Scaffold(

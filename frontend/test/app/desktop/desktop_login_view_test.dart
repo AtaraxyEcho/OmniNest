@@ -11,6 +11,7 @@ import 'package:omninest/core/auth/login_page_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'desktop_test_harness.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 登录提交的替身：只驱动状态机，不打网络。
 class _ScriptedLogin extends LoginPageController {
@@ -111,7 +112,7 @@ void main() {
           debugShowCheckedModeBanner: false,
           routerConfig: router,
           theme: DesktopTheme.resolve(isDark: true),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('en'),
         ),

@@ -12,6 +12,7 @@ import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/widgets/files_table_view.dart';
 import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 主列表分页条：替代原“加载更多”按钮，跳页经 goToFilePage 重放窗口。
 void main() {
@@ -48,7 +49,7 @@ void main() {
         child: MaterialApp.router(
           routerConfig: router,
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
         ),
@@ -123,7 +124,7 @@ void main() {
         child: MaterialApp.router(
           routerConfig: router,
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
         ),
@@ -173,7 +174,7 @@ void main() {
         child: MaterialApp.router(
           routerConfig: router,
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
         ),
@@ -243,7 +244,7 @@ void main() {
           child: MaterialApp.router(
             routerConfig: router,
             theme: OmniNestTheme.light(),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('zh'),
           ),
@@ -298,7 +299,7 @@ void main() {
         child: MaterialApp.router(
           routerConfig: router,
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           builder:

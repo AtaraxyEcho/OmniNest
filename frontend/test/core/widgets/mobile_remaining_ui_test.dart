@@ -10,6 +10,7 @@ import 'package:omninest/features/admin/presentation/widgets/admin_shell.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/pages/file_preview_page.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_mobile_content.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   const targetSizes = <Size>[
@@ -87,7 +88,7 @@ void _noop() {}
 Widget _testApp(Widget child) {
   return ProviderScope(
     child: MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       theme: OmniNestTheme.from(AppThemePalette.dark),

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/desktop/widgets/desktop_window_controls.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/mobile_env_palette.dart';
 
@@ -54,6 +55,9 @@ class PhotoEditorPage extends ConsumerWidget {
                     appBar: AppBar(
                       backgroundColor: Colors.transparent,
                       foregroundColor: context.env.ink,
+                      flexibleSpace: const DesktopWindowDragRegion(
+                        child: SizedBox.expand(),
+                      ),
                       leading: IconButton(
                         tooltip:
                             AppLocalizations.of(context).photosBackToPhotos,
@@ -89,6 +93,9 @@ class PhotoEditorPage extends ConsumerWidget {
             appBar: AppBar(
               backgroundColor: Colors.transparent,
               foregroundColor: context.env.ink,
+              flexibleSpace: const DesktopWindowDragRegion(
+                child: SizedBox.expand(),
+              ),
               leading: IconButton(
                 tooltip: AppLocalizations.of(context).photosBackToPhotos,
                 onPressed: () => context.popOrGo('/photos/$photoId'),

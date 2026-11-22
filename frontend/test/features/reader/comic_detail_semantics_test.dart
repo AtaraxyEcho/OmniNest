@@ -5,6 +5,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/comic_detail_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 const _comic = ReaderItem(
   id: 'comic-1',
@@ -36,7 +37,7 @@ Widget _wrap(Widget child) {
   return ProviderScope(
     child: MaterialApp(
       locale: const Locale('en'),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       theme: OmniNestTheme.light(),
       home: Scaffold(

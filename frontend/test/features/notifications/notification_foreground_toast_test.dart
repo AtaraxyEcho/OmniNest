@@ -14,6 +14,7 @@ import 'package:omninest/features/notifications/domain/notification_models.dart'
 import 'package:omninest/features/notifications/domain/notification_preferences.dart';
 import 'package:omninest/features/notifications/presentation/widgets/notification_foreground_toast.dart';
 import 'package:toastification/toastification.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 偏好假体：横幅判定只读 state，这里不需要真实网络与本地缓存。
 class _FakePreferencesNotifier extends NotificationPreferencesController {
@@ -95,7 +96,7 @@ Future<ProviderContainer> _pumpHost(
         container: container,
         child: MaterialApp.router(
           routerConfig: router,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
         ),

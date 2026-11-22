@@ -15,6 +15,7 @@ import 'package:omninest/features/photos/domain/photo_album.dart';
 import 'package:omninest/features/photos/domain/photo_repository.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_album_detail_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 相册分享创建的异步边界（缺陷报告 M-10）。
 ///
@@ -117,7 +118,7 @@ void main() {
         container: container,
         child: MaterialApp.router(
           routerConfig: router,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('en'),
           theme: OmniNestTheme.from(AppThemePalette.dark),

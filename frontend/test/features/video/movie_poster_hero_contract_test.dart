@@ -4,6 +4,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_poster_card.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_status.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 共享元素转场的开关契约。
 ///
@@ -22,7 +23,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: OmniNestTheme.dark(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: Scaffold(

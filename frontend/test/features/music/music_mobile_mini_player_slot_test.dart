@@ -12,6 +12,7 @@ import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/application/music_spectrum_frame.dart';
 import 'package:omninest/features/music/presentation/widgets/music_mobile_mini_player_slot.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 壳层迷你播放插槽的浮起卡片规范测试：
 /// 左右 10 留边 + 圆角 18 + 高 58（样例配方，不再与底栏同宽贴边）；
@@ -24,7 +25,7 @@ void main() {
       container: container,
       child: MaterialApp(
         theme: ThemeData.dark(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: const Scaffold(

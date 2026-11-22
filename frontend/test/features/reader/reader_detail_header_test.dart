@@ -25,6 +25,7 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_item_detail_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_detail_action_sheet.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_detail_header.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 44dp 状态栏：Android 手机实测档，用真实 view padding 注入而非页面内猜测。
 const double _statusBarInset = 44;
@@ -143,7 +144,7 @@ Future<void> _pumpHostedDetail(
       ],
       child: MaterialApp.router(
         routerConfig: router,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         theme: OmniNestTheme.dark(),

@@ -13,6 +13,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/app/environment.dart';
 import 'package:omninest/features/search/search_ui.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 一切请求都回同一条文件命中：其余来源在空数据下不参与断言。
 class _SingleHitAdapter implements HttpClientAdapter {
@@ -57,7 +58,7 @@ Widget _harness() {
   return ProviderScope(
     overrides: [apiClientProvider.overrideWithValue(client)],
     child: MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       theme: OmniNestTheme.dark(),

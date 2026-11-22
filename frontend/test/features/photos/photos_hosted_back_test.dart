@@ -16,6 +16,7 @@ import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/pages/photos_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _FakePhotoCenter extends PhotoCenterController {
   @override
@@ -115,7 +116,7 @@ void main() {
           photoCenterControllerProvider.overrideWith(() => _FakePhotoCenter()),
         ],
         child: MaterialApp.router(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           routerConfig: router,

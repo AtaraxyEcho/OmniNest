@@ -6,6 +6,7 @@ class ComicReaderDisplaySettings {
     this.contentWidth = 960,
     this.pageGap = 8,
     this.dualPage = false,
+    this.dualPageOverride,
     this.rtlOverride,
     this.imageFit = 'contain',
   });
@@ -30,6 +31,10 @@ class ComicReaderDisplaySettings {
         (rawFit == 'contain' || rawFit == 'fitWidth' || rawFit == 'fitHeight')
             ? rawFit!
             : 'contain';
+    final rawDualOverride = preferences['comicDualPageOverride'];
+    final bool? dualPageOverride =
+        rawDualOverride is bool ? rawDualOverride : null;
+    final rawDualPage = preferences['comicDualPage'] as bool? ?? false;
     bool? rtlOverride;
     final rawRtlMap = preferences['comicRtlByItem'];
     if (itemId != null && rawRtlMap is Map && rawRtlMap[itemId] is bool) {
@@ -40,7 +45,8 @@ class ComicReaderDisplaySettings {
       fullWidth: preferences['comicFullWidth'] as bool? ?? false,
       contentWidth: rawWidth.clamp(480, 1440),
       pageGap: rawGap.clamp(0, 24),
-      dualPage: preferences['comicDualPage'] as bool? ?? false,
+      dualPage: dualPageOverride ?? rawDualPage,
+      dualPageOverride: dualPageOverride,
       rtlOverride: rtlOverride,
       imageFit: normalizedFit,
     );
@@ -52,8 +58,13 @@ class ComicReaderDisplaySettings {
   final double contentWidth;
   final double pageGap;
 
-  /// 双页跨页浏览开关（对齐样例 `ReaderView.tsx:359`）。
+  /// 双页跨页浏览开关（保持向后兼容；显式切换时同步写入 [dualPageOverride]）。
   final bool dualPage;
+
+  /// 用户显式覆写的双页跨页开关：
+  /// - 非空时严格按用户覆写生效；
+  /// - 为空时按模式感知默认（桌面宽屏 `>= 960` 在 Book 模式默认开启双页仿真，Swipe 默认单页）。
+  final bool? dualPageOverride;
 
   /// 单本漫画阅读方向覆写（true = RTL 日漫右翻左，null = 跟随清单默认）。
   final bool? rtlOverride;
@@ -61,22 +72,44 @@ class ComicReaderDisplaySettings {
   /// 图片适应模式：`contain`（适应屏幕）、`fitWidth`（适应宽度）、`fitHeight`（适应高度）。
   final String imageFit;
 
+  /// 解析当前模式与视口宽度下是否实际启用双页跨页显示。
+  bool resolveDualPage({required double viewportWidth, String? mode}) {
+    final effectiveMode = mode ?? readingMode;
+    if (effectiveMode == 'scroll' || viewportWidth < 720) {
+      return false;
+    }
+    if (dualPageOverride != null) {
+      return dualPageOverride!;
+    }
+    if (dualPage) {
+      return true;
+    }
+    return effectiveMode == 'book' && viewportWidth >= 960;
+  }
+
   ComicReaderDisplaySettings copyWith({
     String? readingMode,
     bool? fullWidth,
     double? contentWidth,
     double? pageGap,
     bool? dualPage,
+    bool? dualPageOverride,
+    bool clearDualPageOverride = false,
     bool? rtlOverride,
     bool clearRtlOverride = false,
     String? imageFit,
   }) {
+    final nextDualOverride =
+        clearDualPageOverride
+            ? null
+            : (dualPageOverride ?? dualPage ?? this.dualPageOverride);
     return ComicReaderDisplaySettings(
       readingMode: readingMode ?? this.readingMode,
       fullWidth: fullWidth ?? this.fullWidth,
       contentWidth: contentWidth ?? this.contentWidth,
       pageGap: pageGap ?? this.pageGap,
-      dualPage: dualPage ?? this.dualPage,
+      dualPage: dualPage ?? dualPageOverride ?? this.dualPage,
+      dualPageOverride: nextDualOverride,
       rtlOverride: clearRtlOverride ? null : (rtlOverride ?? this.rtlOverride),
       imageFit: imageFit ?? this.imageFit,
     );
@@ -95,7 +128,8 @@ class ComicReaderDisplaySettings {
       'comicFullWidth': fullWidth,
       'comicContentWidth': contentWidth,
       'comicPageGap': pageGap,
-      'comicDualPage': dualPage,
+      'comicDualPage': dualPageOverride ?? dualPage,
+      if (dualPageOverride != null) 'comicDualPageOverride': dualPageOverride,
       'comicImageFit': imageFit,
       if (nextRtlMap.isNotEmpty) 'comicRtlByItem': nextRtlMap,
     };

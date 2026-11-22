@@ -14,6 +14,7 @@ import 'package:omninest/features/profile/application/profile_controller.dart';
 import 'package:omninest/features/profile/domain/user_session.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_session_management_panel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 通知中心筛选按钮形态与会话表结构的回归：
 /// - 筛选为两个独立按钮（非连体分段），点击未读触发 setFilter；
@@ -28,7 +29,7 @@ void main() {
   Widget host(Widget child) {
     return MaterialApp(
       theme: OmniNestTheme.dark(),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('zh'),
       home: Scaffold(body: child),
@@ -237,7 +238,7 @@ void main() {
         ],
         child: MaterialApp.router(
           routerConfig: router,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
         ),

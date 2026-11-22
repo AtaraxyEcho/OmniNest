@@ -11,6 +11,7 @@ import 'package:omninest/features/files/presentation/widgets/file_grid.dart';
 import 'package:omninest/features/files/presentation/widgets/file_list.dart';
 import 'package:omninest/features/files/presentation/widgets/file_node_actions.dart';
 import 'package:omninest/features/files/presentation/widgets/files_check_mark.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   test('桌面文件浏览器提供上传入口和文件拖放且不显示队列角标', () {
@@ -233,7 +234,7 @@ void main() {
 Widget _filesApp(Widget child) {
   return MaterialApp(
     theme: OmniNestTheme.from(AppThemePalette.dark),
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    localizationsDelegates: kOmniNestLocalizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(body: child),
   );

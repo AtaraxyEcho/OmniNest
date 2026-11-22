@@ -11,6 +11,7 @@ import 'package:omninest/features/notifications/application/notification_type_co
 import 'package:omninest/features/notifications/domain/notification_preferences.dart';
 import 'package:omninest/features/notifications/domain/notification_type.dart';
 import 'package:omninest/features/notifications/presentation/pages/notification_settings_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 偏好控制器假体：记录保存入参，并可由测试从外部推送新值。
 class _FakePreferencesNotifier extends NotificationPreferencesController {
@@ -89,7 +90,7 @@ void main() {
         child: MaterialApp.router(
           routerConfig: router,
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
         ),

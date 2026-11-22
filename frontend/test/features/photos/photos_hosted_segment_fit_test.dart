@@ -24,6 +24,7 @@ import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/pages/photos_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 const _caps = UserCapabilities(
   canBrowseContent: true,
@@ -111,7 +112,7 @@ Future<void> _pumpHostedPhotos(WidgetTester tester) async {
       ],
       child: MaterialApp.router(
         routerConfig: router,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         theme: OmniNestTheme.dark(),

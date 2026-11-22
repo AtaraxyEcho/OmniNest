@@ -17,6 +17,7 @@ import 'package:omninest/features/notifications/domain/notification_preferences.
 import 'package:omninest/features/notifications/domain/notification_type.dart';
 import 'package:omninest/features/notifications/presentation/pages/notification_settings_page.dart';
 import 'package:toastification/toastification.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _AdminSessionNotifier extends AuthSessionNotifier {
   @override
@@ -149,7 +150,7 @@ void main() {
         child: MaterialApp.router(
           routerConfig: router,
           theme: OmniNestTheme.light(),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
         ),

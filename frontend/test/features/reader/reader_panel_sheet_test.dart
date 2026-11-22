@@ -7,6 +7,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_adaptive_pa
 import 'package:omninest/features/reader/presentation/widgets/reader_chapter_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 三面板（目录 / 显示与排版 / 批注）共用抽屉外壳的规格锁。
 ///
@@ -30,7 +31,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         locale: const Locale('zh'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Builder(
           builder:

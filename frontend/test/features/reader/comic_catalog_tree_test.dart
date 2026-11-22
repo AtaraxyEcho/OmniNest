@@ -6,6 +6,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/comic_detail_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_catalog_tree.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 List<ComicCatalogNode> _fixture() => const [
   ComicCatalogNode(id: 'root', nodeType: 'ROOT', title: 'Root'),
@@ -156,7 +157,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           locale: const Locale('en'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: OmniNestTheme.light(),
           home: Scaffold(
@@ -209,7 +210,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           locale: const Locale('en'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: OmniNestTheme.light(),
           home: Scaffold(

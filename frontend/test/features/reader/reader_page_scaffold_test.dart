@@ -11,6 +11,7 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_admin_page.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_stats_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _FakeReaderCenterController extends ReaderCenterController {
   @override
@@ -29,7 +30,7 @@ Widget _wrap(Widget child, {bool hosted = false}) {
       authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
     ],
     child: MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('en'),
       theme: OmniNestTheme.dark(),
@@ -162,7 +163,7 @@ void main() {
             }),
           ],
           child: MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('en'),
             theme: OmniNestTheme.dark(),
@@ -190,7 +191,7 @@ void main() {
             ),
           ],
           child: MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('en'),
             theme: OmniNestTheme.dark(),

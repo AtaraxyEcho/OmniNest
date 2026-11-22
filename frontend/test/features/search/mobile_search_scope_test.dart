@@ -11,6 +11,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/core/search/scoped_search_registry.dart';
 import 'package:omninest/core/search/scoped_search_source.dart';
 import 'package:omninest/features/search/presentation/pages/mobile_search_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _FakeSource extends ScopedSearchSource {
   _FakeSource(this.scope, {this.label = '命中', this.fails = false});
@@ -90,7 +91,7 @@ Future<GoRouter> _pumpSearch(
         routerConfig: router,
         locale: const Locale('zh'),
         theme: OmniNestTheme.dark(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
       ),
     ),

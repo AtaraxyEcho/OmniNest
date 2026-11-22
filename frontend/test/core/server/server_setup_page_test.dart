@@ -11,6 +11,7 @@ import 'package:omninest/core/server/server_config_store_base.dart';
 import 'package:omninest/core/server/server_probe_client.dart';
 import 'package:omninest/core/server/server_setup_controller.dart';
 import 'package:omninest/core/server/presentation/server_setup_page.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _FakeProbeClient extends ServerProbeClient {
   _FakeProbeClient({this.result, this.pending});
@@ -48,7 +49,7 @@ Future<void> _pumpPage(
         serverRequireHttpsProvider.overrideWithValue(false),
       ],
       child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: const ServerSetupPage(),

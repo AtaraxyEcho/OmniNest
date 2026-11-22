@@ -13,6 +13,7 @@ import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/widgets/music_metadata_edit_dialog.dart';
 
 import '../../support/fake_file_pick.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 const MusicTrack _track = MusicTrack(
   id: 'track-1',
@@ -76,7 +77,7 @@ Future<void> _pumpEditor(
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: Scaffold(

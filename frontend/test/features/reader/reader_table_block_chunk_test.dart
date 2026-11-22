@@ -8,6 +8,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_mod
 import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_table_block_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 摘要：超大表格分帧建行，首帧只承担预算内的行，整表占据的高度全程不变。
 ///
@@ -25,7 +26,7 @@ void main() {
   );
 
   Widget host(Widget child) => MaterialApp(
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    localizationsDelegates: kOmniNestLocalizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     locale: const Locale('en'),
     theme: OmniNestTheme.from(AppThemePalette.dark),

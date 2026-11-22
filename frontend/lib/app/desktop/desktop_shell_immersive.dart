@@ -18,9 +18,14 @@ class _DesktopImmersiveCanvas extends ConsumerWidget {
     final backdropActive =
         backdropConfigured &&
         desktopBackdropAppliesToRoute(backdropScope, path);
+    final isFullscreen = ref.watch(
+      windowChromeControllerProvider.select((state) => state.isFullscreen),
+    );
+    final isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
     return BackdropGroup(
       // 所有沉浸路由统一包裹 DesktopWindowFrame（恢复四边+四角边缘缩放），
-      // 并在 child 底层贴顶铺设 64px 兜底拖拽区，确保阅读器/播放器自动隐藏顶栏时仍可拖动窗口与双击最大化。
+      // 在 child 上方（DesktopToasts 下方）放置 14px 顶边兜底拖拽条：
+      // 避让窗口控制键、全屏态关闭、仅绑 onPanStart 不绑 onDoubleTap 防拖慢单击。
       child: DesktopWindowFrame(
         child: Stack(
           fit: StackFit.expand,
@@ -30,14 +35,23 @@ class _DesktopImmersiveCanvas extends ConsumerWidget {
               DesktopBackdropLayer(path: path)
             else
               _AmbientLayer(path: path),
-            const Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 64,
-              child: DesktopWindowDragRegion(child: SizedBox.expand()),
-            ),
             child,
+            if (isDesktopPlatform && !isFullscreen)
+              Positioned(
+                top: 0,
+                left: isMacOS ? 80 : 0,
+                right: isMacOS ? 0 : 148,
+                height: 14,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onPanStart:
+                      (_) =>
+                          ref
+                              .read(windowChromeControllerProvider.notifier)
+                              .startDragging(),
+                  child: const SizedBox.expand(),
+                ),
+              ),
             const DesktopToasts(),
           ],
         ),
@@ -53,32 +67,44 @@ class _AmbientLayer extends ConsumerWidget {
 
   final String path;
 
+  /// 按模块前缀内存缓存最近一次有效 `ambientUrl`，避免切页时 provider
+  /// 短暂空值导致回退黑底再切回封面、二次触发 1.6s 环境光闪烁。
+  static final Map<String, String> _lastAmbientByModule = <String, String>{};
+
+  static String? _modulePrefix(String path) {
+    if (path.startsWith('/music')) return '/music';
+    if (path.startsWith('/video')) return '/video';
+    if (path.startsWith('/reader')) return '/reader';
+    if (path.startsWith('/photos')) return '/photos';
+    return null;
+  }
+
   String? _resolveAmbientImage(WidgetRef ref) {
-    if (path.startsWith('/music')) {
-      return ref.watch(
+    final prefix = _modulePrefix(path);
+    String? resolved;
+    if (prefix == '/music') {
+      resolved = ref.watch(
         musicPortalSnapshotProvider.select((snapshot) {
           final music = snapshot.asData?.value;
           return music?.activeTrack?.coverUrl ?? music?.featuredAlbum?.coverUrl;
         }),
       );
-    }
-    if (path.startsWith('/video')) {
-      return ref.watch(
+    } else if (prefix == '/video') {
+      resolved = ref.watch(
         movieDashboardProvider.select((dashboard) {
           for (final item
               in dashboard.asData?.value.recentlyAdded ??
                   const <MovieVideoItem>[]) {
             final image = item.backdropImageUrl ?? item.posterImageUrl;
-            if (image != null) {
+            if (image != null && image.isNotEmpty) {
               return image;
             }
           }
           return null;
         }),
       );
-    }
-    if (path.startsWith('/reader')) {
-      return ref.watch(
+    } else if (prefix == '/reader') {
+      resolved = ref.watch(
         readerDashboardProvider.select((dashboard) {
           for (final item
               in dashboard.asData?.value.continueReading ??
@@ -91,22 +117,29 @@ class _AmbientLayer extends ConsumerWidget {
           return null;
         }),
       );
-    }
-    if (path.startsWith('/photos')) {
-      return ref.watch(
+    } else if (prefix == '/photos') {
+      resolved = ref.watch(
         photoDashboardProvider.select((dashboard) {
           for (final item
               in dashboard.asData?.value.recentPhotos ?? const <PhotoItem>[]) {
-            if (item.coverUrl != null) {
-              return item.coverUrl;
+            final cover = item.coverUrl;
+            if (cover != null && cover.isNotEmpty) {
+              return cover;
             }
           }
           return null;
         }),
       );
+    } else {
+      // 随包资产而不是网络 URL：`DesktopAmbient` 按前缀识别并走 `Image.asset`。
+      return bundledDefaultWallpaperAssetPath;
     }
-    // 随包资产而不是网络 URL：`DesktopAmbient` 按前缀识别并走 `Image.asset`。
-    return bundledDefaultWallpaperAssetPath;
+
+    if (resolved != null && resolved.isNotEmpty) {
+      _lastAmbientByModule[prefix!] = resolved;
+      return resolved;
+    }
+    return _lastAmbientByModule[prefix];
   }
 
   @override
@@ -129,7 +162,7 @@ class _AmbientLayer extends ConsumerWidget {
 }
 
 /// 页面入场（样例 `.route`）：纯 GPU 合成层 `FadeTransition(alwaysIncludeSemantics: true)` +
-/// `SlideTransition` + `ScaleTransition`（300ms，`DesktopMotion.ease`），拓扑恒定不插拔节点。
+/// `SlideTransition` + `ScaleTransition`（180ms，`DesktopMotion.ease`），拓扑恒定不插拔节点。
 ///
 /// 桌面工作区（`DesktopShellMode.chrome`）内的一级分支与常规/二级路由统一由本层
 /// 单一承载过渡，不再与内层分支动画或路由动画叠跑，也不再强行展示伪进度条。
@@ -145,7 +178,7 @@ class _RouteEnter extends StatefulWidget {
 
 class _RouteEnterState extends State<_RouteEnter>
     with SingleTickerProviderStateMixin {
-  static const Duration _transitionDuration = Duration(milliseconds: 300);
+  static const Duration _transitionDuration = Duration(milliseconds: 180);
 
   late final AnimationController _controller = AnimationController(
     vsync: this,

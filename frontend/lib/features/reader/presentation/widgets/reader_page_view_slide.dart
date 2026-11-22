@@ -1,6 +1,6 @@
 part of 'reader_page_view.dart';
 
-/// Slide 模式 PageView、点击热区与探测页（支持 RTL、鼠标拖拽开关与缩放态拖拽锁）。
+/// Slide 模式 PageView、点击热区与探测页（支持 RTL、鼠标拖拽开关、全表面拖拽与缩放态拖拽锁）。
 extension _ReaderPageViewSlide on _ReaderPageViewState {
   // ══════════════════════════════════════════
   // Slide 模式：PageView + 交互层
@@ -175,14 +175,13 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
         !widget.selectionActive &&
         delta.dx.abs() > 4.0 &&
         delta.dx.abs() > delta.dy.abs() * 0.45) {
-      // Book 模式的拖拽从页边开始，正文中段仍然留给文字选择；鼠标和触摸
-      // 共用这条路径，桌面端不能因为 PointerDeviceKind 是 mouse 而退化成
-      // 只有点按箭头才能翻页。
+      // Book 模式的拖拽从页边开始，正文中段仍然留给文字选择；
+      // 当 fullSurfaceDrag 开启（漫画等无选字场景）时解除边缘限制，允许中段自然拖拽掀页。
       final width = context.size?.width ?? 1;
       final startX = _pointerDownPosition!.dx;
-      // 桌面端鼠标左右各 22% 边缘可直接拖拽翻页，中段 22%~78% 完整留给丝滑选字。
       final edgeRatio = _pointerKind == PointerDeviceKind.mouse ? 0.22 : 0.30;
       final edgeStart =
+          widget.fullSurfaceDrag ||
           width <= 1 ||
           startX < width * edgeRatio ||
           startX > width * (1.0 - edgeRatio);

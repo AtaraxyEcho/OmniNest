@@ -16,6 +16,7 @@ import 'package:omninest/features/music/presentation/player/music_immersive_over
 import 'package:omninest/features/music/presentation/player/music_immersive_preset_editor.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playing_bars.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 样例同源矢量的判定：手机控件换成描边图元后，不能再按 Material IconData 找。
 Finder omniIcon(OmniIconsData icon) => find.byWidgetPredicate(
@@ -167,7 +168,7 @@ Widget _testApp(MusicAudioPlayback player) {
     child: MaterialApp(
       theme: ThemeData.dark().copyWith(splashFactory: NoSplash.splashFactory),
       locale: const Locale('zh'),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: MusicImmersiveOverlay(onClose: () {}),
     ),

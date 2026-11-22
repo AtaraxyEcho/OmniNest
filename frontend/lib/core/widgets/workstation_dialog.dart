@@ -607,20 +607,23 @@ class WorkstationDialogFrame extends StatelessWidget {
     if (inMobileSheet) {
       surface = Material(color: Colors.transparent, child: column);
     } else if (useDesktopSurface) {
-      surface = Material(
-        type: MaterialType.transparency,
-        child: Container(
-          width: width,
-          constraints: BoxConstraints(
-            maxWidth: width,
-            maxHeight: MediaQuery.sizeOf(context).height - 96,
-          ),
-          decoration: BoxDecoration(
-            color: desktopSkin.panelSolid,
-            borderRadius: BorderRadius.circular(DesktopMetrics.radiusDialog),
-            border: Border.all(color: desktopSkin.line2),
-            boxShadow: desktopSkin.shadow,
-          ),
+      final radius = BorderRadius.circular(DesktopMetrics.radiusDialog);
+      surface = Container(
+        width: width,
+        constraints: BoxConstraints(
+          maxWidth: width,
+          maxHeight: MediaQuery.sizeOf(context).height - 96,
+        ),
+        decoration: BoxDecoration(
+          color: desktopSkin.panelSolid,
+          borderRadius: radius,
+          border: Border.all(color: desktopSkin.line2),
+          boxShadow: desktopSkin.shadow,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Material(
+          type: MaterialType.transparency,
+          borderRadius: radius,
           clipBehavior: Clip.antiAlias,
           child: column,
         ),

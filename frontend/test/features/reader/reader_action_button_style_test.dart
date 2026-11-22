@@ -8,6 +8,7 @@ import 'package:omninest/features/files/media_import_ui.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_import_queue_cards.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_library_import_action.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   testWidgets('添加图书使用主题描边按钮尺寸与圆角', (tester) async {
@@ -20,7 +21,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           locale: const Locale('zh'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: OmniNestTheme.dark(),
           home: const Scaffold(body: ImportFromDeviceButton()),
@@ -59,7 +60,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           locale: const Locale('zh'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: OmniNestTheme.dark(),
           home: Scaffold(
@@ -114,7 +115,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           locale: const Locale('zh'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: OmniNestTheme.dark(),
           home: const Scaffold(

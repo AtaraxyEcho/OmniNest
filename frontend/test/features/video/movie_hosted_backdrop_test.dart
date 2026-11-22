@@ -15,6 +15,7 @@ import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_scene_scope.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_shell.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 Future<ProviderContainer> _pump(
   WidgetTester tester, {
@@ -36,7 +37,7 @@ Future<ProviderContainer> _pump(
       container: container,
       child: MaterialApp(
         theme: OmniNestTheme.from(AppThemePalette.dark),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: AppBackdropSceneScope(

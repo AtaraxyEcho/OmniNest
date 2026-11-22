@@ -11,6 +11,7 @@ import 'package:omninest/features/admin/presentation/widgets/admin_common_widget
 import 'package:omninest/features/admin/presentation/widgets/admin_list_components.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_redesign_components.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_trend_charts.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 AdminConsoleSummary _fakeSummary() {
   return AdminConsoleSummary(
@@ -115,7 +116,7 @@ Future<void> _pumpOverview(
       ],
       child: MaterialApp(
         theme: OmniNestTheme.dark(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: Scaffold(

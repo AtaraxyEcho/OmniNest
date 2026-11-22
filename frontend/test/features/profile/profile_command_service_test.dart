@@ -10,6 +10,7 @@ import 'package:omninest/features/profile/application/profile_controller.dart';
 import 'package:omninest/features/profile/domain/profile_repository.dart';
 import 'package:omninest/features/profile/domain/user_session.dart';
 import 'package:omninest/features/profile/presentation/widgets/change_password_dialog.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   test('个人资料应用服务转发写操作', () async {
@@ -43,7 +44,7 @@ void main() {
       ProviderScope(
         overrides: [profileCommandServiceProvider.overrideWithValue(service)],
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           theme: OmniNestTheme.from(AppThemePalette.dark),

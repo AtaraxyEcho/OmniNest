@@ -8,6 +8,7 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_session_store_base.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 /// 账户面板规范测试：矮屏/大字号不溢出，行副标题与双行状态在位。
 void main() {
@@ -33,7 +34,7 @@ void main() {
         child: MediaQuery(
           data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
           child: MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: kOmniNestLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('zh'),
             theme: OmniNestTheme.dark(),

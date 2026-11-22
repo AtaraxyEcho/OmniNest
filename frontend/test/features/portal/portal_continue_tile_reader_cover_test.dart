@@ -6,6 +6,7 @@ import 'package:omninest/features/portal/presentation/widgets/reading_progress_w
 import 'package:omninest/features/reader/application/reader_image_provider.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 void main() {
   testWidgets('继续使用阅读进度卡走 AuthCoverImage，不用接口路径当图片地址', (tester) async {
@@ -15,7 +16,7 @@ void main() {
           coverBytesProvider.overrideWith((ref, itemId) async => null),
         ],
         child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('zh'),
           home: Scaffold(

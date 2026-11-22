@@ -10,6 +10,7 @@ import 'package:omninest/features/admin/data/admin_operations_api.dart';
 import 'package:omninest/features/admin/domain/admin_operations.dart';
 import 'package:omninest/features/admin/domain/admin_paging.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_operations_pages.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 class _MockAdminOperationsApi extends Mock implements AdminOperationsApi {}
 
@@ -75,7 +76,7 @@ Future<void> _pumpSessionsPage(
       ],
       child: MaterialApp(
         theme: OmniNestTheme.dark(),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: Scaffold(body: const AdminSessionsPage()),

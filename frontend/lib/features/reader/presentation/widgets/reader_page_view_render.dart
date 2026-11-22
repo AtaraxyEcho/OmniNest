@@ -1,6 +1,6 @@
 part of 'reader_page_view.dart';
 
-/// 页面占位、静止态 RepaintBoundary 挂载与 0-Rebuild 卷页渲染（v6：支持 RTL 双页与 showPaperGrain）。
+/// 页面占位、静止态 RepaintBoundary 挂载与 0-Rebuild 卷页渲染（v7：支持 deskColor / seamlessSpine / bookmarkOnLeft 与单页书壳透明底）。
 extension _ReaderPageViewRender on _ReaderPageViewState {
   Widget _buildPageOrEmpty(int index) {
     final page = widget.pageBuilder(index);
@@ -43,8 +43,11 @@ extension _ReaderPageViewRender on _ReaderPageViewState {
         right: right,
         surfaceColor: widget.surfaceColor,
         paperEdgeColor: widget.paperEdgeColor,
+        deskColor: widget.deskColor,
         showPaperGrain: widget.showPaperGrain,
+        seamlessSpine: widget.seamlessSpine,
         bookmarked: widget.bookmarked,
+        bookmarkOnLeft: widget.bookmarkOnLeft,
         leftBoundaryKey: _liveLeftKey,
         rightBoundaryKey: _liveRightKey,
         progress: widget.reverse ? (1.0 - rawProgress) : rawProgress,
@@ -54,6 +57,7 @@ extension _ReaderPageViewRender on _ReaderPageViewState {
     final current = singleOverride ?? _currentPageWidget ?? pageAt(idx);
     return Stack(
       fit: StackFit.expand,
+      clipBehavior: Clip.none,
       children: [
         RepaintBoundary(key: _liveSingleKey, child: _constrainPage(current)),
         Positioned.fill(
@@ -147,6 +151,10 @@ extension _ReaderPageViewRender on _ReaderPageViewState {
   }
 
   Widget _constrainPage(Widget? page) {
+    // 仿真单页书壳或 seamlessSpine 场景下避免套一层不透明 ColoredBox 遮挡书桌圆角与投影。
+    if (!widget.spread && (widget.seamlessSpine || widget.deskColor != null)) {
+      return SizedBox.expand(child: page);
+    }
     return SizedBox.expand(
       child: ColoredBox(color: widget.surfaceColor, child: page),
     );
