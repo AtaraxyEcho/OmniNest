@@ -4,7 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:material_ui/material_ui.dart';
 
-import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
+import 'package:omninest/app/desktop/desktop_ambient_mesh.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
@@ -12,14 +12,15 @@ import 'package:omninest/core/theme/motion_token.dart';
 
 /// 桌面环境光层（样例 `Shell.tsx` 的 `Ambient`）。
 ///
-/// 三件事叠出「界面浮在环境里」：当前模块封面的饱和投影（样例无 blur）、
-/// 三团缓慢漂移的色场、以及把中心让给内容的暗纱。强度由外观设置的 ambient
-/// 控制，关闭减动效时漂移停在静帧而不是逐帧空转。
+/// 四层叠出「界面浮在环境里」：当前模块封面的 `4×3` 矢量色网（零马赛克、零 blur）、
+/// 可选的右侧 64% 高清编辑艺术面板（`showArt: true`）、三团缓慢漂移的色场、
+/// 以及把中心让给内容的暗纱。强度由外观设置的 ambient 控制，关闭减动效时漂移停在静帧。
 class DesktopAmbient extends StatefulWidget {
   const DesktopAmbient({
     required this.imageUrl,
     required this.intensity,
     required this.reduceMotion,
+    this.showArt = false,
     super.key,
   });
 
@@ -28,6 +29,9 @@ class DesktopAmbient extends StatefulWidget {
   /// 0-100。
   final double intensity;
   final bool reduceMotion;
+
+  /// Movies / Photos / Music / Reader 路由启用右侧 64% 高清艺术面板。
+  final bool showArt;
 
   @override
   State<DesktopAmbient> createState() => _DesktopAmbientState();
@@ -93,7 +97,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     duration: DesktopMotion.blobCycleSlow,
     vsync: this,
   );
-  // 样例 `.amb-img.in` 的 `drift 40s alternate`：封面自身也缓慢推拉。
+  // 样例 `.amb-img.in` 的 `drift 40s alternate`：色网自身也缓慢推拉。
   // 变换挂在保留边界**之上**，边界内的画面只录一次，漂移走合成变换。
   late final AnimationController _drift = AnimationController(
     duration: DesktopMotion.blobCycleSlow,
@@ -151,15 +155,14 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     _syncMotion();
   }
 
+  bool get _canAnimate =>
+      !_resizing &&
+      !widget.reduceMotion &&
+      !MotionToken.prefersReducedOnPlatform() &&
+      widget.intensity > 0;
+
   void _syncMotion() {
-    // 缩放期间连漂移也停：整屏 blob 每帧重画一次，在拖边的每一帧上
-    // 都是纯浪费，而且 DWM 会把这一帧和上一帧混在一起看起来像残影。
-    final animate =
-        !_resizing &&
-        !widget.reduceMotion &&
-        !MotionToken.prefersReducedOnPlatform() &&
-        widget.intensity > 0;
-    if (animate) {
+    if (_canAnimate) {
       for (final controller in [_blobA, _blobB, _blobC, _drift]) {
         if (!controller.isAnimating) {
           controller.repeat(reverse: true);
@@ -205,7 +208,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
       child: IgnorePointer(
         // 移除外层 AnimatedOpacity，避免 Windows Skia 每帧对整屏环境光执行
         // 离屏 saveLayer；改为仅在 intensity 变化时用 TweenAnimationBuilder 补间，
-        // 并将系数直接乘入封面、三团色块与暗纱/噪点各自的 alpha。
+        // 并将系数直接乘入色网、艺术面板、三团色块与暗纱/噪点各自的 alpha。
         child: TweenAnimationBuilder<double>(
           tween: Tween<double>(end: targetIntensity),
           duration: DesktopMotion.ambientLayer,
@@ -219,11 +222,15 @@ class _DesktopAmbientState extends State<DesktopAmbient>
             final veilColor = skin.veil.withValues(
               alpha: (skin.veil.a * veilOpacity).clamp(0.0, 1.0),
             );
+            // 对齐 desktop.css:170 `.amb-veil` 线性底色为 veil 70%。
+            final linearVeilColor = veilColor.withValues(
+              alpha: (veilColor.a * 0.70).clamp(0.0, 1.0),
+            );
             return Stack(
               fit: StackFit.expand,
               children: [
-                // 静态层：只有换封面、改尺寸或调强度时重绘。drift 变换挂在边界之上，
-                // 边界内画面保留，漂移不触发重录（样例走 CSS transform 同理）。
+                // 静态层：4×3 矢量色网，只有换封面、改尺寸或调强度时重绘。
+                // drift 变换挂在边界之上，边界内画面保留，漂移不触发重录。
                 if (hasCover)
                   AnimatedBuilder(
                     animation: _drift,
@@ -253,6 +260,17 @@ class _DesktopAmbientState extends State<DesktopAmbient>
                     child: RepaintBoundary(
                       key: const ValueKey('ambient-cover'),
                       child: _coverStack(skin, intensityFactor),
+                    ),
+                  ),
+                // 右侧 64% 高清编辑艺术面板（独立 RepaintBoundary，不污染 ambient-cover）。
+                if (hasCover && widget.showArt)
+                  RepaintBoundary(
+                    key: const ValueKey('ambient-art'),
+                    child: EditorialArtPanel(
+                      source: widget.imageUrl!,
+                      isDark: skin.isDark,
+                      intensityFactor: intensityFactor,
+                      animate: _canAnimate,
                     ),
                   ),
                 // 样例 `.blob` 是「光栅一次的径向渐变纹理 + 合成器 transform」。
@@ -299,21 +317,21 @@ class _DesktopAmbientState extends State<DesktopAmbient>
                   ),
                 ),
                 // 静态层：暗纱 alpha 直接折叠进绘制颜色，噪点用 128×128 离屏瓦片平铺，
-                // 彻底消除 Opacity saveLayer 与逐像素 4200 次 drawRect。
+                // 彻底消除 Opacity saveLayer 与逐像素 drawRect。
                 RepaintBoundary(
                   key: const ValueKey('ambient-veil'),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      // CSS 先铺线性实色，再叠径向透明到 veil 的渐变。
-                      ColoredBox(color: veilColor),
+                      // CSS 先铺 70% 线性实色，再叠径向 10%→95% 透明到 veil 的渐变。
+                      ColoredBox(color: linearVeilColor),
                       DecoratedBox(
                         decoration: BoxDecoration(
                           gradient: RadialGradient(
                             center: Alignment.topCenter,
                             radius: 1.25,
                             colors: [Colors.transparent, veilColor],
-                            stops: const [0.0, 0.85],
+                            stops: const [0.10, 0.95],
                           ),
                         ),
                       ),
@@ -333,9 +351,6 @@ class _DesktopAmbientState extends State<DesktopAmbient>
       ),
     );
   }
-
-  /// 抽样宽度：样例 `Mush` 把封面画进 64×40 的 canvas 再铺满 112%。
-  static const int _mushWidth = 64;
 
   /// 封面换页：样例 `Shell.tsx` 只留最多两层——旧层 `.out` 1.6s 淡出，
   /// 新层 `.in` 1.6s 淡入。直接换图会在切路由时硬切一下。
@@ -360,45 +375,18 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     );
   }
 
-  /// 样例 `.amb-img { filter: saturate(1.6) }`：**只有饱和，没有 blur**。
-  ///
-  /// 封面不是照片：样例 `Mush` 先画进 64×40 的 canvas 再拉伸铺满，环境光
-  /// 只保留大块色彩，不保留照片细节——这正是它看起来像「光」而不是
-  /// 「壁纸」的原因。这里用 `ResizeImage(64)` 复刻同一步（顺带把 4K 解码
-  /// 降到 64px）。
-  ///
-  /// `assets/` 前缀是随包默认场景（模块没有可借的当前内容时用它），其余
-  /// 一律按网络地址处理：默认场景绝不能走网络加载，asset key 会被当成
-  /// URL 请求失败，安静地只剩色场。
+  /// 样例 `.amb-img.amb-mesh`：4×3 矢量色网 + `saturate(1.55) brightness(1.05)`，
+  /// 彻底移除 `_mushWidth = 64` 裸拉伸，任意分辨率 0 马赛克。
   Widget _cover(DesktopSkin skin, String source, double intensityFactor) {
-    final ImageProvider<Object> provider =
-        source.startsWith('assets/')
-            ? AssetImage(source)
-            : NetworkImage(source);
-    final coverAlpha = ((skin.isDark ? 0.55 : 0.40) * intensityFactor).clamp(
+    final meshAlpha = ((skin.isDark ? 0.85 : 0.55) * intensityFactor).clamp(
       0.0,
       1.0,
     );
-    return ColorFiltered(
-      colorFilter: desktopColorGrade(saturation: 1.6),
-      child: Image(
-        image: ResizeImage(provider, width: _mushWidth),
-        fit: BoxFit.cover,
-        gaplessPlayback: true,
-        filterQuality: FilterQuality.low,
-        opacity: AlwaysStoppedAnimation<double>(coverAlpha),
-        // 样例 `.mush { opacity: 0; transition: opacity 1.2s }` + `.ok`：
-        // 首帧解码完成才淡入，避免从空画布硬闪。
-        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-          return AnimatedOpacity(
-            opacity: (wasSynchronouslyLoaded || frame != null) ? 1 : 0,
-            duration: DesktopMotion.ambientCoverFade,
-            curve: Curves.ease,
-            child: child,
-          );
-        },
-        errorBuilder: (context, error, stack) => const SizedBox.shrink(),
-      ),
+    return DesktopAmbientMeshSurface(
+      source: source,
+      opacity: meshAlpha,
+      saturation: 1.55,
+      brightness: 1.05,
     );
   }
 

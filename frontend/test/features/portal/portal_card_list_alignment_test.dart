@@ -2,17 +2,14 @@ import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_visual_widgets.dart';
 
 void main() {
   testWidgets('Portal 模块快捷卡片列表从左侧开始排列', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          ...GlobalMaterialLocalizations.delegates,
-        ],
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: const [Locale('zh'), Locale('en')],
         home: Scaffold(
           body: Builder(
@@ -38,10 +35,7 @@ void main() {
   testWidgets('可点击指标行胶囊高亮留出内边距且与静态行对齐', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          ...GlobalMaterialLocalizations.delegates,
-        ],
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: const [Locale('zh'), Locale('en')],
         home: Scaffold(
           body: Builder(

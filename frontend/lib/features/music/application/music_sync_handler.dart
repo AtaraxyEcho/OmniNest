@@ -20,6 +20,9 @@ class MusicSyncHandler implements RealtimeScopeHandler {
   /// 命中预热或回源一次；强制刷新会把缓存再失效一遍，扫码确认后等于全量回源两遍。
   static const String _platformLibraryResourceType = 'MUSIC_PLATFORM';
 
+  /// 单曲更新事件（如收藏切换回波）：走轻量化就地刷新，避免整页 `_loadState` 抖动。
+  static const String _trackResourceType = 'MUSIC_TRACK';
+
   @override
   RealtimeScope get scope => RealtimeScope.music;
 
@@ -38,6 +41,29 @@ class MusicSyncHandler implements RealtimeScopeHandler {
       }
       _auxiliaryRevisions.clear(invalidations);
       return true;
+    }
+    if (_isTrackUpdateOnly(auxiliary)) {
+      if (ref.exists(musicFavoriteTracksProvider)) {
+        ref.invalidate(musicFavoriteTracksProvider);
+        final _ = await ref.refresh(musicFavoriteTracksProvider.future);
+      }
+      if (!ref.exists(musicCenterControllerProvider)) {
+        _auxiliaryRevisions.clear(invalidations);
+        return true;
+      }
+      await ref.read(musicCenterControllerProvider.future);
+      final trackIds = auxiliary
+          .map((item) => item.resourceId)
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toList(growable: false);
+      final handled = await ref
+          .read(musicCenterControllerProvider.notifier)
+          .syncTracksLightweight(trackIds);
+      if (handled) {
+        _auxiliaryRevisions.clear(invalidations);
+        return true;
+      }
     }
     if (auxiliary.isNotEmpty && ref.exists(musicDashboardProvider)) {
       final _ = await ref.refresh(musicDashboardProvider.future);
@@ -67,6 +93,17 @@ class MusicSyncHandler implements RealtimeScopeHandler {
         invalidations.every(
           (invalidation) =>
               invalidation.resourceType == _playHistoryResourceType,
+        );
+  }
+
+  /// 本批失效是否全部为带 resourceId 的单曲更新（如收藏变更）。
+  bool _isTrackUpdateOnly(List<RealtimeInvalidation> invalidations) {
+    return invalidations.isNotEmpty &&
+        invalidations.every(
+          (invalidation) =>
+              invalidation.resourceType == _trackResourceType &&
+              invalidation.resourceId != null &&
+              invalidation.resourceId!.isNotEmpty,
         );
   }
 

@@ -94,6 +94,11 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
       ReaderPageTurnController();
   final ReaderPanelCoordinator _panelCoordinator = ReaderPanelCoordinator();
   final ReaderCommandGate _readerCommandGate = ReaderCommandGate();
+
+  /// Book 模式翻页使用轻量 60ms 防抖门，对齐漫画阅读器连翻手感。
+  final ReaderCommandGate _bookPageCommandGate = ReaderCommandGate(
+    interval: const Duration(milliseconds: 60),
+  );
   VoidCallback? _volumeKeyEventCancel;
   bool _volumeKeyPagingPushed = false;
   final ReaderChapterLoadCoordinator _chapterLoadCoordinator =

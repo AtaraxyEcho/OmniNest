@@ -1,7 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:toastification/toastification.dart';
 import 'package:omninest/features/reader/application/reader_data_manager.dart';
@@ -46,10 +46,7 @@ void main() {
         config: omniFeedbackToastConfig,
         child: MaterialApp(
           locale: const Locale('zh'),
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            ...GlobalMaterialLocalizations.delegates,
-          ],
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: const [Locale('zh'), Locale('en')],
           home: Scaffold(
             body: Builder(
@@ -316,10 +313,7 @@ void main() {
         config: omniFeedbackToastConfig,
         child: MaterialApp(
           locale: const Locale('zh'),
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            ...GlobalMaterialLocalizations.delegates,
-          ],
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: const [Locale('zh'), Locale('en')],
           home: Scaffold(
             body: Builder(
@@ -511,10 +505,7 @@ void main() {
     Widget panelHost(Widget Function(BuildContext context) build) {
       return MaterialApp(
         locale: const Locale('zh'),
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          ...GlobalMaterialLocalizations.delegates,
-        ],
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: const [Locale('zh'), Locale('en')],
         home: Scaffold(
           body: SizedBox(height: 600, child: Builder(builder: build)),

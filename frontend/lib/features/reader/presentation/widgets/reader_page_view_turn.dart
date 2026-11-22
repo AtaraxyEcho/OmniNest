@@ -15,22 +15,30 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
     if (!widget.dragEnabled) {
       return;
     }
-    if (event.scrollDelta.dy.abs() < 24) {
-      return;
-    }
-    final now = DateTime.now();
-    final last = _lastWheelAt;
-    if (last != null &&
-        now.difference(last) < _ReaderPageViewState._wheelThrottle) {
-      return;
-    }
-    _lastWheelAt = now;
-    if (widget.selectionActive) widget.onClearSelection?.call();
-    if (event.scrollDelta.dy > 0) {
-      _goNextPage(tapTurn: true);
-    } else {
-      _goPreviousPage(tapTurn: true);
-    }
+    final dx = event.scrollDelta.dx;
+    final dy = event.scrollDelta.dy;
+    final primaryDelta = dy.abs() >= dx.abs() ? dy : dx;
+    GestureBinding.instance.pointerSignalResolver.register(event, (_) {
+      if (!mounted || !widget.dragEnabled) {
+        return;
+      }
+      if (primaryDelta.abs() < 24) {
+        return;
+      }
+      final now = DateTime.now();
+      final last = _lastWheelAt;
+      if (last != null &&
+          now.difference(last) < _ReaderPageViewState._wheelThrottle) {
+        return;
+      }
+      _lastWheelAt = now;
+      if (widget.selectionActive) widget.onClearSelection?.call();
+      if (primaryDelta > 0) {
+        _goNextPage(tapTurn: true);
+      } else {
+        _goPreviousPage(tapTurn: true);
+      }
+    });
   }
 
   void _onExternalPageCommand() {
@@ -207,8 +215,13 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
             : widget.state.pageIndex;
     final nextIndex = basePage + pageStep;
     final atBoundary = nextIndex >= _localPageCount && !widget.state.hasMore;
+    final canCurlCrossChapter =
+        atBoundary &&
+        widget.turnMode == PageTurnMode.cover &&
+        widget.state.hasNextChapter &&
+        widget.crossChapterSnapshotBuilder != null;
 
-    if (atBoundary) {
+    if (atBoundary && !canCurlCrossChapter) {
       _debugPageTurn(
         'nextBoundaryRequest',
         detail:
@@ -335,8 +348,13 @@ extension _ReaderPageViewTurn on _ReaderPageViewState {
             ? (ctrl.page?.round() ?? widget.state.pageIndex)
             : widget.state.pageIndex;
     final atBoundary = basePage <= 0;
+    final canCurlCrossChapter =
+        atBoundary &&
+        widget.turnMode == PageTurnMode.cover &&
+        widget.state.hasPreviousChapter &&
+        widget.crossChapterSnapshotBuilder != null;
 
-    if (atBoundary) {
+    if (atBoundary && !canCurlCrossChapter) {
       _debugPageTurn('previousBoundaryRequest');
       _dispatchBoundaryRequest(
         widget.callbacks.onPreviousChapter,

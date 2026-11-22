@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
@@ -149,7 +150,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: _testTheme(TargetPlatform.windows),
-        localizationsDelegates: _localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SizedBox(
@@ -179,7 +180,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: _testTheme(TargetPlatform.windows),
-        localizationsDelegates: _localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: SizedBox(
@@ -217,7 +218,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: _testTheme(),
-        localizationsDelegates: _localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: MusicDeckTrackList(
@@ -290,7 +291,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: OmniNestTheme.light(),
-        localizationsDelegates: _localizationsDelegates,
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: MusicDeckSearchField(
@@ -319,8 +320,3 @@ ThemeData _testTheme([TargetPlatform? platform]) {
     splashFactory: InkRipple.splashFactory,
   );
 }
-
-const _localizationsDelegates = <LocalizationsDelegate<dynamic>>[
-  AppLocalizations.delegate,
-  ...GlobalMaterialLocalizations.delegates,
-];

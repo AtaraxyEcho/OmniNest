@@ -45,7 +45,7 @@ _nonce_lock = threading.Lock()
 # 插入顺序即过期时间顺序（TTL 固定），队首永远是最早过期的条目；
 # 用 dict 时满载淘汰要全表扫描并阻塞 _nonce_lock，是单请求就能触发的拒绝服务面。
 _seen_nonces: OrderedDict[str, float] = OrderedDict()
-SIDECAR_SECRET = os.environ.get("OMNINEST_AI_SIDECAR_SECRET", "")
+SIDECAR_SECRET = os.environ.get("OMNINEST_AI_SIDECAR_SECRET", "").strip()
 MAX_IMAGE_BYTES = int(os.environ.get("AI_MAX_IMAGE_BYTES", str(64 * 1024 * 1024)))
 MAX_IMAGE_WIDTH = int(os.environ.get("AI_MAX_IMAGE_WIDTH", "30000"))
 MAX_IMAGE_HEIGHT = int(os.environ.get("AI_MAX_IMAGE_HEIGHT", "30000"))
@@ -306,7 +306,7 @@ class ModelLifecycleManager:
                 if self._lw_session is None:
                     started_at = time.monotonic()
                     options = _build_restricted_session_options()
-                    self._lw_session = ort.InferenceSession(
+                    session = ort.InferenceSession(
                         LIGHTWEIGHT_VISION_ONNX_PATH,
                         sess_options=options,
                         providers=VISION_EXECUTION_PROVIDERS,
@@ -316,15 +316,21 @@ class ModelLifecycleManager:
                         codes = [str(value) for value in data["codes"]]
                         embeddings = np.asarray(data["embeddings"], dtype=np.float32)
                         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-                        self._lw_text_embeds = embeddings / np.clip(norms, 1e-6, None)
-                        self._lw_labels = list(zip(namespaces, codes))
+                        embeds = embeddings / np.clip(norms, 1e-6, None)
+                        labels = list(zip(namespaces, codes))
                         mean = data["image_mean"] if "image_mean" in data else self.DEFAULT_IMAGE_MEAN
                         std = data["image_std"] if "image_std" in data else self.DEFAULT_IMAGE_STD
-                        self._lw_image_mean = np.asarray(mean, dtype=np.float32).reshape(1, 1, 3)
-                        self._lw_image_std = np.asarray(std, dtype=np.float32).reshape(1, 1, 3)
+                        image_mean = np.asarray(mean, dtype=np.float32).reshape(1, 1, 3)
+                        image_std = np.asarray(std, dtype=np.float32).reshape(1, 1, 3)
+                    # 先写入所有配套字段，最后发布 _lw_session，避免无锁快路径观察到半初始化状态。
+                    self._lw_text_embeds = embeds
+                    self._lw_labels = labels
+                    self._lw_image_mean = image_mean
+                    self._lw_image_std = image_std
+                    self._lw_session = session
                     logger.info(
                         "Lightweight 视觉模型加载完成: labels=%d, 耗时 %.2fs",
-                        len(self._lw_labels),
+                        len(labels),
                         time.monotonic() - started_at,
                     )
         return (
@@ -336,10 +342,17 @@ class ModelLifecycleManager:
         )
 
     def acquire_ram_session(self) -> Tuple[Optional[ort.InferenceSession], List[Tuple[str, str]]]:
-        if VISION_PROFILE != "ram_plus_int8" or not os.path.isfile(RAM_ONNX_PATH):
+        if (
+            VISION_PROFILE != "ram_plus_int8"
+            or not (os.path.isfile(RAM_ONNX_PATH) and os.path.isfile(RAM_TAGS_PATH))
+        ):
             if VISION_PROFILE == "ram_plus_int8" and not self._ram_missing_logged:
                 self._ram_missing_logged = True
-                logger.warning("RAM++ 模型文件缺失，视觉标签暂不可用: %s", RAM_ONNX_PATH)
+                logger.warning(
+                    "RAM++ 模型或词表文件缺失，视觉标签暂不可用: onnx=%s, tags=%s",
+                    RAM_ONNX_PATH,
+                    RAM_TAGS_PATH,
+                )
             return None, []
         with self._lock:
             self._ram_last_used = time.monotonic()
@@ -347,20 +360,23 @@ class ModelLifecycleManager:
                 started_at = time.monotonic()
                 logger.info("按需懒加载 RAM++ INT8 ONNX 模型: %s", RAM_ONNX_PATH)
                 options = _build_restricted_session_options()
-                self._ram_session = ort.InferenceSession(
+                session = ort.InferenceSession(
                     RAM_ONNX_PATH,
                     sess_options=options,
                     providers=VISION_EXECUTION_PROVIDERS,
                 )
-                if not self._ram_tags and os.path.isfile(RAM_TAGS_PATH):
+                tags = self._ram_tags
+                if not tags:
                     with open(RAM_TAGS_PATH, "r", encoding="utf-8") as handle:
-                        self._ram_tags = [
+                        tags = [
                             tuple(line.strip().split("\t")[:2])
                             if "\t" in line
                             else (line.strip(), line.strip())
                             for line in handle
                             if line.strip()
                         ]
+                self._ram_tags = tags
+                self._ram_session = session
                 logger.info("RAM++ ONNX 加载完成，耗时 %.2fs", time.monotonic() - started_at)
             return self._ram_session, self._ram_tags
 
@@ -562,7 +578,11 @@ def _decode_single_pass_bgr(raw_bytes: bytes) -> np.ndarray:
                         Image.Resampling.LANCZOS,
                     )
                 rgb = decoded.convert("RGB")
-                return cv2.cvtColor(np.asarray(rgb), cv2.COLOR_RGB2BGR)
+                try:
+                    return cv2.cvtColor(np.asarray(rgb), cv2.COLOR_RGB2BGR)
+                finally:
+                    if rgb is not decoded:
+                        rgb.close()
             finally:
                 if decoded is not raw_image:
                     decoded.close()
@@ -786,7 +806,7 @@ def _analyze_content_sync(contents: bytes, hint: str, skip_ocr: bool) -> Content
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 配置遗漏必须在容器启动阶段暴露：否则健康检查通过，首批 AI 任务才逐请求 503。
-    if len(SIDECAR_SECRET.strip()) < 32:
+    if len(SIDECAR_SECRET) < 32:
         raise RuntimeError(
             "OMNINEST_AI_SIDECAR_SECRET 未配置或长度不足 32 字符，拒绝启动"
         )
@@ -806,7 +826,11 @@ async def lifespan(app: FastAPI):
     yield
     stop_event.set()
     eviction_task.cancel()
-    model_manager.shutdown()
+    try:
+        await eviction_task
+    except asyncio.CancelledError:
+        pass
+    await asyncio.to_thread(model_manager.shutdown)
 
 
 app = FastAPI(title="OmniNest Image Analysis Sidecar", version="6.0.0", lifespan=lifespan)

@@ -797,8 +797,9 @@ extension _ComicReaderViewSections on ComicReaderViewState {
   void _handleCtrlWheelZoom(
     PointerSignalEvent event,
     int slotIndex,
-    Size slotSize,
-  ) {
+    Size slotSize, {
+    Offset? focalPoint,
+  }) {
     if (event is! PointerScrollEvent) return;
     final hardware = HardwareKeyboard.instance;
     if (!hardware.isControlPressed && !hardware.isMetaPressed) return;
@@ -806,7 +807,7 @@ extension _ComicReaderViewSections on ComicReaderViewState {
     _applyZoomScaleToSlot(
       slotIndex,
       _currentZoomScale + delta,
-      focalPoint: event.localPosition,
+      focalPoint: focalPoint ?? event.localPosition,
       viewportSize: slotSize,
     );
   }

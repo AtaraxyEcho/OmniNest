@@ -288,11 +288,17 @@ class _DeckState extends State<_Deck> with TickerProviderStateMixin {
   }
 }
 
-/// 波形进度条（样例 `.wave`）：52 高、96 柱自适应波形，悬停胶囊时间气泡与预览高亮，
-/// 播放头发光底线 + 波形 1.0→1.08 纵伸，播放时播放头邻域高斯微幅呼吸。
+/// 新版样例 120 柱呼吸波形进度条（对照 `ui.tsx:250-283` 与 `more.css:185-198`）：
+/// - 120 柱确定性正弦包络波形；
+/// - 已播区 `hueColor` 纵向双色渐变（底 mix 55% → 顶 mix 20%）+ `.wave-glow` 呼吸底光；
+/// - 播放头高斯邻域隆起（`exp(-(dPlay/4)²)`）+ `0.9s` 亮度脉动 + 悬停透镜放大（`exp(-(dHov/5)²)`）；
+/// - 上下外溢 `8px` 渐隐播放头线 + `12px` 发光白色圆点（hover/drag `1.35×`）；
+/// - `700ms` 点击扩散涟漪 `.wave-rip`；
+/// - 纯白底 `#FFFFFF` / 深黑字 `#0A0C0E` `8px` 圆角时间气泡。
 class _WaveSeek extends StatefulWidget {
   const _WaveSeek({
     required this.trackId,
+    required this.hueColor,
     required this.position,
     required this.duration,
     required this.onDragStart,
@@ -303,6 +309,7 @@ class _WaveSeek extends StatefulWidget {
   });
 
   final String trackId;
+  final Color hueColor;
   final Duration position;
   final Duration duration;
   final VoidCallback onDragStart;
@@ -316,23 +323,52 @@ class _WaveSeek extends StatefulWidget {
 }
 
 class _WaveSeekState extends State<_WaveSeek> with TickerProviderStateMixin {
+  static const int _barCount = 120;
+
   Duration? _pendingPosition;
   double? _hoverFraction;
   double? _dragFraction;
   bool _hovered = false;
   bool _dragging = false;
+  double? _rippleFraction;
+  String _cachedSeed = '';
+  List<double> _heights = const <double>[];
 
   late final AnimationController _activeCtrl = AnimationController(
     vsync: this,
-    duration: MotionToken.resolveForPlatform(const Duration(milliseconds: 180)),
+    duration: MotionToken.resolveForPlatform(const Duration(milliseconds: 200)),
   );
 
-  late final AnimationController _breathCtrl = AnimationController(
+  /// `0.9s` 播放头邻域亮度脉动周期（对齐 `more.css:191` `wbeat .9s`）。
+  late final AnimationController _beatCtrl = AnimationController(
+    vsync: this,
+    duration: MotionToken.resolveForPlatform(const Duration(milliseconds: 900)),
+  );
+
+  /// `2.4s` 呼吸底光周期（对齐 `more.css:190` `wglow 2.4s`）。
+  late final AnimationController _glowCtrl = AnimationController(
     vsync: this,
     duration: MotionToken.resolveForPlatform(
-      const Duration(milliseconds: 1400),
+      const Duration(milliseconds: 2400),
     ),
   );
+
+  /// `700ms` 点击扩散涟漪（对齐 `more.css:197` `wrip .7s ease-out`）。
+  late final AnimationController _rippleCtrl = AnimationController(
+    vsync: this,
+    duration: MotionToken.resolveForPlatform(const Duration(milliseconds: 700)),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _ensureHeights(widget.trackId);
+    _rippleCtrl.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() => _rippleFraction = null);
+      }
+    });
+  }
 
   @override
   void didChangeDependencies() {
@@ -343,7 +379,33 @@ class _WaveSeekState extends State<_WaveSeek> with TickerProviderStateMixin {
   @override
   void didUpdateWidget(_WaveSeek oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.trackId != widget.trackId) {
+      _ensureHeights(widget.trackId);
+    }
     _syncBreath();
+  }
+
+  void _ensureHeights(String seed) {
+    if (_heights.length == _barCount && _cachedSeed == seed) {
+      return;
+    }
+    _cachedSeed = seed;
+    // 严格对照 ui.tsx:255-259：
+    var h = 7;
+    for (final unit in seed.codeUnits) {
+      h = (h * 31 + unit) & 0xFFFFFFFF;
+    }
+    final ph = (h % 100) / 10.0;
+    _heights = List<double>.generate(_barCount, (i) {
+      final e = math.pow(math.sin((i / _barCount) * math.pi), 0.5).toDouble();
+      final harmonic =
+          (math.sin(i * 0.37 + ph) * math.cos(i * 0.11 + ph * 2.0)).abs();
+      final grain =
+          ((math.sin(i * 12.9898 + ph) * 43758.5453).remainder(1.0) + 1.0) *
+          0.5;
+      final value = (0.28 + 0.5 * harmonic + 0.22 * grain) * (0.55 + 0.45 * e);
+      return value.clamp(0.12, 1.0).toDouble();
+    }, growable: false);
   }
 
   void _syncActive() {
@@ -363,18 +425,31 @@ class _WaveSeekState extends State<_WaveSeek> with TickerProviderStateMixin {
   void _syncBreath() {
     final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     if (widget.playing && !reduceMotion) {
-      if (!_breathCtrl.isAnimating) {
-        _breathCtrl.repeat();
+      if (!_beatCtrl.isAnimating) {
+        _beatCtrl.repeat();
       }
-    } else if (_breathCtrl.isAnimating) {
-      _breathCtrl.stop();
+      if (!_glowCtrl.isAnimating) {
+        _glowCtrl.repeat();
+      }
+    } else {
+      if (_beatCtrl.isAnimating) _beatCtrl.stop();
+      if (_glowCtrl.isAnimating) _glowCtrl.stop();
     }
+  }
+
+  void _triggerRipple(double frac) {
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (reduceMotion) return;
+    setState(() => _rippleFraction = frac);
+    unawaited(_rippleCtrl.forward(from: 0.0));
   }
 
   @override
   void dispose() {
     _activeCtrl.dispose();
-    _breathCtrl.dispose();
+    _beatCtrl.dispose();
+    _glowCtrl.dispose();
+    _rippleCtrl.dispose();
     super.dispose();
   }
 
@@ -392,15 +467,6 @@ class _WaveSeekState extends State<_WaveSeek> with TickerProviderStateMixin {
     return Duration(milliseconds: (total * fraction).round());
   }
 
-  static int _stableSeed(String id) {
-    var hash = 2166136261;
-    for (final unit in id.codeUnits) {
-      hash ^= unit;
-      hash = (hash * 16777619) & 0x7fffffff;
-    }
-    return hash;
-  }
-
   @override
   Widget build(BuildContext context) {
     final total = widget.duration.inMilliseconds;
@@ -408,13 +474,8 @@ class _WaveSeekState extends State<_WaveSeek> with TickerProviderStateMixin {
         total <= 0
             ? 0.0
             : (widget.position.inMilliseconds / total).clamp(0.0, 1.0);
-    final seed = _stableSeed(widget.trackId);
-    final skin = DesktopSkin.of(context);
     final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     final breathActive = widget.playing && !reduceMotion;
-    final playedColor = Color.lerp(Colors.white, skin.accent, 0.35)!;
-    final restColor = Colors.white.withValues(alpha: 0.22);
-    final previewColor = Color.lerp(restColor, playedColor, 0.52)!;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -425,7 +486,7 @@ class _WaveSeekState extends State<_WaveSeek> with TickerProviderStateMixin {
             showBubble
                 ? Duration(milliseconds: (total * bubbleFraction).round())
                 : Duration.zero;
-        const estimatedBubbleWidth = 54.0;
+        const estimatedBubbleWidth = 48.0;
         final bubbleLeft =
             showBubble
                 ? (width * bubbleFraction - estimatedBubbleWidth / 2)
@@ -458,6 +519,8 @@ class _WaveSeekState extends State<_WaveSeek> with TickerProviderStateMixin {
             behavior: HitTestBehavior.opaque,
             onTapDown: (details) {
               if (total <= 0 || width <= 0) return;
+              final frac = _fractionAt(details.localPosition.dx, width);
+              _triggerRipple(frac);
               final target = _positionAt(details.localPosition.dx, width);
               _pendingPosition = null;
               widget.onCommit(target);
@@ -465,6 +528,7 @@ class _WaveSeekState extends State<_WaveSeek> with TickerProviderStateMixin {
             onHorizontalDragStart: (details) {
               if (total <= 0 || width <= 0) return;
               final frac = _fractionAt(details.localPosition.dx, width);
+              _triggerRipple(frac);
               final target = _positionAt(details.localPosition.dx, width);
               _pendingPosition = target;
               setState(() {
@@ -514,61 +578,71 @@ class _WaveSeekState extends State<_WaveSeek> with TickerProviderStateMixin {
                 children: [
                   Positioned.fill(
                     child: AnimatedBuilder(
-                      animation: Listenable.merge([_activeCtrl, _breathCtrl]),
+                      animation: Listenable.merge([
+                        _activeCtrl,
+                        _beatCtrl,
+                        _glowCtrl,
+                        _rippleCtrl,
+                      ]),
                       builder: (context, _) {
                         return CustomPaint(
                           painter: _WavePainter(
+                            heights: _heights,
                             progress: progress,
-                            seed: seed,
-                            played: playedColor,
-                            rest: restColor,
-                            preview: previewColor,
-                            hoverFraction: _dragging ? null : _hoverFraction,
-                            activeT: Curves.easeOutCubic.transform(
+                            hueColor: widget.hueColor,
+                            playing: widget.playing,
+                            dragging: _dragging,
+                            hoverFraction:
+                                _dragging ? _dragFraction : _hoverFraction,
+                            activeT: DesktopMotion.spring.transform(
                               _activeCtrl.value,
                             ),
-                            breathPhase: _breathCtrl.value,
+                            beatPhase: _beatCtrl.value,
+                            glowPhase: _glowCtrl.value,
                             breathActive: breathActive,
+                            rippleFraction: _rippleFraction,
+                            rippleT: Curves.easeOut.transform(
+                              _rippleCtrl.value,
+                            ),
                           ),
                         );
                       },
                     ),
                   ),
+                  // 纯白底 #FFFFFF / 深黑字 #0A0C0E 8px 圆角时间气泡（more.css:196）。
                   if (showBubble)
                     Positioned(
                       left: bubbleLeft,
-                      top: -28,
+                      top: -30,
                       child: IgnorePointer(
                         child: Container(
                           constraints: const BoxConstraints(
                             minWidth: estimatedBubbleWidth,
                           ),
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
+                            horizontal: 9,
                             vertical: 3,
                           ),
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            color: const Color(0xEB0A0D10),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.16),
-                            ),
-                            boxShadow: [
+                            color: const Color(0xFFFFFFFF),
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: const [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.45),
-                                blurRadius: 10,
-                                offset: const Offset(0, 3),
+                                color: Color(0x66000000),
+                                blurRadius: 18,
+                                offset: Offset(0, 6),
                               ),
                             ],
                           ),
                           child: Text(
                             formatDesktopClock(bubbleDuration),
                             style: DesktopType.numeric(
-                              Colors.white.withValues(alpha: 0.94),
+                              const Color(0xFF0A0C0E),
                             ).copyWith(
                               fontSize: DesktopType.sizeCaption,
-                              height: 1.15,
+                              fontWeight: FontWeight.w600,
+                              height: 1.2,
                             ),
                           ),
                         ),
@@ -586,123 +660,226 @@ class _WaveSeekState extends State<_WaveSeek> with TickerProviderStateMixin {
 
 class _WavePainter extends CustomPainter {
   const _WavePainter({
+    required this.heights,
     required this.progress,
-    required this.seed,
-    required this.played,
-    required this.rest,
-    required this.preview,
+    required this.hueColor,
+    required this.playing,
+    required this.dragging,
     required this.hoverFraction,
     required this.activeT,
-    required this.breathPhase,
+    required this.beatPhase,
+    required this.glowPhase,
     required this.breathActive,
+    required this.rippleFraction,
+    required this.rippleT,
   });
 
+  final List<double> heights;
   final double progress;
-  final int seed;
-  final Color played;
-  final Color rest;
-  final Color preview;
+  final Color hueColor;
+  final bool playing;
+  final bool dragging;
   final double? hoverFraction;
   final double activeT;
-  final double breathPhase;
+  final double beatPhase;
+  final double glowPhase;
   final bool breathActive;
+  final double? rippleFraction;
+  final double rippleT;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (size.width <= 0 || size.height <= 0) return;
-    final bars = (size.width / 5.5).round().clamp(56, 96);
+    if (size.width <= 0 || size.height <= 0 || heights.isEmpty) return;
+    final bars = heights.length;
     final step = size.width / bars;
-    final barWidth = math.max(1.2, step * 0.56);
-    final paint = Paint()..strokeCap = StrokeCap.round;
-    final seedPhase = (seed % 997) * 0.317;
-    final centerY = size.height / 2;
-    final verticalScale = 1.0 + 0.08 * activeT;
-    final currentIdx = (progress * (bars - 1)).round();
+    final barWidth = math.max(1.0, step - 2.0);
+    final centerY = size.height * 0.5;
+    final playX = (size.width * progress).clamp(0.0, size.width);
 
-    for (var i = 0; i < bars; i++) {
-      final noise =
-          (math.sin((i + 1) * 12.9898 + seedPhase * 78.233) * 43758.5453)
-              .abs() %
-          1;
-      final envelope = 0.72 + 0.28 * math.sin((i / bars) * math.pi);
-      final magnitude = (0.24 + noise * 0.76) * envelope;
-      var breathFactor = 1.0;
-      if (breathActive) {
-        final dist = (i - currentIdx).abs();
-        if (dist <= 3) {
-          final gauss = math.exp(-(dist * dist) / 4.5);
-          final wave = math.sin(breathPhase * 2 * math.pi + i * 0.85);
-          breathFactor = 1.0 + 0.05 * gauss * wave;
-        }
-      }
-      final left = i * step;
-      final barCenterX = left + step / 2;
-      final barFraction = barCenterX / size.width;
-      final half = (size.height *
-              0.44 *
-              magnitude *
-              verticalScale *
-              breathFactor)
-          .clamp(1.5, size.height * 0.49);
-
-      if (barFraction <= progress) {
-        paint.color = played;
-      } else if (hoverFraction != null && barFraction <= hoverFraction!) {
-        paint.color = preview;
-      } else {
-        paint.color = rest;
-      }
-
-      canvas.drawLine(
-        Offset(barCenterX, centerY - half),
-        Offset(barCenterX, centerY + half),
-        paint..strokeWidth = barWidth,
+    // 1. `.wave-glow` 呼吸底光（more.css:189-190）：已播区域内由透明渐亮至 hueColor。
+    if (playX > 2.0) {
+      final glowPulse =
+          breathActive
+              ? 0.45 + 0.30 * (0.5 - 0.5 * math.cos(glowPhase * 2 * math.pi))
+              : 0.45;
+      final glowRect = Rect.fromLTWH(
+        0,
+        size.height * 0.10,
+        playX,
+        size.height * 0.80,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(glowRect, const Radius.circular(99)),
+        Paint()
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14)
+          ..shader = LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: <Color>[
+              Colors.transparent,
+              hueColor.withValues(alpha: (0.70 * glowPulse).clamp(0.0, 1.0)),
+            ],
+          ).createShader(glowRect),
       );
     }
 
-    // 悬停 1px 细游标线。
+    // 2. 120 柱波形（已播纵向双色渐变 + 播放头高斯邻域隆起 + 0.9s 亮度脉动 + 悬停透镜放大）。
+    final playedBottom = Color.lerp(Colors.white, hueColor, 0.55)!;
+    final playedTop = Color.lerp(Colors.white, hueColor, 0.20)!;
+    final restColor = Colors.white.withValues(alpha: 0.22);
+    final playedPaint = Paint()..style = PaintingStyle.fill;
+    final restPaint =
+        Paint()
+          ..style = PaintingStyle.fill
+          ..color = restColor;
+
+    for (var i = 0; i < bars; i++) {
+      final c = (i + 0.5) / bars;
+      final dPlay = (c - progress) * bars;
+      final near = math.exp(-((dPlay / 4.0) * (dPlay / 4.0)));
+      final lens =
+          hoverFraction != null
+              ? math.exp(-math.pow(((c - hoverFraction!) * bars) / 5.0, 2))
+              : 0.0;
+      final sc =
+          1.0 +
+          near * (playing ? 0.50 : 0.28) +
+          lens * 0.45 +
+          (dragging ? 0.08 : 0.0);
+
+      final barH = (heights[i] * size.height * sc).clamp(
+        3.0,
+        size.height * 1.18,
+      );
+      final half = barH * 0.5;
+      final cx = i * step + step * 0.5;
+      final barRect = Rect.fromLTRB(
+        cx - barWidth * 0.5,
+        centerY - half,
+        cx + barWidth * 0.5,
+        centerY + half,
+      );
+      final barRRect = RRect.fromRectAndRadius(
+        barRect,
+        Radius.circular(barWidth * 0.5),
+      );
+
+      final isPlayed = c < progress;
+      final isBeat = near > 0.5 && breathActive;
+      var boost = 0.0;
+      if (isBeat) {
+        final delayFrac = ((i % 7) * 0.09) / 0.9;
+        final phase = (beatPhase + delayFrac) % 1.0;
+        boost = 0.35 * (0.5 - 0.5 * math.cos(phase * 2 * math.pi));
+      }
+
+      if (isPlayed) {
+        final topCol =
+            boost > 0 ? Color.lerp(playedTop, Colors.white, boost)! : playedTop;
+        final botCol =
+            boost > 0
+                ? Color.lerp(playedBottom, Colors.white, boost)!
+                : playedBottom;
+        playedPaint.shader = LinearGradient(
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: <Color>[botCol, topCol],
+        ).createShader(barRect);
+        canvas.drawRRect(barRRect, playedPaint);
+      } else {
+        restPaint.color =
+            boost > 0
+                ? Colors.white.withValues(
+                  alpha: (0.22 + boost * 0.35).clamp(0.0, 1.0),
+                )
+                : restColor;
+        canvas.drawRRect(barRRect, restPaint);
+      }
+    }
+
+    // 3. 悬停 1px 细游标线 `.wave-hov`（more.css:195）。
     if (hoverFraction != null) {
       final hx = (size.width * hoverFraction!).clamp(0.0, size.width);
       canvas.drawLine(
-        Offset(hx, 3),
-        Offset(hx, size.height - 3),
+        Offset(hx, 0),
+        Offset(hx, size.height),
         Paint()
-          ..color = Colors.white.withValues(alpha: 0.48)
+          ..color = Colors.white.withValues(alpha: 0.40)
           ..strokeWidth = 1.0,
       );
     }
 
-    // 播放头：MaskFilter.blur(6) 发光底线（hover/drag 时平滑淡入增强）+ 2px 白色主线。
-    final x = (size.width * progress).clamp(0.0, size.width);
-    final glowAlpha = 0.28 + 0.56 * activeT;
-    canvas.drawLine(
-      Offset(x, 1),
-      Offset(x, size.height - 1),
-      Paint()
-        ..color = played.withValues(alpha: glowAlpha)
-        ..strokeWidth = 4.0 + 2.0 * activeT
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+    // 4. `700ms` 点击扩散涟漪 `.wave-rip`（more.css:197）。
+    if (rippleFraction != null && rippleT < 1.0) {
+      final rx = (size.width * rippleFraction!).clamp(0.0, size.width);
+      final radius = 7.0 * (1.0 + 6.0 * rippleT);
+      final ripAlpha = (1.0 - rippleT).clamp(0.0, 1.0);
+      canvas.drawCircle(
+        Offset(rx, centerY),
+        radius,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0
+          ..color = Colors.white.withValues(alpha: ripAlpha),
+      );
+    }
+
+    // 5. 上下外溢 8px 渐隐播放头线（more.css:192）。
+    final lineRect = Rect.fromLTRB(
+      playX - 1.0,
+      -8.0,
+      playX + 1.0,
+      size.height + 8.0,
     );
-    canvas.drawLine(
-      Offset(x, 0),
-      Offset(x, size.height),
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(lineRect, const Radius.circular(2.0)),
       Paint()
-        ..color = Colors.white
-        ..strokeWidth = 2.0
-        ..strokeCap = StrokeCap.round,
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[
+            Colors.transparent,
+            Colors.white,
+            Colors.white,
+            Colors.transparent,
+          ],
+          stops: <double>[0.0, 0.20, 0.80, 1.0],
+        ).createShader(lineRect),
     );
+
+    // 6. 12px 发光白色圆点（hover/drag 时放大 1.35×，more.css:193-194）。
+    final dotScale = (1.0 + 0.35 * activeT).clamp(1.0, 1.5);
+    final dotRadius = 6.0 * dotScale;
+    final dotCenter = Offset(playX, centerY);
+    // 外环 4px 半透 hueColor 晕环。
+    canvas.drawCircle(
+      dotCenter,
+      dotRadius + 4.0 * dotScale,
+      Paint()..color = hueColor.withValues(alpha: 0.50),
+    );
+    // 柔白辉光 + 实体白点。
+    canvas.drawCircle(
+      dotCenter,
+      dotRadius + 2.0,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.55)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9),
+    );
+    canvas.drawCircle(dotCenter, dotRadius, Paint()..color = Colors.white);
   }
 
   @override
   bool shouldRepaint(_WavePainter oldDelegate) =>
+      oldDelegate.heights != heights ||
       oldDelegate.progress != progress ||
-      oldDelegate.seed != seed ||
-      oldDelegate.played != played ||
-      oldDelegate.rest != rest ||
-      oldDelegate.preview != preview ||
+      oldDelegate.hueColor != hueColor ||
+      oldDelegate.playing != playing ||
+      oldDelegate.dragging != dragging ||
       oldDelegate.hoverFraction != hoverFraction ||
       oldDelegate.activeT != activeT ||
-      oldDelegate.breathPhase != breathPhase ||
-      oldDelegate.breathActive != breathActive;
+      oldDelegate.beatPhase != beatPhase ||
+      oldDelegate.glowPhase != glowPhase ||
+      oldDelegate.breathActive != breathActive ||
+      oldDelegate.rippleFraction != rippleFraction ||
+      oldDelegate.rippleT != rippleT;
 }

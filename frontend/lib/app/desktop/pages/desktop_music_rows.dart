@@ -408,6 +408,7 @@ class _TrackActionState extends State<_TrackAction> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
+        onDoubleTap: () {},
         child: Tooltip(
           message: widget.tooltip,
           child: SizedBox(

@@ -2,6 +2,52 @@ part of 'comic_reader_view.dart';
 
 /// 漫画阅读器的内容构建与单页/双页槽位装配。
 extension _ComicReaderViewBuilders on ComicReaderViewState {
+  /// 全舞台滚轮统一接管：注册 pointerSignalResolver 彻底阻止 InteractiveViewer 劫持普通滚轮。
+  /// - 按住 Ctrl/Meta：执行焦点缩放；
+  /// - 未按 Ctrl/Meta 且未放大（!_imageZoomed）：执行 320ms 节流翻页（兼容 dx/dy）；
+  /// - 未按 Ctrl/Meta 且已放大：静默消费事件，防止误缩放或误翻页。
+  void _handleComicPointerSignal(
+    PointerSignalEvent event,
+    int slotIndex,
+    Size slotSize, {
+    BuildContext? viewportContext,
+  }) {
+    if (event is! PointerScrollEvent) return;
+    final hardware = HardwareKeyboard.instance;
+    final isZoomModifier = hardware.isControlPressed || hardware.isMetaPressed;
+    final dx = event.scrollDelta.dx;
+    final dy = event.scrollDelta.dy;
+    final primaryDelta = dy.abs() >= dx.abs() ? dy : dx;
+    Offset? viewportFocal;
+    final renderObj = viewportContext?.findRenderObject();
+    if (renderObj is RenderBox && renderObj.hasSize) {
+      viewportFocal = renderObj.globalToLocal(event.position);
+    }
+
+    GestureBinding.instance.pointerSignalResolver.register(event, (_) {
+      if (!mounted) return;
+      if (isZoomModifier) {
+        _handleCtrlWheelZoom(
+          event,
+          slotIndex,
+          slotSize,
+          focalPoint: viewportFocal,
+        );
+        return;
+      }
+      if (_imageZoomed) return;
+      if (primaryDelta.abs() < 24) return;
+      final now = DateTime.now();
+      final last = _lastWheelAt;
+      if (last != null &&
+          now.difference(last) < ComicReaderViewState._wheelThrottle) {
+        return;
+      }
+      _lastWheelAt = now;
+      _turnSlotByDelta(primaryDelta > 0 ? 1 : -1);
+    });
+  }
+
   /// 构建漫画内容。
   Widget _buildContent({
     required List<_ComicSpreadSlot> slots,
@@ -356,7 +402,12 @@ extension _ComicReaderViewBuilders on ComicReaderViewState {
         return Listener(
           behavior: HitTestBehavior.translucent,
           onPointerSignal:
-              (event) => _handleCtrlWheelZoom(event, activeSlotIndex, viewport),
+              (event) => _handleComicPointerSignal(
+                event,
+                activeSlotIndex,
+                viewport,
+                viewportContext: context,
+              ),
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onDoubleTapDown:
@@ -371,8 +422,18 @@ extension _ComicReaderViewBuilders on ComicReaderViewState {
               scaleEnabled: true,
               onInteractionUpdate: (_) => _syncSlotZoomScale(activeSlotIndex),
               onInteractionEnd: (_) => _syncSlotZoomScale(activeSlotIndex),
-              child: Center(
-                child: SizedBox(width: bookW, height: bookH, child: pageView),
+              child: Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerSignal:
+                    (event) => _handleComicPointerSignal(
+                      event,
+                      activeSlotIndex,
+                      viewport,
+                      viewportContext: context,
+                    ),
+                child: Center(
+                  child: SizedBox(width: bookW, height: bookH, child: pageView),
+                ),
               ),
             ),
           ),
@@ -398,61 +459,71 @@ extension _ComicReaderViewBuilders on ComicReaderViewState {
               : MediaQuery.sizeOf(context).height,
         );
         final layout = _resolveLayout(viewport);
-        return ReaderPageView(
-          key: ValueKey('comic-swipe-view-${widget.itemId}'),
-          turnMode: PageTurnMode.slide,
-          reverse: _isRtl,
-          dragEnabled: !_imageZoomed,
-          allowMouseDrag: true,
-          spread: false,
-          showPaperGrain: false,
-          surfaceColor: pageSurfaceBg,
-          paperEdgeColor: _controlSettings.paperEdgeColor,
-          bookmarked: isBookmarked,
-          controller: _pageTurnController,
-          contentRevision: Object.hash(
-            useSpread,
-            _displaySettings.imageFit,
-            _isRtl,
-            _controlSettings.palette.id,
-            pageSurfaceBg.toARGB32(),
-            _rotationRevision,
-          ),
-          state: PagedState(
-            chapterId: widget.itemId,
-            pageIndex: activeSlotIndex,
-            pageCount: slots.length,
-            hasMore: false,
-          ),
-          pageBuilder: (slotIndex) {
-            if (slotIndex < 0 || slotIndex >= slots.length) return null;
-            return _buildSlotPage(
-              slotIndex: slotIndex,
-              slot: slots[slotIndex],
-              layout: layout,
-              slotSize: viewport,
-              pageSurfaceBg: pageSurfaceBg,
-              interactive: true,
-            );
-          },
-          snapshotPageBuilder: (slotIndex) {
-            if (slotIndex < 0 || slotIndex >= slots.length) return null;
-            return _buildSlotPage(
-              slotIndex: slotIndex,
-              slot: slots[slotIndex],
-              layout: layout,
-              slotSize: viewport,
-              pageSurfaceBg: pageSurfaceBg,
-              interactive: false,
-            );
-          },
-          callbacks: _ComicPageTurnCallbacks(
-            onPageChangedFn: (newSlotIndex) {
-              if (newSlotIndex < 0 || newSlotIndex >= slots.length) return;
-              _resetOffscreenSlotTransforms(newSlotIndex);
-              _onPageChanged(slots[newSlotIndex].startPageIndex);
+        return Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerSignal:
+              (event) => _handleComicPointerSignal(
+                event,
+                activeSlotIndex,
+                viewport,
+                viewportContext: context,
+              ),
+          child: ReaderPageView(
+            key: ValueKey('comic-swipe-view-${widget.itemId}'),
+            turnMode: PageTurnMode.slide,
+            reverse: _isRtl,
+            dragEnabled: !_imageZoomed,
+            allowMouseDrag: true,
+            spread: false,
+            showPaperGrain: false,
+            surfaceColor: pageSurfaceBg,
+            paperEdgeColor: _controlSettings.paperEdgeColor,
+            bookmarked: isBookmarked,
+            controller: _pageTurnController,
+            contentRevision: Object.hash(
+              useSpread,
+              _displaySettings.imageFit,
+              _isRtl,
+              _controlSettings.palette.id,
+              pageSurfaceBg.toARGB32(),
+              _rotationRevision,
+            ),
+            state: PagedState(
+              chapterId: widget.itemId,
+              pageIndex: activeSlotIndex,
+              pageCount: slots.length,
+              hasMore: false,
+            ),
+            pageBuilder: (slotIndex) {
+              if (slotIndex < 0 || slotIndex >= slots.length) return null;
+              return _buildSlotPage(
+                slotIndex: slotIndex,
+                slot: slots[slotIndex],
+                layout: layout,
+                slotSize: viewport,
+                pageSurfaceBg: pageSurfaceBg,
+                interactive: true,
+              );
             },
-            onToggleControlsFn: _toggleControls,
+            snapshotPageBuilder: (slotIndex) {
+              if (slotIndex < 0 || slotIndex >= slots.length) return null;
+              return _buildSlotPage(
+                slotIndex: slotIndex,
+                slot: slots[slotIndex],
+                layout: layout,
+                slotSize: viewport,
+                pageSurfaceBg: pageSurfaceBg,
+                interactive: false,
+              );
+            },
+            callbacks: _ComicPageTurnCallbacks(
+              onPageChangedFn: (newSlotIndex) {
+                if (newSlotIndex < 0 || newSlotIndex >= slots.length) return;
+                _resetOffscreenSlotTransforms(newSlotIndex);
+                _onPageChanged(slots[newSlotIndex].startPageIndex);
+              },
+              onToggleControlsFn: _toggleControls,
+            ),
           ),
         );
       },
@@ -519,26 +590,45 @@ extension _ComicReaderViewBuilders on ComicReaderViewState {
     }
 
     final controller = _controllerForSlot(slotIndex);
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerSignal:
-          (event) => _handleCtrlWheelZoom(event, slotIndex, slotSize),
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onDoubleTapDown:
-            (details) => _lastDoubleTapLocalPosition = details.localPosition,
-        onDoubleTap: () => _toggleDoubleTapZoom(slotIndex, slotSize),
-        child: InteractiveViewer(
-          transformationController: controller,
-          minScale: 1.0,
-          maxScale: 4.0,
-          panEnabled: _imageZoomed,
-          scaleEnabled: true,
-          onInteractionUpdate: (_) => _syncSlotZoomScale(slotIndex),
-          onInteractionEnd: (_) => _syncSlotZoomScale(slotIndex),
-          child: padded,
-        ),
-      ),
+    return Builder(
+      builder:
+          (slotContext) => Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerSignal:
+                (event) => _handleComicPointerSignal(
+                  event,
+                  slotIndex,
+                  slotSize,
+                  viewportContext: slotContext,
+                ),
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onDoubleTapDown:
+                  (details) =>
+                      _lastDoubleTapLocalPosition = details.localPosition,
+              onDoubleTap: () => _toggleDoubleTapZoom(slotIndex, slotSize),
+              child: InteractiveViewer(
+                transformationController: controller,
+                minScale: 1.0,
+                maxScale: 4.0,
+                panEnabled: _imageZoomed,
+                scaleEnabled: true,
+                onInteractionUpdate: (_) => _syncSlotZoomScale(slotIndex),
+                onInteractionEnd: (_) => _syncSlotZoomScale(slotIndex),
+                child: Listener(
+                  behavior: HitTestBehavior.translucent,
+                  onPointerSignal:
+                      (event) => _handleComicPointerSignal(
+                        event,
+                        slotIndex,
+                        slotSize,
+                        viewportContext: slotContext,
+                      ),
+                  child: padded,
+                ),
+              ),
+            ),
+          ),
     );
   }
 }

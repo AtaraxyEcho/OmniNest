@@ -75,6 +75,21 @@ class _DesktopNowPlayingLyricsState extends State<DesktopNowPlayingLyrics>
   bool _userScrolling = false;
   Timer? _resumeFollowTimer;
 
+  static bool _lyricLinesEqual(List<MusicLyricLine> a, List<MusicLyricLine> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      final left = a[i];
+      final right = b[i];
+      if (left.position != right.position ||
+          left.text != right.text ||
+          left.translation != right.translation) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -97,7 +112,7 @@ class _DesktopNowPlayingLyricsState extends State<DesktopNowPlayingLyrics>
     if (oldWidget.positionStream != widget.positionStream) {
       _subscribeStream();
     }
-    if (oldWidget.lines != widget.lines) {
+    if (!_lyricLinesEqual(oldWidget.lines, widget.lines)) {
       _lineKeys.clear();
       _hoveredIndex = null;
       _userScrolling = false;

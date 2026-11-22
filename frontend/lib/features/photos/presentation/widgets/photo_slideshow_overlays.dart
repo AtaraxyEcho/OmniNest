@@ -3,6 +3,7 @@ import 'dart:ui' as ui show Image;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:omninest/app/desktop/desktop_ambient_mesh.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/theme/motion_token.dart';
@@ -21,12 +22,9 @@ class SlideFrame {
   final ui.Image? image;
 }
 
-/// 单张模糊封面：96px 超低分辨率缩略图放大拉伸（放大即强模糊）+ 压暗。
-///
-/// 加载层与 ready 背景层共用：同一缓存键（coverCacheKey@96）、同一观感，
-/// 进场前后画面连续，96px 解码毫秒级且无需额外预热。
-/// 不叠 ImageFilter.blur：全屏 blur 在首绘/切换时会把光栅线程冻住
-/// 数百毫秒到数秒（Windows 尤甚），96px 放大后模糊程度已经足够。
+/// 单张氛围背景：复用 `DesktopAmbientMeshCache`（`4×3` 矢量色网 + 暗罩），
+/// 彻底消除 `memCacheWidth: 96` 裸拉伸马赛克，同时零 `ImageFilter.blur`、
+/// 零 Windows 光栅线程卡顿。
 class SlideshowBlurredCover extends StatelessWidget {
   const SlideshowBlurredCover({required this.photo, super.key});
 
@@ -39,25 +37,22 @@ class SlideshowBlurredCover extends StatelessWidget {
       return const ColoredBox(color: Colors.black);
     }
     return RepaintBoundary(
-      child: Transform.scale(
-        scale: 1.12,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            CachedNetworkImage(
-              imageUrl: thumb,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          DesktopAmbientMeshSurface(
+            source: thumb,
+            imageProvider: CachedNetworkImageProvider(
+              thumb,
               cacheKey: photo.coverCacheKey,
-              memCacheWidth: 96,
-              fit: BoxFit.cover,
-              filterQuality: FilterQuality.low,
-              fadeInDuration: Duration.zero,
-              errorWidget:
-                  (context, url, error) =>
-                      const ColoredBox(color: Colors.black),
             ),
-            ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
-          ],
-        ),
+            cacheKey: photo.coverCacheKey,
+            fallbackColor: Colors.black,
+            saturation: 1.45,
+            brightness: 0.95,
+          ),
+          ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
+        ],
       ),
     );
   }
@@ -163,11 +158,8 @@ class SlideshowSlideLayers extends StatelessWidget {
   }
 }
 
-/// 首屏加载层：有封面时以 96px 模糊封面打底（与 ready 背景层同键同观感），
+/// 首屏加载层：有封面时以 `4×3` 矢量色网打底（与 ready 背景层同键同观感），
 /// 消除进场期间的内容真空；仅无封面照片回退黑底小型 spinner。
-///
-/// 画质阶梯保持单调：96 模糊 → 400 缩略图 → preview 高清档，
-/// 不再出现"1280 清晰封面 → 400 糊图"的倒退闪烁。
 class SlideshowLoadingStage extends StatelessWidget {
   const SlideshowLoadingStage({required this.photo, super.key});
 

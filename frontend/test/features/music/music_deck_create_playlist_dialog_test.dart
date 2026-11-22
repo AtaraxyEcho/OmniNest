@@ -1,6 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_create_playlist_dialog.dart';
 
 void main() {
@@ -8,10 +8,7 @@ void main() {
     MusicDeckPlaylistDraft? submittedDraft;
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          ...GlobalMaterialLocalizations.delegates,
-        ],
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: const [Locale('zh'), Locale('en')],
         home: Builder(
           builder: (context) {
@@ -47,10 +44,7 @@ void main() {
   testWidgets('编辑歌单对话框不使用黑色文字', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          ...GlobalMaterialLocalizations.delegates,
-        ],
+        localizationsDelegates: kOmniNestLocalizationsDelegates,
         supportedLocales: const [Locale('zh'), Locale('en')],
         home: const Material(
           child: MusicDeckCreatePlaylistDialog(

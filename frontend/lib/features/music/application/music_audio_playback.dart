@@ -104,6 +104,7 @@ class MusicAudioPlayer implements MusicAudioPlayback {
 
   static const Duration _tickInterval = Duration(milliseconds: 16);
   static const Duration _completionTolerance = Duration(milliseconds: 180);
+  static const Duration _completionStallGrace = Duration(milliseconds: 600);
 
   final SoLoud _soLoud;
   final MusicRealtimeSpectrumMapper _spectrumMapper;
@@ -140,6 +141,9 @@ class MusicAudioPlayer implements MusicAudioPlayback {
   StreamSubscription<StreamSoundEvent>? _soundEventSub;
   Timer? _ticker;
   String? _url;
+  int _openGeneration = 0;
+  Duration _lastObservedPosition = Duration.zero;
+  Duration? _stallStartedAt;
   bool _opening = false;
   bool _disposed = false;
   bool _completedEmitted = false;
@@ -182,17 +186,25 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       }
       return;
     }
+    final gen = ++_openGeneration;
     _opening = true;
     _completedEmitted = false;
+    _resetStallTracking(Duration.zero);
     try {
       await _disposeCurrentSource();
+      if (gen != _openGeneration || _disposed) {
+        return;
+      }
       await _ensureInitialized();
+      if (gen != _openGeneration || _disposed) {
+        return;
+      }
       final source = await _soLoud.loadUrl(
         normalized,
         mode: LoadMode.disk,
         autoDispose: false,
       );
-      if (_disposed) {
+      if (gen != _openGeneration || _disposed) {
         await _disposeSourceInstance(source);
         return;
       }
@@ -202,9 +214,14 @@ class MusicAudioPlayer implements MusicAudioPlayback {
         volume: (_state.volume / 100).clamp(0.0, 1.0),
         paused: !play,
       );
+      _soLoud.setProtectVoice(handle, true);
+      if (_state.speed != 1.0) {
+        _soLoud.setRelativePlaySpeed(handle, _state.speed);
+      }
       _source = source;
       _handle = handle;
       _url = normalized;
+      _resetStallTracking(Duration.zero);
       _state = _state.copyWith(
         playing: play,
         position: Duration.zero,
@@ -217,10 +234,15 @@ class MusicAudioPlayer implements MusicAudioPlayback {
         _startTicker();
       }
     } on Exception catch (error) {
+      if (gen != _openGeneration || _disposed) {
+        return;
+      }
       _log('SoLoud 音乐打开失败: $error', playbackFailure: true);
       rethrow;
     } finally {
-      _opening = false;
+      if (gen == _openGeneration) {
+        _opening = false;
+      }
     }
   }
 
@@ -229,37 +251,80 @@ class MusicAudioPlayer implements MusicAudioPlayback {
   Future<void> play() async {
     final handle = _handle;
     if (handle == null) {
+      final source = _source;
+      if (source != null) {
+        await _restartSource(
+          source,
+          resumeAt: _completedEmitted ? Duration.zero : _state.position,
+        );
+      } else {
+        _state = _state.copyWith(playing: false);
+        _stopTicker();
+      }
       return;
     }
     try {
       _soLoud.setPause(handle, false);
+      _resetStallTracking(_state.position);
       _state = _state.copyWith(playing: true);
       _startTicker();
     } on SoLoudSoundHandleNotFoundCppException {
-      // 句柄已在 C++ 侧失效（上一条音轨播完、声源被回收等）：丢弃死句柄，
-      // 由播放会话按需重新 openUrl 起播，而不是反复对死句柄操作报错。
+      // 句柄已在 C++ 侧失效：声源仍在时按上次进度自动重开句柄续播，
+      // 声源也已失效时置 playing=false，避免 UI 空转。
       _handle = null;
-      _log('SoLoud 句柄已失效，等待重新加载音源', playbackFailure: true);
+      final source = _source;
+      if (source != null) {
+        await _restartSource(
+          source,
+          resumeAt: _completedEmitted ? Duration.zero : _state.position,
+        );
+      } else {
+        _state = _state.copyWith(playing: false);
+        _stopTicker();
+        _log('SoLoud 句柄已失效，等待重新加载音源', playbackFailure: true);
+      }
     } on Exception catch (error) {
+      _state = _state.copyWith(playing: false);
+      _stopTicker();
       _log('SoLoud 播放失败: $error', playbackFailure: true);
     }
   }
 
-  /// 从当前声源的起点重新起播（用于播放完毕后重放同一地址）。
-  Future<void> _restartSource(AudioSource source) async {
+  /// 从当前声源重新起播（支持按指定进度续播，默认从起点重放）。
+  Future<void> _restartSource(
+    AudioSource source, {
+    Duration resumeAt = Duration.zero,
+  }) async {
     try {
+      final duration = _state.duration;
+      final target =
+          resumeAt > Duration.zero &&
+                  (duration <= Duration.zero || resumeAt < duration)
+              ? resumeAt
+              : Duration.zero;
       final handle = _soLoud.play(
         source,
         volume: (_state.volume / 100).clamp(0.0, 1.0),
         paused: false,
       );
+      _soLoud.setProtectVoice(handle, true);
+      if (_state.speed != 1.0) {
+        _soLoud.setRelativePlaySpeed(handle, _state.speed);
+      }
+      if (target > Duration.zero) {
+        _soLoud.seek(handle, target);
+      }
       _handle = handle;
       _bindSoundEvents(source, handle);
       _completedEmitted = false;
-      _state = _state.copyWith(playing: true, position: Duration.zero);
-      _positionController.add(Duration.zero);
+      _resetStallTracking(target);
+      _state = _state.copyWith(playing: true, position: target);
+      _positionController.add(target);
       _startTicker();
     } on Exception catch (error) {
+      _handle = null;
+      _state = _state.copyWith(playing: false);
+      _stopTicker();
       _log('SoLoud 重新起播失败: $error', playbackFailure: true);
     }
   }
@@ -270,6 +335,7 @@ class MusicAudioPlayer implements MusicAudioPlayback {
     final handle = _handle;
     if (handle == null) {
       _state = _state.copyWith(playing: false);
+      _resetStallTracking(_state.position);
       _stopTicker();
       return;
     }
@@ -278,11 +344,15 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       _state = _state.copyWith(playing: false);
       _spectrumSampler.reset();
       _emitPosition();
+      _resetStallTracking(_state.position);
       _stopTicker();
     } on SoLoudSoundHandleNotFoundCppException {
       _handle = null;
+      _state = _state.copyWith(playing: false);
+      _resetStallTracking(_state.position);
       _stopTicker();
     } on Exception catch (error) {
+      _state = _state.copyWith(playing: false);
       _log('SoLoud 暂停失败: $error');
       _stopTicker();
     }
@@ -301,6 +371,7 @@ class MusicAudioPlayer implements MusicAudioPlayback {
     try {
       _soLoud.seek(handle, target);
       _completedEmitted = false;
+      _resetStallTracking(target);
       _state = _state.copyWith(position: target);
       _positionController.add(target);
     } on SoLoudSoundHandleNotFoundCppException {
@@ -390,6 +461,7 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       return;
     }
     _disposed = true;
+    _openGeneration++;
     _stopTicker();
     await _disposeCurrentSource();
     await _visualizationSub?.cancel();
@@ -402,9 +474,19 @@ class MusicAudioPlayer implements MusicAudioPlayback {
   }
 
   Future<void> _ensureInitialized() async {
+    final isDesktop =
+        !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.windows ||
+            defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.linux);
     if (!_soLoud.isInitialized) {
-      await _soLoud.init(bufferSize: 512, lowLatency: true);
+      if (isDesktop) {
+        await _soLoud.init(bufferSize: 2048, lowLatency: false);
+      } else {
+        await _soLoud.init(bufferSize: 512, lowLatency: true);
+      }
     }
+    _soLoud.setGlobalVolume(1.0);
     if (!_soLoud.getVisualizationEnabled()) {
       _soLoud.setVisualizationEnabled(true);
     }
@@ -424,6 +506,11 @@ class MusicAudioPlayer implements MusicAudioPlayback {
   void _stopTicker() {
     _ticker?.cancel();
     _ticker = null;
+  }
+
+  void _resetStallTracking(Duration position) {
+    _lastObservedPosition = position;
+    _stallStartedAt = null;
   }
 
   void _tick() {
@@ -447,10 +534,22 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       _markCompleted();
       return;
     }
+    // 播完判定以句柄失效事件/状态为主，避免按 duration 容差提前掐断尾音；
+    // 仅当进度已停滞且接近末尾超过宽限时间时兜底完播。
+    if (_state.position != _lastObservedPosition) {
+      _lastObservedPosition = _state.position;
+      _stallStartedAt = null;
+      return;
+    }
     final duration = _state.duration;
     if (duration > Duration.zero &&
         _state.position + _completionTolerance >= duration) {
-      _markCompleted();
+      final startedAt = _stallStartedAt ??= _spectrumClock.elapsed;
+      if (_spectrumClock.elapsed - startedAt >= _completionStallGrace) {
+        _markCompleted();
+      }
+    } else {
+      _stallStartedAt = null;
     }
   }
 
@@ -487,6 +586,7 @@ class MusicAudioPlayer implements MusicAudioPlayback {
     // 播放结束（或被 SoLoud 判定句柄失效）后句柄即不可再用，丢弃之；
     // 声源保留，便于重放同一地址时直接起播。
     _handle = null;
+    _stallStartedAt = null;
     _state = _state.copyWith(playing: false);
     _spectrumSampler.reset();
     _stopTicker();
@@ -528,6 +628,7 @@ class MusicAudioPlayer implements MusicAudioPlayback {
     _handle = null;
     _source = null;
     _url = null;
+    _resetStallTracking(Duration.zero);
     _state = _state.copyWith(playing: false, position: Duration.zero);
     _spectrumMapper.reset();
     _spectrumSampler.reset();

@@ -159,13 +159,19 @@ public class NotificationService implements NotificationPublisher, NotificationR
             log.warn("延迟通知投递并发已满，丢弃本次通知: userId={}, type={}", userId, type);
             return;
         }
-        deferredExecutor.execute(() -> {
-            try {
-                deliverQuietly(userId, type, title, message, metadata);
-            } finally {
-                deferredPermits.release();
-            }
-        });
+        try {
+            deferredExecutor.execute(() -> {
+                try {
+                    deliverQuietly(userId, type, title, message, metadata);
+                } finally {
+                    deferredPermits.release();
+                }
+            });
+        } catch (RuntimeException ex) {
+            deferredPermits.release();
+            log.warn("延迟通知任务提交失败，已释放并发许可: userId={}, type={}, errorType={}",
+                    userId, type, ex.getClass().getSimpleName());
+        }
     }
 
     private void deliverQuietly(UUID userId, String type, String title, String message,

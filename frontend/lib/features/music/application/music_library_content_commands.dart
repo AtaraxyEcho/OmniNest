@@ -75,6 +75,68 @@ extension MusicLibraryContentCommands on MusicCenterController {
     }
   }
 
+  /// 轻量化同步单条/少量曲目的实时更新（如收藏变更回波），避免整页 `_loadState` 抖动。
+  ///
+  /// 返回 `true` 表示已就地合并；若曲目已删除或批量变更，返回 `false` 交由全量刷新兜底。
+  Future<bool> syncTracksLightweight(List<String> trackIds) async {
+    if (trackIds.isEmpty || trackIds.length > 5) {
+      return false;
+    }
+    final uniqueIds = trackIds.toSet();
+    for (final trackId in uniqueIds) {
+      final MusicTrack detail;
+      try {
+        detail = await _api.trackDetail(trackId);
+      } on Object {
+        // 解析失败抛的是 TypeError/StateError（Error 而非 Exception），
+        // 轻量同步必须降级回全量刷新，不能把异常抛进实时同步处理链。
+        return false;
+      }
+      if (_controllerDisposed) {
+        return true;
+      }
+      final live = _currentState;
+      if (live == null) {
+        return false;
+      }
+      List<MusicTrack> patchTrackList(List<MusicTrack> items) {
+        return items
+            .map((item) => item.id == detail.id ? detail : item)
+            .toList(growable: false);
+      }
+
+      List<MusicPlayableItem> patchPlayableList(List<MusicPlayableItem> items) {
+        return items
+            .map(
+              (item) =>
+                  item.ref is LocalMusicRef && item.track.id == detail.id
+                      ? item.copyWith(track: detail)
+                      : item,
+            )
+            .toList(growable: false);
+      }
+
+      final nextCurrentItem =
+          live.currentItem != null &&
+                  live.currentItem!.ref is LocalMusicRef &&
+                  live.currentItem!.track.id == detail.id
+              ? live.currentItem!.copyWith(track: detail)
+              : live.currentItem;
+      _replaceState(
+        live.copyWith(
+          tracks: patchTrackList(live.tracks),
+          selectedPlaylistTracks: patchTrackList(live.selectedPlaylistTracks),
+          selectedAlbumTracks: patchTrackList(live.selectedAlbumTracks),
+          selectedArtistTracks: patchTrackList(live.selectedArtistTracks),
+          playbackItems: patchPlayableList(live.playbackItems),
+          recentItems: patchPlayableList(live.recentItems),
+          currentItem: nextCurrentItem,
+        ),
+      );
+    }
+    return true;
+  }
+
   /// 更新本地曲目元数据，并在需要时先上传自定义封面。
   ///
   /// [clearCover] 为 true 时显式清空封面（与 [coverBytes] 互斥，新封面优先）；
@@ -157,6 +219,21 @@ extension MusicLibraryContentCommands on MusicCenterController {
             .toList(growable: false);
       }
 
+      List<MusicPlayableItem> patchPlayableFavorite(
+        List<MusicPlayableItem> items,
+      ) {
+        return items
+            .map(
+              (item) =>
+                  item.track.id == track.id
+                      ? item.copyWith(
+                        track: item.track.copyWith(favorite: !track.favorite),
+                      )
+                      : item,
+            )
+            .toList(growable: false);
+      }
+
       // 收藏回写取发布时刻的实况：远端请求窗口内的队列与分页变化不能被旧快照覆盖。
       final live = _liveOr(current);
       final nextCurrentItem =
@@ -173,6 +250,8 @@ extension MusicLibraryContentCommands on MusicCenterController {
           selectedPlaylistTracks: patchFavorite(live.selectedPlaylistTracks),
           selectedAlbumTracks: patchFavorite(live.selectedAlbumTracks),
           selectedArtistTracks: patchFavorite(live.selectedArtistTracks),
+          playbackItems: patchPlayableFavorite(live.playbackItems),
+          recentItems: patchPlayableFavorite(live.recentItems),
           currentItem: nextCurrentItem,
         ),
       );

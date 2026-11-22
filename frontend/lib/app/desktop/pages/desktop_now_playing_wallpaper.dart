@@ -92,7 +92,8 @@ class _NpAnimState extends ChangeNotifier {
 
 /// Now Playing 背景（样例 `.np-bg` 的六档）：
 /// 完整复刻 `Wallpaper.tsx` 平滑阻尼状态机与 6 种动态预设：
-/// `aurora` / `spectrum`（四层景深声场）/ `library`（隔离全局 dim/blur 并支持内置 live 极光）/
+/// `aurora` / `spectrum`（新版 5 层频谱脉动，无 np-orb）/
+/// `library`（隔离全局 dim/blur 并支持内置 live 极光）/
 /// `cover`（blur 20 + 30s 轻缓推镜）/ `gradient` / `plain`（1s 切歌缓动径向微光）。
 class _NpBackdrop extends ConsumerStatefulWidget {
   const _NpBackdrop({
@@ -100,12 +101,14 @@ class _NpBackdrop extends ConsumerStatefulWidget {
     required this.cover,
     required this.playing,
     required this.hueColor,
+    this.seed = '',
   });
 
   final DesktopNpStyle style;
   final String? cover;
   final bool playing;
   final Color hueColor;
+  final String seed;
 
   @override
   ConsumerState<_NpBackdrop> createState() => _NpBackdropState();
@@ -123,6 +126,7 @@ class _NpBackdropState extends ConsumerState<_NpBackdrop>
 
   bool get _needsTicker =>
       widget.style.background != DesktopNpBackground.gradient &&
+      widget.style.background != DesktopNpBackground.spectrum &&
       (widget.style.background != DesktopNpBackground.library ||
           _isLibraryLive);
 
@@ -177,10 +181,10 @@ class _NpBackdropState extends ConsumerState<_NpBackdrop>
     super.dispose();
   }
 
-  Widget _buildLiveAurora({required bool spectrum}) {
+  Widget _buildLiveAurora() {
     return RepaintBoundary(
       child: CustomPaint(
-        painter: _NpLiveWallpaperPainter(anim: _anim, spectrum: spectrum),
+        painter: _NpLiveWallpaperPainter(anim: _anim),
         child: const SizedBox.expand(),
       ),
     );
@@ -190,9 +194,11 @@ class _NpBackdropState extends ConsumerState<_NpBackdrop>
   Widget build(BuildContext context) {
     final style = widget.style;
     final hue = widget.hueColor;
+    // 对齐 polish.css:652 `.np.bg-spectrum .np-orb { display: none; }`。
     final showOrbs =
         style.background != DesktopNpBackground.gradient &&
-        style.background != DesktopNpBackground.library;
+        style.background != DesktopNpBackground.library &&
+        style.background != DesktopNpBackground.spectrum;
 
     Widget base = switch (style.background) {
       DesktopNpBackground.cover =>
@@ -228,8 +234,12 @@ class _NpBackdropState extends ConsumerState<_NpBackdrop>
                 ),
               ),
             ),
-      DesktopNpBackground.aurora => _buildLiveAurora(spectrum: false),
-      DesktopNpBackground.spectrum => _buildLiveAurora(spectrum: true),
+      DesktopNpBackground.aurora => _buildLiveAurora(),
+      DesktopNpBackground.spectrum => NpSpectrumBackdrop(
+        hueColor: hue,
+        playing: widget.playing,
+        seed: widget.seed,
+      ),
       DesktopNpBackground.gradient => _angleGradient(context, style, hue),
       DesktopNpBackground.plain => AnimatedContainer(
         duration: MotionToken.reduced(context, DesktopMotion.colorFade),
@@ -339,7 +349,7 @@ class _NpBackdropState extends ConsumerState<_NpBackdrop>
   Widget _wallpaper(BuildContext context, WidgetRef ref, String wallId) {
     // 内置 live 极光壁纸直接接入播放状态与曲目色相。
     if (wallId == 'b-aurora' || wallId == 'live') {
-      return _buildLiveAurora(spectrum: false);
+      return _buildLiveAurora();
     }
     final state = ref.watch(appBackdropControllerProvider).asData?.value;
     if (state == null) {
@@ -376,19 +386,12 @@ class _NpBackdropState extends ConsumerState<_NpBackdrop>
   }
 }
 
-/// 动态预设壁纸绘制器（复刻样例 `Wallpaper.tsx` 并升级四层景深声场）：
-/// - `aurora`：5 球同色系 `(hueDeg + (i - 2) * 22°)` 大半径全屏流动轨道 + 柔焦效果，受 `level` 驱动呼吸；
-/// - `spectrum`：
-///   - Layer 1 极光柔焦底；
-///   - Layer 2 `MaskFilter.blur(24)` 低频弥散脉冲环；
-///   - Layer 3 64 根连续色相径向主频谱（圆形非退化渐变，右侧歌词区 `cosA > 0.25` 柔和衰减）；
-///   - Layer 4 `1.0px` 基线细环与峰顶星点。
+/// 动态极光壁纸绘制器（复刻样例 `Wallpaper.tsx` `Aurora`）：
+/// 5 球同色系 `(hueDeg + (i - 2) * 22°)` 大半径全屏流动轨道 + 柔焦效果，受 `level` 驱动呼吸。
 class _NpLiveWallpaperPainter extends CustomPainter {
-  _NpLiveWallpaperPainter({required this.anim, required this.spectrum})
-    : super(repaint: anim);
+  _NpLiveWallpaperPainter({required this.anim}) : super(repaint: anim);
 
   final _NpAnimState anim;
-  final bool spectrum;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -398,13 +401,12 @@ class _NpLiveWallpaperPainter extends CustomPainter {
 
     final t = anim.phase;
     final level = anim.level;
-    final energy = anim.energy;
     final h0 = anim.hueDeg;
     final sat = anim.sat;
     final lit = anim.lit;
 
-    // Layer 1：5 球同色系大半径全屏流动极光 + 柔焦效果（受 level 驱动呼吸）。
-    final auroraOpacity = spectrum ? 0.42 : 0.55;
+    // 5 球同色系大半径全屏流动极光 + 柔焦效果（受 level 驱动呼吸）。
+    const auroraOpacity = 0.55;
     for (var i = 0; i < 5; i++) {
       final k = i * 1.7 + 0.6;
       final cx = size.width * (0.5 + 0.42 * math.sin(t * (0.5 + i * 0.13) + k));
@@ -430,119 +432,14 @@ class _NpLiveWallpaperPainter extends CustomPainter {
             ).createShader(orbRect);
       canvas.drawCircle(center, r, paint);
     }
-
-    if (!spectrum) return;
-
-    // spectrum 模式：圆心居中至 (0.50w, 0.46h) 彻底离开唱机边缘。
-    final center = Offset(size.width * 0.50, size.height * 0.46);
-    final minDim = math.min(size.width, size.height);
-    final baseR = minDim * 0.21;
-    final maxLen = minDim * 0.20;
-
-    // Layer 2：`MaskFilter.blur(24)` 低频弥散脉冲环。
-    final pulseR = baseR * (1.0 + 0.055 * level * energy);
-    final pulseStroke = minDim * (0.040 + 0.024 * level * energy);
-    final pulseColor = HSLColor.fromAHSL(1.0, h0, sat, lit).toColor();
-    canvas.drawCircle(
-      center,
-      pulseR,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = pulseStroke
-        ..blendMode = BlendMode.plus
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24)
-        ..color = pulseColor.withValues(
-          alpha: ((0.18 + 0.24 * level) * energy).clamp(0.0, 1.0),
-        ),
-    );
-
-    // Layer 3：64 根连续色相径向主频谱（右侧歌词区 cosA > 0.25 柔和衰减护眼）。
-    const rays = 64;
-    final spinAngle = t * 0.15;
-    final starPaint = Paint()..blendMode = BlendMode.plus;
-
-    for (var i = 0; i < rays; i++) {
-      final a = spinAngle + (i / rays) * 2 * math.pi;
-      final cosA = math.cos(a);
-      final sinA = math.sin(a);
-
-      // 对右侧歌词区自动柔和衰减护眼。
-      final rightFade =
-          cosA > 0.25
-              ? (1.0 - ((cosA - 0.25) / 0.75) * 0.65).clamp(0.35, 1.0)
-              : 1.0;
-
-      final wave =
-          (math.sin(t * 6.0 + i * 0.9) * math.cos(t * 3.1 + i * 0.37)).abs();
-      final e = (0.18 + 0.82 * wave * (0.55 + level * 0.55)) * energy;
-      final innerR = baseR;
-      final outerR = baseR + maxLen * (0.08 + 0.92 * e);
-
-      final p1 = Offset(center.dx + cosA * innerR, center.dy + sinA * innerR);
-      final p2 = Offset(center.dx + cosA * outerR, center.dy + sinA * outerR);
-      final mid = Offset((p1.dx + p2.dx) * 0.5, (p1.dy + p2.dy) * 0.5);
-      final halfLen = math.max(1.0, (outerR - innerR) * 0.5);
-
-      final rayHue = (h0 + (i / rays) * 140.0) % 360.0;
-      final baseColor = HSLColor.fromAHSL(1.0, rayHue, 0.82, 0.60).toColor();
-      final tipColor =
-          HSLColor.fromAHSL(1.0, (rayHue + 20.0) % 360.0, 0.88, 0.78).toColor();
-      final rayAlpha = ((0.20 + 0.54 * e) * rightFade).clamp(0.0, 1.0);
-
-      // 使用沿射线方向对齐的圆形非退化包围盒生成精确 p1 -> p2 线性渐变，
-      // 彻底修复水平/垂直射线下 Rect.fromPoints 退化为零宽/零高的 Bug。
-      final rayPaint =
-          Paint()
-            ..blendMode = BlendMode.plus
-            ..strokeCap = StrokeCap.round
-            ..strokeWidth = 2.4
-            ..shader = LinearGradient(
-              begin: Alignment(-cosA, -sinA),
-              end: Alignment(cosA, sinA),
-              colors: [
-                baseColor.withValues(alpha: rayAlpha * 0.42),
-                tipColor.withValues(alpha: rayAlpha),
-              ],
-            ).createShader(Rect.fromCircle(center: mid, radius: halfLen));
-      canvas.drawLine(p1, p2, rayPaint);
-
-      // Layer 4b：峰顶星点（随能量与右侧护眼衰减平滑显现）。
-      if (e > 0.28) {
-        final starR = outerR + 3.5;
-        final starPos = Offset(
-          center.dx + cosA * starR,
-          center.dy + sinA * starR,
-        );
-        final starAlpha = (((e - 0.28) / 0.72) * 0.72 * rightFade).clamp(
-          0.0,
-          1.0,
-        );
-        starPaint.color = Colors.white.withValues(alpha: starAlpha);
-        canvas.drawCircle(starPos, 1.3 + 0.8 * e, starPaint);
-      }
-    }
-
-    // Layer 4a：1.0px 基线细环。
-    final ringColor = HSLColor.fromAHSL(1.0, h0, 0.65, 0.78).toColor();
-    canvas.drawCircle(
-      center,
-      baseR,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.0
-        ..blendMode = BlendMode.plus
-        ..color = ringColor.withValues(
-          alpha: (0.14 + 0.14 * energy).clamp(0.0, 1.0),
-        ),
-    );
   }
 
   @override
   bool shouldRepaint(_NpLiveWallpaperPainter oldDelegate) =>
-      oldDelegate.anim != anim || oldDelegate.spectrum != spectrum;
+      oldDelegate.anim != anim;
 }
 
-/// 2 枚 `BlendMode.screen` 恒速慢漂移柔光球 `np-orb`（用于非 `gradient`/`library` 模式）：
+/// 2 枚 `BlendMode.screen` 恒速慢漂移柔光球 `np-orb`（用于非 `gradient`/`library`/`spectrum` 模式）：
 /// `o1` 位于左上画外 `(-0.08w, -0.10h)`、`o2` 位于右下画外 `(1.06w, 1.08h)`，
 /// 双球均取平滑 `hueDeg` 并在 `wallClock` 上恒速流动。
 class _NpOrbsPainter extends CustomPainter {

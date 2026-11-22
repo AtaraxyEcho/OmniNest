@@ -406,10 +406,7 @@ void registerMusicPlatformTests() {
           ),
         ],
         child: MaterialApp(
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            ...GlobalMaterialLocalizations.delegates,
-          ],
+          localizationsDelegates: kOmniNestLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: const MusicDeckMobileSearchPage(),
         ),

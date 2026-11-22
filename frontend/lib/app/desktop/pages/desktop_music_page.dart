@@ -341,8 +341,11 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
   Future<void> _playFavoriteTrack(MusicTrack startTrack) async {
     final controller = ref.read(musicCenterControllerProvider.notifier);
     try {
+      final remoteFavorites =
+          ref.read(musicFavoriteTracksProvider).asData?.value;
       final current = ref.read(musicCenterControllerProvider).asData?.value;
       final favorites =
+          remoteFavorites ??
           current?.tracks
               .where((track) => track.favorite)
               .toList(growable: false) ??
@@ -358,12 +361,14 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
         startIndex: startIndex,
         source: MusicQueueSource.transient,
       );
-      unawaited(
-        _streamFavoriteQueue(
-          seededTrackIds: favorites.map((track) => track.id).toSet(),
-          startTrackId: startTrack.id,
-        ),
-      );
+      if (remoteFavorites == null) {
+        unawaited(
+          _streamFavoriteQueue(
+            seededTrackIds: favorites.map((track) => track.id).toSet(),
+            startTrackId: startTrack.id,
+          ),
+        );
+      }
     } on Object catch (error) {
       if (mounted) {
         showDesktopToast(
@@ -822,6 +827,10 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
                   children: [
                     _TracksView(
                       tracks:
+                          ref
+                              .watch(musicFavoriteTracksProvider)
+                              .asData
+                              ?.value ??
                           state?.tracks
                               .where((track) => track.favorite)
                               .toList(growable: false) ??

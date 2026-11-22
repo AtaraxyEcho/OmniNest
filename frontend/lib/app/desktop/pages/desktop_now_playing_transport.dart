@@ -4,6 +4,7 @@ class _Transport extends StatelessWidget {
   const _Transport({
     required this.trackId,
     required this.playing,
+    required this.hueColor,
     required this.playMode,
     required this.queueLength,
     required this.queueIndex,
@@ -30,6 +31,7 @@ class _Transport extends StatelessWidget {
 
   final String trackId;
   final bool playing;
+  final Color hueColor;
   final MusicPlayMode playMode;
   final int queueLength;
   final int queueIndex;
@@ -279,6 +281,7 @@ class _Transport extends StatelessWidget {
                     Expanded(
                       child: _WaveSeek(
                         trackId: trackId,
+                        hueColor: hueColor,
                         position: shownDuration,
                         duration: duration,
                         playing: playing,

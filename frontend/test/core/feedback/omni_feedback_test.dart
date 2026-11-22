@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:toastification/toastification.dart';
@@ -10,10 +11,7 @@ Widget _host(Widget child) {
     config: omniFeedbackToastConfig,
     child: MaterialApp(
       locale: const Locale('zh'),
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        ...GlobalMaterialLocalizations.delegates,
-      ],
+      localizationsDelegates: kOmniNestLocalizationsDelegates,
       supportedLocales: const [Locale('zh'), Locale('en')],
       home: Scaffold(body: Center(child: child)),
     ),

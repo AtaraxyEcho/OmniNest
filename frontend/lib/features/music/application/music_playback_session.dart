@@ -62,6 +62,9 @@ final musicPlaybackSessionProvider =
 
 /// 全局音乐播放会话控制器。
 class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
+  static const Duration _planRenewalLead = Duration(minutes: 2);
+  static const Duration _planRenewalCooldown = Duration(seconds: 30);
+
   /// 会话可能被 invalidate 后在同一 notifier 实例上重建，字段不能声明为 late final。
   late MusicAudioPlayback _player;
   StreamSubscription<bool>? _completedSub;
@@ -82,6 +85,9 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
   bool _persistRequested = false;
   bool _pendingCompleted = false;
   bool _completedForLoadedItem = false;
+  bool _renewingPlan = false;
+  String? _lastRenewedPlanUrl;
+  DateTime? _lastPlanRenewalAttemptAt;
   _PendingSeek? _pendingSeek;
   Future<void>? _persistFuture;
   AppLifecycleListener? _lifecycleListener;
@@ -103,6 +109,9 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
     _loadedUrl = null;
     _loadedItem = null;
     _lastSavedSecond = -1;
+    _renewingPlan = false;
+    _lastRenewedPlanUrl = null;
+    _lastPlanRenewalAttemptAt = null;
     _listeningPlayableKey = null;
     _listeningHistoryId = null;
     _listenedMilliseconds = 0;
@@ -414,9 +423,8 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
 
   /// 受控跳转：所有用户发起的进度跳转都走这里，而不是直接操作播放器。
   ///
-  /// 切歌时 `_openItem` 会把新音源定位到 0；若此刻用户点了歌词行或拖了进度条，
-  /// 直接 `player.seek()` 会被那次归零覆盖（表现为跳转后仍从头播放）。因此目标
-  /// 位置先记下来，加载完成后对同一曲目生效；曲目已加载时立即跳转。
+  /// 切歌时 `_openItem` 会消费待生效跳转；若此刻用户点了歌词行或拖了进度条，
+  /// 目标位置先记下来，加载完成后对同一曲目生效；曲目已加载时立即跳转。
   Future<void> seekTo(Duration position) async {
     final item =
         ref.read(musicCenterControllerProvider).asData?.value.currentItem;
@@ -449,6 +457,57 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
     return pending.playableKey == playableKey ? pending.position : null;
   }
 
+  Future<void> _renewPlaybackPlan(
+    MusicCenterState current,
+    MusicPlayableItem item,
+    MusicPlaybackPlan plan,
+    Duration resumePosition,
+  ) async {
+    if (_renewingPlan) {
+      return;
+    }
+    final now = DateTime.now();
+    if (_lastRenewedPlanUrl == plan.url &&
+        _lastPlanRenewalAttemptAt != null &&
+        now.difference(_lastPlanRenewalAttemptAt!) < _planRenewalCooldown) {
+      return;
+    }
+    _renewingPlan = true;
+    _lastRenewedPlanUrl = plan.url;
+    _lastPlanRenewalAttemptAt = now;
+    final wasPlaying = current.isPlaying;
+    try {
+      if (resumePosition > Duration.zero) {
+        _pendingSeek = (
+          playableKey: item.playableKey,
+          position: resumePosition,
+        );
+      }
+      await _persistCurrent();
+      final controller = ref.read(musicCenterControllerProvider.notifier);
+      if (current.playbackIndex >= 0 &&
+          current.playbackIndex < current.playbackItems.length &&
+          current.playbackItems[current.playbackIndex].playableKey ==
+              item.playableKey) {
+        await controller.playQueueIndex(current.playbackIndex);
+      } else {
+        await controller.playActiveTrack();
+      }
+      if (!ref.mounted) {
+        return;
+      }
+      if (!wasPlaying) {
+        await controller.setPlaying(false);
+      }
+    } on Object catch (error) {
+      if (kDebugMode) {
+        devLog('[_renewPlaybackPlan] 续签播放计划失败: $error');
+      }
+    } finally {
+      _renewingPlan = false;
+    }
+  }
+
   Future<void> _syncOnce() async {
     final current = ref.read(musicCenterControllerProvider).asData?.value;
     if (current == null) {
@@ -478,16 +537,26 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
       }
       return;
     }
-    if (plan.expiresAt != null && DateTime.now().isAfter(plan.expiresAt!)) {
-      // 播放计划已过期：静默停止并置空，避免 invalidate 自触发重建循环。
-      if (_player.state.playing) {
-        await _player.pause();
-        await _persistCurrent();
+    final expiresAt = plan.expiresAt;
+    if (expiresAt != null) {
+      final now = DateTime.now();
+      final isExpired = now.isAfter(expiresAt);
+      final isNearExpiry = now.isAfter(expiresAt.subtract(_planRenewalLead));
+      if (isNearExpiry &&
+          (_loadedItem?.playableKey == item.playableKey || current.isPlaying)) {
+        // 令牌临近或已过期：记录当前进度并静默触发重拉播放计划续播，
+        // 不再清空 _loadedUrl/_loadedItem，避免收藏或刷新时从 00:00 重头播放。
+        final resumePosition =
+            _loadedItem?.playableKey == item.playableKey
+                ? _player.state.position
+                : Duration.zero;
+        unawaited(_renewPlaybackPlan(current, item, plan, resumePosition));
+        if (isExpired) {
+          return;
+        }
+      } else if (isExpired) {
+        return;
       }
-      _loadedUrl = null;
-      _loadedItem = null;
-      _lastSavedSecond = 0;
-      return;
     }
     if (_loadedUrl != plan.url ||
         _loadedItem?.playableKey != item.playableKey) {
@@ -519,22 +588,36 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
     required bool play,
   }) async {
     try {
+      final sameLoadedItem =
+          _loadedItem?.playableKey == item.playableKey &&
+          !_completedForLoadedItem;
+      final livePosition =
+          sameLoadedItem && _player.state.position > Duration.zero
+              ? _player.state.position
+              : null;
       if (_loadedItem != null && _player.state.playing) {
         await _player.pause();
       }
       await _persistCurrent();
-      await openMusicAudio(_player, url, play: false);
-      await _player.seek(_takePendingSeek(item.playableKey) ?? Duration.zero);
+      final pendingSeek = _takePendingSeek(item.playableKey) ?? livePosition;
+      final shouldSeek = pendingSeek != null && pendingSeek > Duration.zero;
+      await openMusicAudio(_player, url, play: play && !shouldSeek);
+      if (shouldSeek) {
+        await _player.seek(pendingSeek);
+      }
       _loadedUrl = url;
       _loadedItem = item;
       _completedForLoadedItem = false;
-      _lastSavedSecond = 0;
+      _lastSavedSecond = shouldSeek ? pendingSeek.inSeconds : 0;
       final latestItem =
           ref.read(musicCenterControllerProvider).asData?.value.currentItem;
       if (latestItem?.playableKey != item.playableKey) {
+        if (play && !shouldSeek) {
+          await _player.pause();
+        }
         return;
       }
-      if (play) {
+      if (play && shouldSeek) {
         await _player.play();
       }
       state = state.copyWith(lastError: null);

@@ -49,12 +49,14 @@ class CurlFrame {
     required this.direction,
     required this.config,
     this.isPeek = false,
+    this.isTurning = false,
   });
 
   final double progress;
   final CurlDirection direction;
   final CurlGrabConfig config;
   final bool isPeek;
+  final bool isTurning;
 
   static const idle = CurlFrame(
     progress: 0,
@@ -62,7 +64,7 @@ class CurlFrame {
     config: CurlGrabConfig.defaultNext,
   );
 
-  bool get active => progress > 0.0005;
+  bool get active => isTurning || progress > 0.0005;
 }
 
 /// 预烘焙 128×128 纸张微噪点纹理（静止纸面与动态卷页共用同一份 Shader，耗时 < 0.05ms/帧）。

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
@@ -7,6 +8,7 @@ import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
+import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
@@ -16,7 +18,11 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/features/music/domain/music_playable_item.dart'
+    show LocalMusicRef;
 import 'package:omninest/features/music/music_portal.dart';
 
 part 'desktop_player_bar_parts.dart';
@@ -46,6 +52,23 @@ class DesktopPlayerBar extends ConsumerStatefulWidget {
 class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
   double _lastAudibleVolume = 100;
 
+  Future<void> _toggleFavorite(MusicTrack track) async {
+    try {
+      await ref
+          .read(musicCenterControllerProvider.notifier)
+          .toggleFavorite(track);
+    } on Object catch (error) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
+      showDesktopToast(
+        context,
+        failureToast(l10n, l10n.photosFavorite, error),
+        kind: DesktopToastKind.error,
+        icon: DesktopIcons.info,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
@@ -72,9 +95,9 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
     // 只订阅播放条真正渲染的三个字段：中心控制器每次重建都会带上整份
     // 曲库快照（专辑/艺人/歌单/分页），直接 watch 整份 AsyncValue 会让
     // 后台次级回填把这条 36σ 毛玻璃底栏一起重建。
-    final centerTrack = ref.watch(
+    final currentItem = ref.watch(
       musicCenterControllerProvider.select(
-        (state) => state.asData?.value.currentItem?.track,
+        (state) => state.asData?.value.currentItem,
       ),
     );
     final mode = ref.watch(
@@ -82,7 +105,14 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
         (state) => state.asData?.value.playMode ?? MusicPlayMode.sequential,
       ),
     );
-    final current = centerTrack;
+    final canManageOwnActivity = ref.watch(
+      userCapabilitiesProvider.select((caps) => caps.canManageOwnActivity),
+    );
+    final current = currentItem?.track;
+    final canFavorite =
+        current != null &&
+        currentItem?.ref is LocalMusicRef &&
+        canManageOwnActivity;
     final durationSeconds = current?.durationSeconds ?? 0;
     final favorite = current?.favorite ?? false;
     // 时间轴订阅已隔离至 `_IsolatedPlayerSeekBar` 内部：此处不再于顶层
@@ -92,10 +122,6 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
     final shellState = ref.watch(desktopShellProvider);
     final shellController = ref.read(desktopShellProvider.notifier);
     final engine = track == null ? null : ref.watch(musicAudioPlaybackProvider);
-    final volume = engine?.state.volume ?? _lastAudibleVolume;
-    if (volume > 0) {
-      _lastAudibleVolume = volume;
-    }
 
     return LayoutBuilder(
       builder: (context, viewport) {
@@ -182,14 +208,11 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
                                     tooltip: l10n.desktopFavorite,
                                     color: favorite ? skin.liked : null,
                                     onPressed:
-                                        current == null
+                                        !canFavorite
                                             ? null
-                                            : () => ref
-                                                .read(
-                                                  musicCenterControllerProvider
-                                                      .notifier,
-                                                )
-                                                .toggleFavorite(current),
+                                            : () => unawaited(
+                                              _toggleFavorite(current),
+                                            ),
                                   ),
                                   SizedBox(width: sectionGap),
                                   Expanded(
@@ -366,45 +389,89 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
                                         width:
                                             DesktopMetrics.playerBarControlGap,
                                       ),
-                                      DesktopIconButton(
-                                        key: const ValueKey(
-                                          'desktop-player-mute',
-                                        ),
-                                        icon:
-                                            volume <= 0
-                                                ? DesktopIcons.mute
-                                                : DesktopIcons.volume,
-                                        tooltip: l10n.desktopMute,
-                                        onPressed:
-                                            engine == null
-                                                ? null
-                                                : () => engine.setVolume(
-                                                  volume <= 0
-                                                      ? _lastAudibleVolume
-                                                      : 0,
-                                                ),
-                                      ),
-                                      if (showVolume) ...[
-                                        SizedBox(
-                                          width:
-                                              DesktopMetrics
-                                                  .playerBarControlGap,
-                                        ),
-                                        DesktopSlider(
+                                      if (engine == null) ...[
+                                        DesktopIconButton(
                                           key: const ValueKey(
-                                            'desktop-player-volume',
+                                            'desktop-player-mute',
                                           ),
-                                          width: 92,
-                                          value: volume,
-                                          max: 100,
-                                          trackColor: skin.raise3,
-                                          fillColor: skin.accent,
-                                          thumbAlwaysVisible: true,
-                                          onChanged:
-                                              (value) =>
-                                                  engine?.setVolume(value),
+                                          icon: DesktopIcons.volume,
+                                          tooltip: l10n.desktopMute,
+                                          onPressed: null,
                                         ),
-                                      ],
+                                        if (showVolume) ...[
+                                          SizedBox(
+                                            width:
+                                                DesktopMetrics
+                                                    .playerBarControlGap,
+                                          ),
+                                          DesktopSlider(
+                                            key: const ValueKey(
+                                              'desktop-player-volume',
+                                            ),
+                                            width: 92,
+                                            value: _lastAudibleVolume,
+                                            max: 100,
+                                            trackColor: skin.raise3,
+                                            fillColor: skin.accent,
+                                            thumbAlwaysVisible: true,
+                                            onChanged: (_) {},
+                                          ),
+                                        ],
+                                      ] else
+                                        StreamBuilder<double>(
+                                          stream: engine.stream.volume,
+                                          initialData: engine.state.volume,
+                                          builder: (context, volumeSnap) {
+                                            final volume =
+                                                (volumeSnap.data ??
+                                                        engine.state.volume)
+                                                    .clamp(0.0, 100.0)
+                                                    .toDouble();
+                                            if (volume > 0) {
+                                              _lastAudibleVolume = volume;
+                                            }
+                                            return Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                DesktopIconButton(
+                                                  key: const ValueKey(
+                                                    'desktop-player-mute',
+                                                  ),
+                                                  icon:
+                                                      volume <= 0
+                                                          ? DesktopIcons.mute
+                                                          : DesktopIcons.volume,
+                                                  tooltip: l10n.desktopMute,
+                                                  onPressed:
+                                                      () => engine.setVolume(
+                                                        volume <= 0
+                                                            ? _lastAudibleVolume
+                                                            : 0,
+                                                      ),
+                                                ),
+                                                if (showVolume) ...[
+                                                  SizedBox(
+                                                    width:
+                                                        DesktopMetrics
+                                                            .playerBarControlGap,
+                                                  ),
+                                                  DesktopSlider(
+                                                    key: const ValueKey(
+                                                      'desktop-player-volume',
+                                                    ),
+                                                    width: 92,
+                                                    value: volume,
+                                                    max: 100,
+                                                    trackColor: skin.raise3,
+                                                    fillColor: skin.accent,
+                                                    thumbAlwaysVisible: true,
+                                                    onChanged: engine.setVolume,
+                                                  ),
+                                                ],
+                                              ],
+                                            );
+                                          },
+                                        ),
                                       SizedBox(
                                         width:
                                             DesktopMetrics.playerBarControlGap,

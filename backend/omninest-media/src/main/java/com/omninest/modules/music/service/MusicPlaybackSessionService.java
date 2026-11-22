@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class MusicPlaybackSessionService {
-    private static final Duration DEFAULT_TOKEN_TTL = Duration.ofMinutes(10);
+    private static final Duration DEFAULT_TOKEN_TTL = Duration.ofMinutes(60);
     private static final Duration LOCAL_SESSION_CACHE_TTL = Duration.ofSeconds(30);
 
     /** 进程内会话缓存容量上限，超出时淘汰最早过期条目。 */

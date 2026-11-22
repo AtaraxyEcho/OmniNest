@@ -20,6 +20,7 @@ import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_search.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
+import 'package:omninest/app/l10n/omni_localizations_delegates.dart';
 
 part 'music_controller_platform_test_part.dart';
 part 'music_controller_first_frame_test_part.dart';

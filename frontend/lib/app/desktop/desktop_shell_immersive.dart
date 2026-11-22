@@ -151,11 +151,18 @@ class _AmbientLayer extends ConsumerWidget {
       desktopAppearanceProvider.select((appearance) => appearance.reduceMotion),
     );
     final imageUrl = _resolveAmbientImage(ref);
+    final prefix = _modulePrefix(path);
+    final showArt =
+        prefix == '/video' ||
+        prefix == '/photos' ||
+        prefix == '/music' ||
+        prefix == '/reader';
     return ExcludeSemantics(
       child: DesktopAmbient(
         imageUrl: imageUrl,
         intensity: intensity,
         reduceMotion: reduceMotion,
+        showArt: showArt,
       ),
     );
   }

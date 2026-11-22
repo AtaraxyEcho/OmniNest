@@ -43,7 +43,7 @@ public class MusicStreamGatewayService {
     private static final int MAX_REDIRECT_COUNT = 5;
     private static final int BUFFER_SIZE = 16 * 1024;
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(8);
-    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofMinutes(5);
 
     private final MusicPlaybackSessionService sessionService;
     private final MusicOnlineSourceUrlPolicy sourceUrlPolicy;
@@ -177,6 +177,11 @@ public class MusicStreamGatewayService {
                     null,
                     headRequest
             );
+        }
+        if (totalBytes <= 0) {
+            return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                    .header(HttpHeaders.CONTENT_RANGE, "bytes */0")
+                    .build();
         }
         ByteRange parsed = parseRange(range, totalBytes);
         if (parsed == null) {

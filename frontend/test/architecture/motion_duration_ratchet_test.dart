@@ -27,6 +27,12 @@ void main() {
     // 状态灯控制器原在 admin_shell.dart，随键盘无障碍整改拆到独立文件。
     'lib/features/admin/presentation/widgets/admin_status_dot.dart 1600':
         '工作区指示动画',
+    // 新版样例波形进度条（`.wave-rip` .7s / `.wbeat` .9s）：点击扩散涟漪与
+    // 播放头邻域脉动属内容节奏，不是交互反馈，与媒体类节奏同档。
+    'lib/app/desktop/pages/desktop_now_playing_deck.dart 700':
+        '波形点击扩散涟漪，对齐样例 .wave-rip',
+    'lib/app/desktop/pages/desktop_now_playing_deck.dart 900':
+        '播放头邻域亮度脉动，对齐样例 .wbeat',
   };
 
   test('动画时长不得新增硬编码超预算值', () {

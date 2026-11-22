@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 
 import 'package:flutter/gestures.dart'
     show
+        GestureBinding,
         PointerScrollEvent,
         PointerSignalEvent,
         VelocityTracker,
@@ -283,8 +284,8 @@ class _ReaderPageViewState extends State<ReaderPageView>
   static const _tapMoveThreshold = 6.0;
 
   // ── 热区比例 ──
-  static const _leftZoneRatio = 0.25;
-  static const _rightZoneRatio = 0.25;
+  static const _leftZoneRatio = 0.30;
+  static const _rightZoneRatio = 0.30;
 
   // ── 配置 ──
   static const _commitThreshold = 0.35;
@@ -349,6 +350,10 @@ class _ReaderPageViewState extends State<ReaderPageView>
       if (widget.pageCountNotifier != null) {
         _localPageCount = widget.pageCountNotifier!.value;
       }
+    }
+    if (widget.pageCountNotifier == null &&
+        oldWidget.state.pageCount != widget.state.pageCount) {
+      _localPageCount = widget.state.pageCount;
     }
 
     if (oldWidget.dragEnabled && !widget.dragEnabled && _isDragging) {

@@ -1,7 +1,42 @@
 part of 'reader_view_page_builders.dart';
 
+const Duration _deskWheelThrottle = Duration(milliseconds: 320);
+
 /// 翻页/滚动模式的页面内容构建方法。
 extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
+  void _handlePageModeDeskPointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) {
+      return;
+    }
+    lastPointerDownTime = DateTime.now();
+    if (HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed) {
+      return;
+    }
+    final dx = event.scrollDelta.dx;
+    final dy = event.scrollDelta.dy;
+    final primaryDelta = dy.abs() >= dx.abs() ? dy : dx;
+    GestureBinding.instance.pointerSignalResolver.register(event, (_) {
+      if (!mounted || !isPageMode) {
+        return;
+      }
+      if (primaryDelta.abs() < 24) {
+        return;
+      }
+      final now = DateTime.now();
+      final last = _lastDeskWheelAt;
+      if (last != null && now.difference(last) < _deskWheelThrottle) {
+        return;
+      }
+      _lastDeskWheelAt = now;
+      if (selectionActive) clearReaderSelection();
+      if (primaryDelta > 0) {
+        pageTurnController.next();
+      } else {
+        pageTurnController.previous();
+      }
+    });
+  }
   // ── 翻页模式 ──
 
   Widget buildPageModeContent(
@@ -299,6 +334,7 @@ extension ReaderViewPageBuildersContent on ReaderViewPageBuilders {
         return Listener(
           behavior: HitTestBehavior.translucent,
           onPointerDown: (_) => lastPointerDownTime = DateTime.now(),
+          onPointerSignal: _handlePageModeDeskPointerSignal,
           child:
               spread
                   ? Center(child: _SpreadFrame(size: frame, child: pageView))

@@ -3,7 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/gestures.dart'
-    show PointerScrollEvent, PointerSignalEvent;
+    show GestureBinding, PointerScrollEvent, PointerSignalEvent;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -165,6 +165,8 @@ class ComicReaderViewState extends ConsumerState<ComicReaderView>
   final ReaderCommandGate _bookPageCommandGate = ReaderCommandGate(
     interval: const Duration(milliseconds: 60),
   );
+  DateTime? _lastWheelAt;
+  static const Duration _wheelThrottle = Duration(milliseconds: 320);
   VoidCallback? _volumeKeyEventCancel;
   bool _volumeKeyPagingPushed = false;
 

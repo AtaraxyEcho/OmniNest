@@ -46,16 +46,22 @@ public class QuotaNotificationDispatcher {
             log.warn("配额预警投递并发已满，丢弃本次通知: userId={}, type={}", userId, type);
             return;
         }
-        executor.execute(() -> {
-            try {
-                notificationPublisher.notifyOrLog(userId, type, title, message, metadata);
-            } catch (RuntimeException exception) {
-                log.warn("配额预警异步投递失败: userId={}, errorType={}", userId,
-                        exception.getClass().getSimpleName());
-            } finally {
-                permits.release();
-            }
-        });
+        try {
+            executor.execute(() -> {
+                try {
+                    notificationPublisher.notifyOrLog(userId, type, title, message, metadata);
+                } catch (RuntimeException exception) {
+                    log.warn("配额预警异步投递失败: userId={}, errorType={}", userId,
+                            exception.getClass().getSimpleName());
+                } finally {
+                    permits.release();
+                }
+            });
+        } catch (RuntimeException exception) {
+            permits.release();
+            log.warn("配额预警异步任务提交失败，已释放并发许可: userId={}, type={}, errorType={}",
+                    userId, type, exception.getClass().getSimpleName());
+        }
     }
 
     @PreDestroy

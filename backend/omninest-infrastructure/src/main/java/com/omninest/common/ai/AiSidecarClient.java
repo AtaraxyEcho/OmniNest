@@ -48,6 +48,7 @@ public class AiSidecarClient implements ImageAnalysisGateway {
     private static final int BUFFER_SIZE = 8192;
     private static final int MAX_ERROR_SUMMARY_CHARS = 512;
     private static final long PIPELINE_VERSION_CACHE_MILLIS = 60_000L;
+    private static final long PIPELINE_VERSION_FAILURE_CACHE_MILLIS = 5_000L;
     private static final String SIDECAR_TIMESTAMP_HEADER = "X-OmniNest-Timestamp";
     private static final String SIDECAR_SIGNATURE_HEADER = "X-OmniNest-Signature";
     private static final String SIDECAR_NONCE_HEADER = "X-OmniNest-Nonce";
@@ -108,17 +109,13 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         }
         long now = System.currentTimeMillis();
         PipelineVersionCache cached = pipelineVersionCache;
-        if (cached != null
-                && cached.endpoint().equals(normalizedEndpoint)
-                && now - cached.fetchedAtMillis() < PIPELINE_VERSION_CACHE_MILLIS) {
+        if (isPipelineVersionCacheFresh(cached, normalizedEndpoint, now)) {
             return cached.version();
         }
         synchronized (pipelineVersionLock) {
             cached = pipelineVersionCache;
             now = System.currentTimeMillis();
-            if (cached != null
-                    && cached.endpoint().equals(normalizedEndpoint)
-                    && now - cached.fetchedAtMillis() < PIPELINE_VERSION_CACHE_MILLIS) {
+            if (isPipelineVersionCacheFresh(cached, normalizedEndpoint, now)) {
                 return cached.version();
             }
             String version = probePipelineVersion(normalizedEndpoint, timeoutSeconds);
@@ -333,12 +330,26 @@ public class AiSidecarClient implements ImageAnalysisGateway {
         };
     }
 
+    private boolean isPipelineVersionCacheFresh(
+            PipelineVersionCache cached,
+            String normalizedEndpoint,
+            long now
+    ) {
+        if (cached == null || !cached.endpoint().equals(normalizedEndpoint)) {
+            return false;
+        }
+        long ttlMillis = cached.version() != null
+                ? PIPELINE_VERSION_CACHE_MILLIS
+                : PIPELINE_VERSION_FAILURE_CACHE_MILLIS;
+        return now - cached.fetchedAtMillis() < ttlMillis;
+    }
+
     private String requireSecret() {
         String secret = properties.getSecret();
         if (secret == null || secret.isBlank()) {
             throw new IllegalStateException("图像分析侧车认证密钥未配置");
         }
-        return secret;
+        return secret.trim();
     }
 
     private String requireEndpoint(String endpoint) {

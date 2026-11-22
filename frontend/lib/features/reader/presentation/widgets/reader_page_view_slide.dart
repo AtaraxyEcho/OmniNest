@@ -264,6 +264,7 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
     // 点击翻页固定采用优雅下角斜卷预设 CurlGrabConfig.defaultNext（slant: -0.26），
     // 不再传 tapFy，杜绝点击页面中部出现僵硬竖直折痕；RTL 自动翻转左右热区。
     if (x < leftBound) {
+      if (!widget.dragEnabled) return;
       _debugPageTurn('leftTapReceived');
       if (widget.reverse) {
         _goNextPage(tapTurn: true);
@@ -271,6 +272,7 @@ extension _ReaderPageViewSlide on _ReaderPageViewState {
         _goPreviousPage(tapTurn: true);
       }
     } else if (x > rightBound) {
+      if (!widget.dragEnabled) return;
       _debugPageTurn('rightTapReceived');
       if (widget.reverse) {
         _goPreviousPage(tapTurn: true);

@@ -157,11 +157,17 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
     if (ctrl == null) return;
     final dir = _curlDirectionFor(_isForward);
     if (_hasReadyCurlPair(dir)) {
-      _curlFrameNotifier.value = CurlFrame(
+      final wasActive = _curlFrameNotifier.value.active;
+      final nextFrame = CurlFrame(
         progress: ctrl.value,
         direction: dir,
         config: _activeCurlConfig,
+        isTurning: _isAnimating,
       );
+      _curlFrameNotifier.value = nextFrame;
+      if (!wasActive && nextFrame.active && mounted) {
+        _updateState(() {});
+      }
     }
   }
 
@@ -246,11 +252,11 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
       }
     }
 
-    // 关键修复：点击翻页从 startValue = 0.0 平滑起步，确保第 1 帧阴影与卷曲高度从 0 连续生长。
+    // 关键修复：点击/键盘/滚轮翻页以 0.002 起跳并标记 isTurning=true，根治 CurlFrame.active 首帧拦截。
     final startValue =
         _curlFrameNotifier.value.isPeek
             ? _curlFrameNotifier.value.progress
-            : _flipProgress.clamp(0.0, 1.0);
+            : math.max(0.002, _flipProgress.clamp(0.0, 1.0));
 
     // 关键修复：若已拖到 1.0，AnimationController.animateTo(1) 不会派发 completed 回调！
     // 直接提交翻页，彻底根除 gate=pageAnimation 永久锁死。
@@ -272,6 +278,7 @@ extension _ReaderPageViewCustom on _ReaderPageViewState {
         progress: startValue,
         direction: dir,
         config: _activeCurlConfig,
+        isTurning: true,
       );
     }
     if (mounted) _updateState(() {});

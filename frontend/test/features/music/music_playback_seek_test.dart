@@ -232,9 +232,16 @@ void main() {
       await notifier.syncFromCenterState();
 
       expect(
-        player.seekCalls,
-        containsAllInOrder(<Duration>[Duration.zero]),
-        reason: '距结尾 5 秒内的存档按听完处理：calls=${player.seekCalls}',
+        player.openCalls.map((call) => call.url),
+        contains('https://example/track-3.mp3'),
+        reason: '恢复播放必须重新开流：calls=${player.openCalls}',
+      );
+      expect(
+        player.seekCalls.where((position) => position > Duration.zero),
+        isEmpty,
+        reason:
+            '距结尾 5 秒内的存档按听完处理：不得跳到存档位置，'
+            'calls=${player.seekCalls}',
       );
       expect(player.seekCalls, isNot(contains(const Duration(seconds: 298))));
     } finally {
@@ -296,6 +303,8 @@ class _MockProgressRepository extends Mock implements MusicProgressRepository {}
 
 class _StubMusicAudioPlayback implements MusicAudioPlayback {
   final List<Duration> seekCalls = <Duration>[];
+  final List<({String url, bool play})> openCalls =
+      <({String url, bool play})>[];
 
   @override
   MusicAudioPlayerState get state => MusicAudioPlayerState(
@@ -318,7 +327,9 @@ class _StubMusicAudioPlayback implements MusicAudioPlayback {
   );
 
   @override
-  Future<void> openUrl(String url, {required bool play}) async {}
+  Future<void> openUrl(String url, {required bool play}) async {
+    openCalls.add((url: url, play: play));
+  }
 
   @override
   Future<void> pause() async {}

@@ -40,7 +40,7 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     if (event is KeyRepeatEvent && !_isRepeatableReaderCommand(command)) {
       return KeyEventResult.handled;
     }
-    if (_requiresReaderCommandGate(command) && !_readerCommandGate.accept()) {
+    if (!_acceptReaderCommandGate(command)) {
       return KeyEventResult.handled;
     }
     _executeReaderCommand(command, detail, content);
@@ -62,6 +62,19 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
         command == ReaderCommand.increaseFont ||
         command == ReaderCommand.decreaseFont ||
         command == ReaderCommand.resetTypography;
+  }
+
+  bool _acceptReaderCommandGate(ReaderCommand command) {
+    if (!_requiresReaderCommandGate(command)) {
+      return true;
+    }
+    if ((command == ReaderCommand.nextPage ||
+            command == ReaderCommand.previousPage) &&
+        _isPageMode &&
+        _settings.pageTurnMode == 'cover') {
+      return _bookPageCommandGate.accept();
+    }
+    return _readerCommandGate.accept();
   }
 
   void _executeReaderCommand(

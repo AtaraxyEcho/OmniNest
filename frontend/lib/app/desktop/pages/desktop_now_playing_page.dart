@@ -15,8 +15,10 @@ import 'package:omninest/app/desktop/desktop_player_bar.dart'
     show formatDesktopClock;
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
+import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/pages/desktop_music_metadata_drawer.dart';
 import 'package:omninest/app/desktop/pages/desktop_now_playing_lyrics.dart';
+import 'package:omninest/app/desktop/pages/desktop_now_playing_spectrum.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_np_style_panel.dart';
@@ -28,10 +30,14 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
+import 'package:omninest/features/music/domain/music_playable_item.dart'
+    show LocalMusicRef;
 import 'package:omninest/features/music/music_portal.dart';
 
 part 'desktop_now_playing_deck.dart';
@@ -105,6 +111,55 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
     }
   }
 
+  Future<void> _toggleFavorite({
+    required MusicPlayableItem? item,
+    required MusicTrack track,
+    required bool canManageOwnActivity,
+    required bool isZh,
+  }) async {
+    if (!canManageOwnActivity) {
+      showDesktopToast(
+        context,
+        isZh ? '当前账号暂无收藏权限' : 'You do not have permission to manage favorites',
+        kind: DesktopToastKind.warn,
+        icon: DesktopIcons.info,
+      );
+      return;
+    }
+    if (item?.ref is! LocalMusicRef) {
+      showDesktopToast(
+        context,
+        isZh ? '暂仅支持收藏本地曲目' : 'Only local tracks can be favorited',
+        kind: DesktopToastKind.info,
+        icon: DesktopIcons.info,
+      );
+      return;
+    }
+    final wasFavorite = track.favorite;
+    try {
+      await ref
+          .read(musicCenterControllerProvider.notifier)
+          .toggleFavorite(track);
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
+      showDesktopToast(
+        context,
+        wasFavorite ? l10n.favoriteRemoved : l10n.favoriteAdded,
+        kind: DesktopToastKind.success,
+        icon: wasFavorite ? DesktopIcons.heart : DesktopIcons.heartFilled,
+      );
+    } on Object catch (error) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
+      showDesktopToast(
+        context,
+        failureToast(l10n, l10n.musicFavoriteToggleFailed, error),
+        kind: DesktopToastKind.error,
+        icon: DesktopIcons.info,
+      );
+    }
+  }
+
   @override
   void dispose() {
     _spin.dispose();
@@ -120,6 +175,9 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
     final outerTheme = Theme.of(context);
     final accent = ref.watch(
       desktopAppearanceProvider.select((appearance) => appearance.accent),
+    );
+    final canManageOwnActivity = ref.watch(
+      userCapabilitiesProvider.select((caps) => caps.canManageOwnActivity),
     );
     final darkSkin = DesktopSkin.resolve(isDark: true, accent: accent);
 
@@ -274,6 +332,7 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
                 cover: cover,
                 playing: playing && track != null,
                 hueColor: hueColor,
+                seed: track?.id ?? '',
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -358,15 +417,15 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
                                           (index) => unawaited(
                                             actions.playQueueAt(index),
                                           ),
-                                      onToggleFavorite:
-                                          () => unawaited(
-                                            ref
-                                                .read(
-                                                  musicCenterControllerProvider
-                                                      .notifier,
-                                                )
-                                                .toggleFavorite(track),
-                                          ),
+                                      onToggleFavorite: () {
+                                        _toggleFavorite(
+                                          item: item,
+                                          track: track,
+                                          canManageOwnActivity:
+                                              canManageOwnActivity,
+                                          isZh: isZh,
+                                        );
+                                      },
                                       onBrowseMusic: _browseMusic,
                                       onEdit:
                                           () => unawaited(_editMetadata(track)),
@@ -379,6 +438,7 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
                             _Transport(
                               trackId: track.id,
                               playing: playing,
+                              hueColor: hueColor,
                               playMode: playMode,
                               queueLength: queue.length,
                               queueIndex: queueIndex,

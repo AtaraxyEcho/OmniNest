@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:omninest/app/theme/app_typography.dart';
 
 import 'package:flutter/foundation.dart' show kDebugMode;
-import 'package:flutter/gestures.dart' show PointerScrollEvent;
+import 'package:flutter/gestures.dart'
+    show GestureBinding, PointerScrollEvent, PointerSignalEvent;
+import 'package:flutter/services.dart' show HardwareKeyboard;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/appearance/application/font_scale_scope.dart';
@@ -62,6 +64,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   bool _pageRestoreScheduled = false;
   ReaderProgressSnapshot? _pendingProgressSnapshot;
   bool _progressSnapshotApplyScheduled = false;
+  DateTime? _lastDeskWheelAt;
 
   // ── State 字段访问器（由 State 实现） ──
   ReaderContentLoader? get contentLoader;
