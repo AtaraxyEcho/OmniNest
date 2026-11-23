@@ -217,7 +217,7 @@ services:
       <<: *backend-environment
       OMNINEST_ROLE: worker
       JAVA_OPTS: ${JAVA_OPTS_WORKER:--Xms128m -Xmx512m -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError -XX:+UseCompactObjectHeaders}
-      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${HIKARI_MAX_POOL_WORKER:-6}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${HIKARI_MAX_POOL_WORKER:-8}
       OMNINEST_WORKER_MEDIA_CONCURRENCY: "1"
     mem_limit: ${BACKEND_WORKER_MEM_LIMIT:-768m}
 

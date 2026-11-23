@@ -163,6 +163,19 @@ class WindowGeometryService with WindowListener {
 
   Timer? _debounce;
   Rect? _lastNormalBounds;
+  bool _quitting = false;
+
+  /// 标记进入应用退出期，短路关闭瞬间并发触发的 4 次平台通道持久化。
+  void markQuitting() {
+    _quitting = true;
+    _debounce?.cancel();
+    _debounce = null;
+  }
+
+  @visibleForTesting
+  void resetQuittingForTest() {
+    _quitting = false;
+  }
 
   /// 应用启动几何；插件或屏幕信息不可用时静默降级为原生默认。
   Future<void> applyStartupGeometry() async {
@@ -272,6 +285,9 @@ class WindowGeometryService with WindowListener {
   }
 
   void _schedulePersist() {
+    if (_quitting) {
+      return;
+    }
     _debounce?.cancel();
     _debounce = Timer(_persistDebounce, () {
       unawaited(_persistNow());
@@ -279,6 +295,9 @@ class WindowGeometryService with WindowListener {
   }
 
   Future<void> _persistNow() async {
+    if (_quitting) {
+      return;
+    }
     try {
       final maximized = await windowManager.isMaximized();
       if (await windowManager.isFullScreen() || await _isNativeFullscreen()) {
@@ -360,10 +379,14 @@ class WindowGeometryService with WindowListener {
   @override
   void onWindowClose() {
     _debounce?.cancel();
+    if (_quitting) {
+      return;
+    }
     unawaited(_persistNow());
   }
 
   void dispose() {
+    _quitting = true;
     _debounce?.cancel();
     windowManager.removeListener(this);
   }

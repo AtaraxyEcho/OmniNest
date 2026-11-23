@@ -281,7 +281,7 @@ class _AdminBatchBar extends StatelessWidget {
     return Row(
       children: [
         Text(
-          l10n.adminListSelectedCount('$count'),
+          l10n.adminListSelectedCount(count),
           style: Theme.of(context).textTheme.labelLarge,
         ),
         const SizedBox(width: 12),

@@ -469,9 +469,11 @@ class _DesktopMoviesPageState extends ConsumerState<DesktopMoviesPage> {
             tab: _tab,
             onChanged: _openTab,
             importAction: _importAction(context, l10n),
+            // 占位符顺序为 {titleCount} titles · {continueCount} in progress，
+            // v16 补齐 @placeholders 后参数顺序以文案为准，不能沿用旧顺序。
             subtitle: l10n.moviesModuleSubtitle(
-              continueWatching.length,
               dashboard?.stats.movieCount ?? movies.length,
+              continueWatching.length,
             ),
           ),
         ),

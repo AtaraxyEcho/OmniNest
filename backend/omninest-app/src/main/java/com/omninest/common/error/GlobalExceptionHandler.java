@@ -55,11 +55,14 @@ public class GlobalExceptionHandler {
             case FILE_SIZE_EXCEEDED, BACKDROP_FILE_TOO_LARGE -> HttpStatus.CONTENT_TOO_LARGE;
             case BACKDROP_UNSUPPORTED_FORMAT -> HttpStatus.UNPROCESSABLE_CONTENT;
             case DEPENDENCY_UNAVAILABLE, MEDIA_PROVIDER_UNREACHABLE,
-                    MEDIA_PROVIDER_AUTH_FAILED, MEDIA_PROVIDER_CONFIG_INVALID -> HttpStatus.SERVICE_UNAVAILABLE;
+                    MEDIA_PROVIDER_AUTH_FAILED, MEDIA_PROVIDER_CONFIG_INVALID,
+                    BACKDROP_SCAN_UNAVAILABLE,
+                    MUSIC_RECOMMENDATION_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
             case MEDIA_PROVIDER_RATE_LIMITED -> HttpStatus.TOO_MANY_REQUESTS;
             case CONFLICT, TASK_STATUS_ILLEGAL, TASK_ALREADY_COMPLETED,
                     PREFERENCE_VERSION_CONFLICT, RESOURCE_IN_USE,
-                    FILE_LIFECYCLE_CONFLICT -> HttpStatus.CONFLICT;
+                    FILE_LIFECYCLE_CONFLICT,
+                    TWO_FACTOR_ALREADY_ENABLED -> HttpStatus.CONFLICT;
             default -> HttpStatus.BAD_REQUEST;
         };
         Object details = exception.details().isEmpty() ? null : exception.details();

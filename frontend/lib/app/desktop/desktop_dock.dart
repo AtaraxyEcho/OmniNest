@@ -8,6 +8,7 @@ import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
+import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
@@ -29,74 +30,79 @@ class DesktopDock extends ConsumerWidget {
     final shell = ref.watch(desktopShellProvider);
     final controller = ref.read(desktopShellProvider.notifier);
 
-    return AnimatedContainer(
-      duration: DesktopMotion.of(context, DesktopMotion.dock),
-      curve: DesktopMotion.ease,
-      width: shell.dockOpen ? DesktopMetrics.dockWidth : 0,
-      clipBehavior: Clip.hardEdge,
-      decoration: BoxDecoration(
-        color: skin.bg.withValues(alpha: 0.55),
-        border: Border(
-          left: BorderSide(
-            color: skin.line,
-            width: shell.dockOpen ? DesktopMetrics.hairline : 0,
+    return DesktopGlassSurface(
+      borderRadius: BorderRadius.zero,
+      blur: 26,
+      saturation: 1.4,
+      child: AnimatedContainer(
+        duration: DesktopMotion.of(context, DesktopMotion.dock),
+        curve: DesktopMotion.ease,
+        width: shell.dockOpen ? DesktopMetrics.dockWidth : 0,
+        clipBehavior: Clip.hardEdge,
+        decoration: BoxDecoration(
+          color: skin.bg.withValues(alpha: 0.38),
+          border: Border(
+            left: BorderSide(
+              color: skin.line,
+              width: shell.dockOpen ? DesktopMetrics.hairline : 0,
+            ),
           ),
         ),
-      ),
-      child: ClipRect(
-        child: OverflowBox(
-          // Dock 本身按样例从 0 到 348px 动画；内容保持完整规格，避免
-          // 收放途中把页签行压窄后触发 RenderFlex 溢出。
-          alignment: Alignment.centerLeft,
-          minWidth: DesktopMetrics.dockWidth,
-          maxWidth: DesktopMetrics.dockWidth,
-          child: SizedBox(
-            width: DesktopMetrics.dockWidth,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DesktopSeg<DesktopDockTab>(
-                          options: DesktopDockTab.values,
-                          value: shell.dockTab,
-                          small: true,
-                          labelOf:
-                              (tab) =>
-                                  tab == DesktopDockTab.details
-                                      ? l10n.desktopDockDetails
-                                      : l10n.desktopDockQueue,
-                          onChanged: controller.setDockTab,
+        child: ClipRect(
+          child: OverflowBox(
+            // Dock 本身按样例从 0 到 348px 动画；内容保持完整规格，避免
+            // 收放途中把页签行压窄后触发 RenderFlex 溢出。
+            alignment: Alignment.centerLeft,
+            minWidth: DesktopMetrics.dockWidth,
+            maxWidth: DesktopMetrics.dockWidth,
+            child: SizedBox(
+              width: DesktopMetrics.dockWidth,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DesktopSeg<DesktopDockTab>(
+                            options: DesktopDockTab.values,
+                            value: shell.dockTab,
+                            small: true,
+                            labelOf:
+                                (tab) =>
+                                    tab == DesktopDockTab.details
+                                        ? l10n.desktopDockDetails
+                                        : l10n.desktopDockQueue,
+                            onChanged: controller.setDockTab,
+                          ),
+                        ),
+                        DesktopIconButton(
+                          icon: DesktopIcons.close,
+                          tooltip: l10n.desktopClosePanel,
+                          onPressed: () => controller.setDock(false),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (shell.dockTab == DesktopDockTab.details)
+                              _DetailsBody(detail: shell.detail)
+                            else
+                              const _QueueBody(),
+                            const SizedBox(
+                              height: DesktopMetrics.playerBarClearance,
+                            ),
+                          ],
                         ),
                       ),
-                      DesktopIconButton(
-                        icon: DesktopIcons.close,
-                        tooltip: l10n.desktopClosePanel,
-                        onPressed: () => controller.setDock(false),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (shell.dockTab == DesktopDockTab.details)
-                            _DetailsBody(detail: shell.detail)
-                          else
-                            const _QueueBody(),
-                          const SizedBox(
-                            height: DesktopMetrics.playerBarClearance,
-                          ),
-                        ],
-                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

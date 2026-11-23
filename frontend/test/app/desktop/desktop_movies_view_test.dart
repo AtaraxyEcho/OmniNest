@@ -56,7 +56,8 @@ void main() {
     expect(find.text('HD'), findsWidgets);
 
     // 页头计数来自 stats/continueWatching，而不是写死。
-    expect(find.textContaining('128 TITLES'), findsOneWidget);
+    // 「128」同时出现在页头眉标与「专题影片」区块眉标，两处都必须来自 stats。
+    expect(find.textContaining('128 TITLES'), findsWidgets);
 
     // 分页与排序。
     expect(find.text('For you'), findsWidgets);

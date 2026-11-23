@@ -12,8 +12,35 @@ Map<DateTime?, List<PhotoItem>> _groupPhotosByDay(List<PhotoItem> items) {
   return groups;
 }
 
-/// 将照片库拆分为按日期组 + 按行虚拟化的 Sliver 列表（`SliverMainAxisGroup` +
-/// `SliverList.builder`），大幅降低百张以上照片的首屏构建与滚动开销。
+/// 单日分组悬停联动状态（由组头与同级 `_SliverJustifiedPhotos` 共享，
+/// 拆平 `SliverMainAxisGroup` 后依然 100% 保持组头/照片行悬停联动）。
+class _PhotoDayHoverState {
+  final ValueNotifier<bool> hovered = ValueNotifier<bool>(false);
+  int _depth = 0;
+
+  void enter() {
+    _depth += 1;
+    if (!hovered.value) {
+      hovered.value = true;
+    }
+  }
+
+  void exit() {
+    if (_depth > 0) {
+      _depth -= 1;
+    }
+    if (_depth == 0 && hovered.value) {
+      hovered.value = false;
+    }
+  }
+
+  void dispose() {
+    hovered.dispose();
+  }
+}
+
+/// 将照片库拆分为扁平同级 Sliver 列表（移除 `SliverMainAxisGroup` 以避免 Windows
+/// `ui::AXTree` 在分组 Sliver 边界产生语义断链），100% 保留按行虚拟化、FLIP 拖拽与悬停联动。
 List<Widget> _buildPhotoGroupSlivers({
   required BuildContext context,
   required List<PhotoItem> photos,
@@ -31,6 +58,7 @@ List<Widget> _buildPhotoGroupSlivers({
   required ValueChanged<List<PhotoItem>> onSelectMany,
   required _PhotoOrderChanged onOrderChanged,
   required Future<void> Function(String contextKey) onResetOrder,
+  _PhotoDayHoverState Function(String contextKey)? hoverStateOf,
 }) {
   final l10n = AppLocalizations.of(context);
   if (error != null) {
@@ -64,175 +92,137 @@ List<Widget> _buildPhotoGroupSlivers({
   final selectionActive = selection.isNotEmpty || selectionMode;
   final locale = Localizations.localeOf(context).toString();
 
-  return <Widget>[
-    for (final entry in groups.entries)
-      _PhotoDaySliverGroup(
-        key: ValueKey<String>(
-          'photo-day-${photoOrderContextForDay(entry.key)}',
+  final slivers = <Widget>[];
+  for (final entry in groups.entries) {
+    final contextKey = photoOrderContextForDay(entry.key);
+    final dayPhotos = entry.value;
+    final orderedDayPhotos = applyPhotoDisplayOrder(
+      dayPhotos,
+      displayOrders[contextKey],
+    );
+    final selectedCount =
+        dayPhotos.where((photo) => selection.contains(photo.id)).length;
+    final label =
+        entry.key == null ? '—' : DateFormat.yMMMMd(locale).format(entry.key!);
+    final hoverState = hoverStateOf?.call(contextKey) ?? _PhotoDayHoverState();
+    final ownsHoverState = hoverStateOf == null;
+
+    slivers.add(
+      SliverToBoxAdapter(
+        key: ValueKey<String>('photo-day-head-$contextKey'),
+        child: Semantics(
+          container: true,
+          child: _PhotoDayHeaderHost(
+            hoverState: hoverState,
+            ownsHoverState: ownsHoverState,
+            label: label,
+            count: dayPhotos.length,
+            selectedCount: selectedCount,
+            selectionActive: selectionActive,
+            onToggleDay: () => onSelectMany(dayPhotos),
+            onReset:
+                displayOrders.containsKey(contextKey)
+                    ? () => onResetOrder(contextKey)
+                    : null,
+          ),
         ),
-        dayKey: entry.key,
-        label:
-            entry.key == null
-                ? '—'
-                : DateFormat.yMMMMd(locale).format(entry.key!),
-        dayPhotos: entry.value,
-        orderedDayPhotos: applyPhotoDisplayOrder(
-          entry.value,
-          displayOrders[photoOrderContextForDay(entry.key)],
-        ),
-        browsePhotos: browsePhotos,
-        contextKey: photoOrderContextForDay(entry.key),
-        hasCustomOrder: displayOrders.containsKey(
-          photoOrderContextForDay(entry.key),
-        ),
-        density: density,
+      ),
+    );
+    slivers.add(
+      _SliverJustifiedPhotos(
+        key: ValueKey<String>('photo-day-grid-$contextKey'),
+        photos: orderedDayPhotos,
+        targetHeight: density,
         selection: selection,
         selectionMode: selectionMode,
-        selectionActive: selectionActive,
-        onActivate: onActivate,
+        onActivate: (photo, _) => onActivate(photo, browsePhotos),
         onToggleSelect: onToggleSelect,
-        onSecondaryTap: onSecondaryTap,
-        onSelectMany: onSelectMany,
+        onSecondaryTap:
+            onSecondaryTap == null
+                ? null
+                : (photo, _, globalPos) =>
+                    onSecondaryTap(photo, browsePhotos, globalPos),
+        orderContext: contextKey,
         onOrderChanged: onOrderChanged,
-        onResetOrder: onResetOrder,
+        onRowHoverEnter: hoverState.enter,
+        onRowHoverExit: hoverState.exit,
       ),
-  ];
+    );
+    slivers.add(
+      SliverToBoxAdapter(
+        key: ValueKey<String>('photo-day-gap-$contextKey'),
+        child: const SizedBox(height: 34),
+      ),
+    );
+  }
+  return slivers;
 }
 
-/// 单日照片虚拟化分组：使用 [SliverMainAxisGroup] 组合组头与按行虚拟化的
-/// [_SliverJustifiedPhotos]，仅在视口范围内构建可见行。
-class _PhotoDaySliverGroup extends StatefulWidget {
-  const _PhotoDaySliverGroup({
-    required this.dayKey,
+class _PhotoDayHeaderHost extends StatefulWidget {
+  const _PhotoDayHeaderHost({
+    required this.hoverState,
+    required this.ownsHoverState,
     required this.label,
-    required this.dayPhotos,
-    required this.orderedDayPhotos,
-    required this.browsePhotos,
-    required this.contextKey,
-    required this.hasCustomOrder,
-    required this.density,
-    required this.selection,
-    required this.selectionMode,
+    required this.count,
+    required this.selectedCount,
     required this.selectionActive,
-    required this.onActivate,
-    required this.onToggleSelect,
-    required this.onSelectMany,
-    required this.onOrderChanged,
-    required this.onResetOrder,
-    this.onSecondaryTap,
-    super.key,
+    required this.onToggleDay,
+    this.onReset,
   });
 
-  final DateTime? dayKey;
+  final _PhotoDayHoverState hoverState;
+  final bool ownsHoverState;
   final String label;
-  final List<PhotoItem> dayPhotos;
-  final List<PhotoItem> orderedDayPhotos;
-  final List<PhotoItem> browsePhotos;
-  final String contextKey;
-  final bool hasCustomOrder;
-  final double density;
-  final Set<String> selection;
-  final bool selectionMode;
+  final int count;
+  final int selectedCount;
   final bool selectionActive;
-  final void Function(PhotoItem photo, List<PhotoItem> photos) onActivate;
-  final ValueChanged<PhotoItem> onToggleSelect;
-  final void Function(
-    PhotoItem photo,
-    List<PhotoItem> photos,
-    Offset globalPosition,
-  )?
-  onSecondaryTap;
-  final ValueChanged<List<PhotoItem>> onSelectMany;
-  final _PhotoOrderChanged onOrderChanged;
-  final Future<void> Function(String contextKey) onResetOrder;
+  final VoidCallback onToggleDay;
+  final VoidCallback? onReset;
 
   @override
-  State<_PhotoDaySliverGroup> createState() => _PhotoDaySliverGroupState();
+  State<_PhotoDayHeaderHost> createState() => _PhotoDayHeaderHostState();
 }
 
-class _PhotoDaySliverGroupState extends State<_PhotoDaySliverGroup> {
-  final ValueNotifier<bool> _hovered = ValueNotifier<bool>(false);
-  int _hoverDepth = 0;
+class _PhotoDayHeaderHostState extends State<_PhotoDayHeaderHost> {
+  @override
+  void didUpdateWidget(covariant _PhotoDayHeaderHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.ownsHoverState &&
+        !identical(oldWidget.hoverState, widget.hoverState)) {
+      oldWidget.hoverState.dispose();
+    }
+  }
 
   @override
   void dispose() {
-    _hovered.dispose();
+    if (widget.ownsHoverState) {
+      widget.hoverState.dispose();
+    }
     super.dispose();
-  }
-
-  void _enter() {
-    _hoverDepth += 1;
-    if (!_hovered.value) {
-      _hovered.value = true;
-    }
-  }
-
-  void _exit() {
-    if (_hoverDepth > 0) {
-      _hoverDepth -= 1;
-    }
-    if (_hoverDepth == 0 && _hovered.value) {
-      _hovered.value = false;
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final selectedCount =
-        widget.dayPhotos
-            .where((photo) => widget.selection.contains(photo.id))
-            .length;
-    return SliverMainAxisGroup(
-      slivers: [
-        SliverToBoxAdapter(
-          child: MouseRegion(
-            cursor: SystemMouseCursors.basic,
-            onEnter: (_) => _enter(),
-            onExit: (_) => _exit(),
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: ValueListenableBuilder<bool>(
-                valueListenable: _hovered,
-                builder:
-                    (context, hovered, _) => _GroupHead(
-                      label: widget.label,
-                      count: widget.dayPhotos.length,
-                      selectedCount: selectedCount,
-                      hovered: hovered,
-                      selectionActive: widget.selectionActive,
-                      onToggleDay: () => widget.onSelectMany(widget.dayPhotos),
-                      onReset:
-                          widget.hasCustomOrder
-                              ? () => widget.onResetOrder(widget.contextKey)
-                              : null,
-                    ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.basic,
+      onEnter: (_) => widget.hoverState.enter(),
+      onExit: (_) => widget.hoverState.exit(),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: ValueListenableBuilder<bool>(
+          valueListenable: widget.hoverState.hovered,
+          builder:
+              (context, hovered, _) => _GroupHead(
+                label: widget.label,
+                count: widget.count,
+                selectedCount: widget.selectedCount,
+                hovered: hovered,
+                selectionActive: widget.selectionActive,
+                onToggleDay: widget.onToggleDay,
+                onReset: widget.onReset,
               ),
-            ),
-          ),
         ),
-        _SliverJustifiedPhotos(
-          photos: widget.orderedDayPhotos,
-          targetHeight: widget.density,
-          selection: widget.selection,
-          selectionMode: widget.selectionMode,
-          onActivate:
-              (photo, _) => widget.onActivate(photo, widget.browsePhotos),
-          onToggleSelect: widget.onToggleSelect,
-          onSecondaryTap:
-              widget.onSecondaryTap == null
-                  ? null
-                  : (photo, _, globalPos) => widget.onSecondaryTap!(
-                    photo,
-                    widget.browsePhotos,
-                    globalPos,
-                  ),
-          orderContext: widget.contextKey,
-          onOrderChanged: widget.onOrderChanged,
-          onRowHoverEnter: _enter,
-          onRowHoverExit: _exit,
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 34)),
-      ],
+      ),
     );
   }
 }

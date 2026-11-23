@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
@@ -188,8 +187,8 @@ class _DesktopSliverPageState extends State<DesktopSliverPage> {
 /// 通用 Sticky 分类栏 Sliver（样例 `.page-head.sticky` / `.cat-sticky`）。
 ///
 /// 吸顶时铺满全宽（忽略内容区左右 padding，实现 `inset: 0 -100vw` 全出血磨砂），
-/// 外层严格包裹 [ClipRect] 再套 [BackdropFilter]（blur: 18），并自测量真实高度
-/// 驱动 [SliverPersistentHeader]，防止窄窗口换行时触发 RenderFlex 溢出。
+/// 外层严格包裹 [ClipRect] 再套独立 [BackdropFilter]（blur: 26, sat: 1.4），
+/// 并自测量真实高度驱动 [SliverPersistentHeader]，防止窄窗口换行时触发 RenderFlex 溢出。
 class DesktopStickySliver extends StatefulWidget {
   const DesktopStickySliver({
     required this.child,
@@ -207,16 +206,32 @@ class DesktopStickySliver extends StatefulWidget {
 }
 
 class _DesktopStickySliverState extends State<DesktopStickySliver> {
+  static const int _maxMeasurePasses = 3;
+
   double? _measuredHeight;
+  int _measurePasses = 0;
+
+  @override
+  void didUpdateWidget(DesktopStickySliver oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.minHeight != widget.minHeight ||
+        oldWidget.maxHeight != widget.maxHeight) {
+      _measurePasses = 0;
+    }
+  }
 
   void _onChildSizeChanged(Size size) {
     final next = size.height;
     if (next <= 0 || !next.isFinite) {
       return;
     }
-    if (_measuredHeight != null && (_measuredHeight! - next).abs() < 0.5) {
+    if (_measurePasses >= _maxMeasurePasses) {
       return;
     }
+    if (_measuredHeight != null && (_measuredHeight! - next).abs() <= 1.0) {
+      return;
+    }
+    _measurePasses += 1;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() => _measuredHeight = next);
@@ -292,31 +307,49 @@ class _DesktopStickySliverDelegate extends SliverPersistentHeaderDelegate {
           fit: StackFit.expand,
           children: [
             Positioned.fill(
-              child: IgnorePointer(
-                child: AnimatedOpacity(
-                  opacity: stuck ? 1.0 : 0.0,
-                  duration: duration,
-                  curve: DesktopMotion.ease,
-                  alwaysIncludeSemantics: true,
-                  child: ClipRect(
-                    child: BackdropFilter.grouped(
-                      filterConfig: ImageFilterConfig(
-                        ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                      ),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: skin.bg.withValues(alpha: 0.78),
-                          border: Border(bottom: BorderSide(color: skin.line)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.08),
-                              blurRadius: 24,
-                              offset: const Offset(0, 6),
+              child: ExcludeSemantics(
+                child: IgnorePointer(
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween<double>(end: stuck ? 1.0 : 0.0),
+                    duration: duration,
+                    curve: DesktopMotion.ease,
+                    builder: (context, opacity, _) {
+                      if (opacity <= 0.01) {
+                        return const SizedBox.shrink();
+                      }
+                      return Opacity(
+                        opacity: opacity.clamp(0.0, 1.0),
+                        alwaysIncludeSemantics: true,
+                        child: ClipRect(
+                          child: BackdropFilter(
+                            filter: desktopGlassFilter(
+                              blur: 26,
+                              saturation: 1.4,
                             ),
-                          ],
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: skin.bg.withValues(alpha: 0.38),
+                                border: Border(
+                                  bottom: BorderSide(color: skin.line),
+                                ),
+                                boxShadow:
+                                    skin.isDark
+                                        ? [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.08,
+                                            ),
+                                            blurRadius: 24,
+                                            offset: const Offset(0, 6),
+                                          ),
+                                        ]
+                                        : null,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   ),
                 ),
               ),

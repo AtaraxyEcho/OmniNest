@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:omninest/app/appearance/application/appearance_controller.dart';
 import 'package:omninest/app/desktop/desktop_brand.dart';
-import 'package:omninest/app/desktop/desktop_backdrop_layer.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
@@ -55,7 +54,6 @@ class DesktopTitleBar extends ConsumerWidget {
         themeMode == ThemeMode.dark ||
         (themeMode == ThemeMode.system &&
             MediaQuery.platformBrightnessOf(context) == Brightness.dark);
-    final backdropActive = desktopBackdropVisibleForRoute(ref, path);
 
     // 无边框窗口没有系统标题栏可拖：整条标题栏自己当拖拽区，
     // 双击按 Windows 惯例切换最大化。子按钮仍拿到自己的点击（手势竞技场里
@@ -63,7 +61,7 @@ class DesktopTitleBar extends ConsumerWidget {
     final bar = Container(
       height: DesktopMetrics.titleBarHeight,
       decoration: BoxDecoration(
-        color: skin.bg.withValues(alpha: backdropActive ? 0.38 : 0.62),
+        color: skin.bg.withValues(alpha: 0.38),
         border: Border(bottom: BorderSide(color: skin.line)),
       ),
       padding: const EdgeInsets.only(left: 14),
@@ -171,15 +169,12 @@ class DesktopTitleBar extends ConsumerWidget {
                       .read(windowChromeControllerProvider.notifier)
                       .toggleMaximize()
               : null,
-      child:
-          backdropActive
-              ? DesktopGlassSurface(
-                borderRadius: BorderRadius.zero,
-                blur: 26,
-                saturation: 1.4,
-                child: bar,
-              )
-              : bar,
+      child: DesktopGlassSurface(
+        borderRadius: BorderRadius.zero,
+        blur: 26,
+        saturation: 1.4,
+        child: bar,
+      ),
     );
   }
 }

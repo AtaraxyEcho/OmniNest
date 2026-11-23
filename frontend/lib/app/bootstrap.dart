@@ -48,11 +48,8 @@ void bootstrap(Widget Function(AppBootstrapData data) builder) {
     () {
       WidgetsFlutterBinding.ensureInitialized();
       AppImageCachePolicy.configure(PaintingBinding.instance.imageCache);
-      // 桌面端在启动前摆放窗口：记忆边界优先，首启按工作区收窄，
-      // Windows 原生窗口隐藏由本服务负责展示。
-      unawaited(windowGeometryService.applyStartupGeometry());
-      // 桌面壳层：单实例锁 + 托盘 + 关窗隐藏（Web/移动端空实现）。
-      unawaited(bootstrapDesktopShell());
+      // 桌面端先串行确保 windowManager.ensureInitialized()，再并发几何恢复与壳层初始化。
+      unawaited(_bootstrapDesktopWindowAndShell());
       runApp(AppBootstrapGate(builder: builder, loader: _loadBootstrapData));
     },
     (error, stackTrace) {
@@ -64,6 +61,14 @@ void bootstrap(Widget Function(AppBootstrapData data) builder) {
       );
     },
   );
+}
+
+Future<void> _bootstrapDesktopWindowAndShell() async {
+  await ensureDesktopWindowManagerInitialized();
+  await Future.wait<void>([
+    windowGeometryService.applyStartupGeometry(),
+    bootstrapDesktopShell(),
+  ]);
 }
 
 Future<AppBootstrapData> _loadBootstrapData() async {

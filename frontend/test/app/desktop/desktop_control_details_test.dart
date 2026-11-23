@@ -164,21 +164,25 @@ void main() {
       tester,
       find.byKey(const ValueKey<String>('panel-field')),
     );
-    expect(
-      tester.getSize(find.byKey(const ValueKey<String>('panel-field'))).height,
-      40,
-    );
-    expect(
-      tester.getSize(find.byKey(const ValueKey<String>('page-field'))).height,
-      36,
-    );
+    // v16 起底色 / 描边 / 光环统一画在外层 AnimatedContainer，TextField 透明铺满，
+    // 因此高度与装饰都要按外层容器断言（键仍挂在 TextField 上用于定位与取控件）。
+    Finder boxOf(String key) =>
+        find
+            .ancestor(
+              of: find.byKey(ValueKey<String>(key)),
+              matching: find.byType(AnimatedContainer),
+            )
+            .first;
+    expect(tester.getSize(boxOf('panel-field')).height, 40);
+    expect(tester.getSize(boxOf('page-field')).height, 36);
 
-    InputDecoration decorationOf(String key) =>
-        tester.widget<TextField>(find.byKey(ValueKey<String>(key))).decoration!;
-    expect(decorationOf('panel-field').fillColor, skin.raise);
-    expect(decorationOf('page-field').fillColor, skin.bg);
+    BoxDecoration decorationOf(String key) =>
+        tester.widget<AnimatedContainer>(boxOf(key)).decoration!
+            as BoxDecoration;
+    expect(decorationOf('panel-field').color, skin.raise);
+    expect(decorationOf('page-field').color, skin.bg);
     expect(
-      (decorationOf('page-field').border! as OutlineInputBorder).borderRadius,
+      decorationOf('page-field').borderRadius,
       BorderRadius.circular(DesktopMetrics.radiusIconButton),
     );
   });

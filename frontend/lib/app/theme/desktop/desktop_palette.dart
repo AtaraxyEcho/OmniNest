@@ -23,6 +23,7 @@ abstract final class DesktopPalette {
 
   /// 登录页深色样例的右上角径向起始色（`desktop.css:494`）。
   static const Color authGlowDark = Color(0xFF14201D);
+  static const Color panelBaseDark = Color(0xFF0E1216);
   static const Color panelSolidDark = Color(0xFF161B20);
 
   /// `.drawer` 通用左侧阴影。
@@ -39,18 +40,17 @@ abstract final class DesktopPalette {
   static const Color shadowSoftDark = Color(0x4D000000);
 
   // ── 浅色主题 ────────────────────────────────────────────────────────
-  static const Color bgLight = Color(0xFFEEF0EC);
-  static const Color bg2Light = Color(0xFFE6E9E4);
-  static const Color panelSolidLight = Color(0xFFFBFCFA);
-  // `--panel` 的浅色基色是纯白，与 `--panel-solid` 的 #FBFCFA 不是同一档。
+  static const Color bgLight = Color(0xFFF5F4EF);
+  static const Color bg2Light = Color(0xFFECEBE4);
+  static const Color panelSolidLight = Color(0xFFFFFFFF);
   static const Color panelBaseLight = Color(0xFFFFFFFF);
-  static const Color popBaseLight = Color(0xFFFCFDFB);
-  static const Color textLight = Color(0xFF151C19);
-  static const Color text2Light = Color(0xFF435048);
-  static const Color text3Light = Color(0xFF647068);
+  static const Color popBaseLight = Color(0xFFFFFFFE);
+  static const Color textLight = Color(0xFF0F1613);
+  static const Color text2Light = Color(0xFF2C3832);
+  static const Color text3Light = Color(0xFF46524B);
   static const Color accentInkLight = Color(0xFFFFFFFF);
   static const Color warmLight = Color(0xFF85582C);
-  static const Color veilLight = Color(0xFFEEF0EC);
+  static const Color veilLight = Color(0xFFF5F4EF);
   static const Color raiseBaseLight = Color(0xFF18241E);
   static const Color shadowLight = Color(0x59283730);
   static const Color shadowSoftLight = Color(0x1A283730);

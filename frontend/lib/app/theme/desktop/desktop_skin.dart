@@ -40,24 +40,25 @@ class DesktopSkin extends ThemeExtension<DesktopSkin> {
     final tint = accent.resolve(isDark: isDark);
     final raiseBase =
         isDark ? DesktopPalette.raiseBaseDark : DesktopPalette.raiseBaseLight;
+    final bg = isDark ? DesktopPalette.bgDark : DesktopPalette.bgLight;
     return DesktopSkin(
       isDark: isDark,
-      bg: isDark ? DesktopPalette.bgDark : DesktopPalette.bgLight,
+      bg: bg,
       bg2: isDark ? DesktopPalette.bg2Dark : DesktopPalette.bg2Light,
-      panel: (isDark
-              ? DesktopPalette.panelSolidDark
-              : DesktopPalette.panelBaseLight)
-          .withValues(alpha: 0.66),
+      panel:
+          isDark
+              ? DesktopPalette.panelBaseDark.withValues(alpha: 0.58)
+              : bg.withValues(alpha: 0.55),
       panelSolid:
           isDark
               ? DesktopPalette.panelSolidDark
               : DesktopPalette.panelSolidLight,
       pop: (isDark ? DesktopPalette.popBaseDark : DesktopPalette.popBaseLight)
-          .withValues(alpha: isDark ? 0.90 : 0.92),
+          .withValues(alpha: isDark ? 0.90 : 0.95),
       raise: raiseBase.withValues(alpha: isDark ? 0.040 : 0.045),
       raise2: raiseBase.withValues(alpha: isDark ? 0.075 : 0.080),
       raise3: raiseBase.withValues(alpha: isDark ? 0.120 : 0.130),
-      line: raiseBase.withValues(alpha: isDark ? 0.085 : 0.120),
+      line: raiseBase.withValues(alpha: isDark ? 0.085 : 0.160),
       line2: raiseBase.withValues(alpha: isDark ? 0.170 : 0.240),
       text: isDark ? DesktopPalette.textDark : DesktopPalette.textLight,
       text2: isDark ? DesktopPalette.text2Dark : DesktopPalette.text2Light,

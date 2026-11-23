@@ -13,6 +13,9 @@ import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/preferences/app_bootstrap_data.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/window/desktop_close_flow.dart';
+import 'package:omninest/core/window/window_geometry_service.dart';
+import 'package:omninest/features/backdrop/application/app_backdrop_video_session.dart';
+import 'package:omninest/features/music/application/music_media_session.dart';
 import 'package:omninest/platform/desktop/desktop_hotkey_service.dart';
 import 'package:omninest/platform/desktop/desktop_tray_port.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -51,8 +54,11 @@ class DesktopTrayService with TrayListener, WindowListener {
   /// 非 Windows 托盘 PNG。
   static const String posixTrayIconAsset = BrandLogo.assetPath;
 
-  /// 托盘退出清理的硬超时；超时后强制结束进程。
+  /// 非 Windows 桌面端托盘退出清理预算。
   static const Duration quitCleanupBudget = Duration(milliseconds: 400);
+
+  /// Windows 退出前暂停/释放活跃音视频会话的异步预算。
+  static const Duration windowsMediaCleanupBudget = Duration(milliseconds: 200);
 
   /// Windows 原生窗口帧通道，与 runner 的 flutter_window.cpp 对齐；
   /// window_chrome_controller 内亦声明了同名通道。
@@ -62,7 +68,17 @@ class DesktopTrayService with TrayListener, WindowListener {
 
   final DesktopTrayPort _tray;
   bool _initialized = false;
+  bool _windowListenerAttached = false;
   bool _quitting = false;
+
+  /// 提前挂载窗口关闭监听（在 setPreventClose(true) 之前调用，消除早关窗空窗）。
+  void attachWindowListener() {
+    if (_windowListenerAttached) {
+      return;
+    }
+    windowManager.addListener(this);
+    _windowListenerAttached = true;
+  }
 
   /// 初始化系统托盘与窗口关闭拦截。
   Future<void> init() async {
@@ -70,7 +86,7 @@ class DesktopTrayService with TrayListener, WindowListener {
       return;
     }
     _tray.addListener(this);
-    windowManager.addListener(this);
+    attachWindowListener();
 
     await _setIcon();
     try {
@@ -155,7 +171,10 @@ class DesktopTrayService with TrayListener, WindowListener {
   /// 移除托盘图标并注销监听。
   Future<void> dispose() async {
     _tray.removeListener(this);
-    windowManager.removeListener(this);
+    if (_windowListenerAttached) {
+      windowManager.removeListener(this);
+      _windowListenerAttached = false;
+    }
     if (_initialized) {
       await _tray.destroy();
     }
@@ -201,24 +220,84 @@ class DesktopTrayService with TrayListener, WindowListener {
     return stored ?? resolveSystemLanguage();
   }
 
-  /// 托盘菜单退出：短清理后立即结束进程。
+  /// 托盘菜单或关窗确认退出。
   ///
-  /// `windowManager.destroy()` 在 Windows 仅 `PostQuitMessage`，但 Flutter
-  /// 引擎关停、media 等插件释放仍可能挂住平台通道；清理预算结束后强制
-  /// `exit(0)`，避免托盘“退出”后窗口假死数秒。
+  /// Windows 端彻底移除 `exit(0)` 与会阻塞主线程的同步 FFI `_tray.destroy()`：
+  /// 先隐藏窗口、在 200ms 预算内异步暂停/释放活跃音视频会话、解除关闭拦截，
+  /// 再经 `omninest/window_frame` 调用 `requestAppExit` 投递 `WM_CLOSE` 并由
+  /// 原生 1.5s 看门狗兜底。非 Windows 桌面端维持既有安全退出路径。
   Future<void> quit() async {
     if (_quitting) {
       return;
     }
     _quitting = true;
     devLog('托盘退出流程开始');
-    windowManager.removeListener(this);
-    await Future.any([
+    windowGeometryService.markQuitting();
+    if (_windowListenerAttached) {
+      windowManager.removeListener(this);
+      _windowListenerAttached = false;
+    }
+
+    final isWindows =
+        Platform.isWindows || defaultTargetPlatform == TargetPlatform.windows;
+    if (isWindows) {
+      try {
+        await windowManager.hide();
+      } on Object catch (error) {
+        devLog('退出前隐藏窗口失败（忽略继续退出）: $error');
+      }
+      await Future.any<void>([
+        _cleanupWindowsMediaBeforeExit(),
+        Future<void>.delayed(windowsMediaCleanupBudget),
+      ]);
+      try {
+        await windowManager.setPreventClose(false);
+      } on Object catch (error) {
+        devLog('解除关闭拦截失败: $error');
+      }
+      try {
+        await _windowFrameChannel.invokeMethod<void>('requestAppExit');
+      } on Object catch (error) {
+        devLog('请求 Windows 原生退出通道失败，回退关闭窗口: $error');
+        try {
+          await windowManager.close();
+        } on Object catch (_) {}
+      }
+      return;
+    }
+
+    await Future.any<void>([
       _cleanupBeforeExit(),
       Future<void>.delayed(quitCleanupBudget),
     ]);
     devLog('托盘退出：结束进程');
     exit(0);
+  }
+
+  Future<void> _cleanupWindowsMediaBeforeExit() async {
+    await Future.wait<void>([
+      () async {
+        try {
+          await DesktopHotkeyService.instance.dispose();
+        } on Object catch (error) {
+          devLog('媒体键注销失败（忽略继续退出）: $error');
+        }
+      }(),
+      () async {
+        try {
+          await MusicMediaKeyBridge.dispatch(play: false, pause: true);
+        } on Object catch (error) {
+          devLog('退出前暂停音频会话失败（忽略继续退出）: $error');
+        }
+      }(),
+      () async {
+        try {
+          await AppBackdropVideoSession.releaseActiveSessionsForExit();
+        } on Object catch (error) {
+          devLog('退出前释放视频会话失败（忽略继续退出）: $error');
+        }
+      }(),
+    ]);
   }
 
   Future<void> _cleanupBeforeExit() async {
@@ -227,6 +306,16 @@ class DesktopTrayService with TrayListener, WindowListener {
       await DesktopHotkeyService.instance.dispose();
     } on Object catch (error) {
       devLog('媒体键注销失败（忽略继续退出）: $error');
+    }
+    try {
+      await MusicMediaKeyBridge.dispatch(play: false, pause: true);
+    } on Object catch (error) {
+      devLog('退出前暂停音频会话失败（忽略继续退出）: $error');
+    }
+    try {
+      await AppBackdropVideoSession.releaseActiveSessionsForExit();
+    } on Object catch (error) {
+      devLog('退出前释放视频会话失败（忽略继续退出）: $error');
     }
     try {
       await _tray.destroy();

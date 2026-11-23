@@ -9,13 +9,25 @@ import 'package:omninest/app/desktop/pages/desktop_home_page.dart';
 import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 
 import 'desktop_test_harness.dart';
+import 'tolerant_golden.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  final GoldenFileComparator defaultComparator = goldenFileComparator;
+  setUpAll(() {
+    goldenFileComparator = TolerantGoldenComparator(
+      Uri.parse('test/app/desktop/desktop_home_view_test.dart'),
+    );
+  });
+  tearDownAll(() {
+    goldenFileComparator = defaultComparator;
+  });
+
   setUp(() {
     // 固定时刻：问候语、天象渐变与 hero 时钟都随之确定，基线不随跑测时间漂移。
     DesktopHomePage.clock = () => DateTime(2026, 11, 14, 18, 30);
+    _mockPathProvider();
   });
 
   tearDown(() {
@@ -32,32 +44,32 @@ void main() {
         (await rootBundle.load(
           'assets/backdrops/default_wallpaper.jpg',
         )).buffer.asUint8List();
-    await HttpOverrides.runZoned(
-      () async {
-        tester.view.physicalSize = viewport;
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        await tester.pumpWidget(
-          ProviderScope(
-            overrides: desktopSeedOverrides(),
-            child: wrapDesktop(
-              const DesktopHomePage(),
-              dark: dark,
-              accent: accent,
-              viewport: viewport,
-            ),
-          ),
-        );
-        // 天象是循环动画，pumpAndSettle 永远等不到静止；按固定帧推进，
-        // golden 的相位因此也是确定的。
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
-        await tester.pump(const Duration(milliseconds: 300));
-      },
-      createHttpClient:
-          (context) => DesktopImageOverrides(bytes).createHttpClient(context),
+    // 用全局 HttpOverrides 而不是 runZoned：图片请求可能在 zone 结束后才由
+    // 绘制/解码链发起，落在 zone 外就会走真实网络并回退成兜底色，导致基线
+    // 在并行跑套件时稳定差 0.3%。每个测试文件独立 isolate，全局覆盖是安全的。
+    final previousOverrides = HttpOverrides.current;
+    HttpOverrides.global = DesktopImageOverrides(bytes);
+    addTearDown(() => HttpOverrides.global = previousOverrides);
+    tester.view.physicalSize = viewport;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: desktopSeedOverrides(),
+        child: wrapDesktop(
+          const DesktopHomePage(),
+          dark: dark,
+          accent: accent,
+          viewport: viewport,
+        ),
+      ),
     );
+    // 天象是循环动画，pumpAndSettle 永远等不到静止；按固定帧推进，
+    // golden 的相位因此也是确定的。
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
   }
 
   testWidgets('首页按样例铺开六个分区，数据全部来自模块门面', (tester) async {
@@ -117,6 +129,16 @@ void main() {
     // 首页区块带 55ms 交错入场，固定帧推进到入场结束后再取基线，
     // 否则 golden 会固化半透明的中间帧。
     await tester.pump(const Duration(milliseconds: 1200));
+    // 卡片封面解码是真实异步：并行跑整个桌面套件时 1.2s 假时间不足以让位图落地，
+    // 基线会随机差 0.3%（半透明首帧）。让出真实事件循环再补两帧，动画相位不变。
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 250)),
+    );
+    // 解码落地后封面还有 300ms 淡入：再推一段假时间让两枚 hero 徽标的玻璃
+    // 采样稳定下来，否则并行跑套件时会差 0.3%。
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump();
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/desktop_home_dark.png'),
@@ -146,5 +168,26 @@ void main() {
     expect(find.text('Nothing on the shelf yet.'), findsOneWidget);
     expect(find.text('No recent files.'), findsOneWidget);
     expect(find.byIcon(DesktopIcons.film), findsWidgets);
+  });
+}
+
+const MethodChannel _pathProviderChannel = MethodChannel(
+  'plugins.flutter.io/path_provider',
+);
+
+/// 首页卡片封面走 `flutter_cache_manager`，测试进程没有 path_provider 插件，
+/// 这里给出临时目录桩，避免平台通道异常打断 golden 采样。
+void _mockPathProvider() {
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(_pathProviderChannel, (call) async {
+        final prefix = call.method.replaceAll(RegExp(r'[^A-Za-z]'), '');
+        final dir = await Directory.systemTemp.createTemp(
+          'omninest-home-$prefix',
+        );
+        return dir.path;
+      });
+  addTearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_pathProviderChannel, null);
   });
 }

@@ -35,9 +35,9 @@ void main() {
     // 原型 `Music.tsx`：Playing from {album}。
     expect(find.text('PLAYING FROM BLUE HOURS'), findsOneWidget);
     expect(find.text('Pause'), findsOneWidget);
-    // 音乐页头部（标题 + 导入 + 分类栏）不吸顶：样例里没有粘性页头，
-    // 一旦复用 SliverPersistentHeader 就会常驻并压住滚动内容。
-    expect(find.byType(SliverPersistentHeader), findsNothing);
+    // v16 起音乐页头与影视/照片/阅读一致改为固定分类栏（DesktopStickySliver），
+    // 滚动时只保留 26px 玻璃页头，不再把整块标题压住内容。
+    expect(find.byType(SliverPersistentHeader), findsOneWidget);
   });
 
   testWidgets('专辑分区使用音乐文案且卡片不带指针柔光', (tester) async {

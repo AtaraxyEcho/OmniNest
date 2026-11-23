@@ -38,7 +38,48 @@ bool ContainsDeepLink(const std::vector<std::string>& args, std::string* out_uri
   return false;
 }
 
+std::string ReadInstanceToken() {
+  DWORD required = ::GetEnvironmentVariableW(L"LOCALAPPDATA", nullptr, 0);
+  if (required == 0) {
+    return {};
+  }
+  std::wstring local_app_data(required, L'\0');
+  DWORD written =
+      ::GetEnvironmentVariableW(L"LOCALAPPDATA", local_app_data.data(), required);
+  if (written == 0 || written >= required) {
+    return {};
+  }
+  local_app_data.resize(written);
+  std::wstring token_path = local_app_data + L"\\OmniNest\\instance.token";
+  HANDLE file = ::CreateFileW(
+      token_path.c_str(), GENERIC_READ,
+      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (file == INVALID_HANDLE_VALUE) {
+    return {};
+  }
+  char buffer[256] = {};
+  DWORD bytes_read = 0;
+  const BOOL ok = ::ReadFile(file, buffer, sizeof(buffer) - 1, &bytes_read, nullptr);
+  ::CloseHandle(file);
+  if (!ok || bytes_read == 0) {
+    return {};
+  }
+  std::string token(buffer, bytes_read);
+  const auto first = token.find_first_not_of(" \t\r\n");
+  if (first == std::string::npos) {
+    return {};
+  }
+  const auto last = token.find_last_not_of(" \t\r\n");
+  return token.substr(first, last - first + 1);
+}
+
 bool ForwardToRunningInstance(const std::vector<std::string>& args) {
+  const std::string token = ReadInstanceToken();
+  if (token.empty()) {
+    return false;
+  }
+
   WSADATA wsa{};
   if (::WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
     return false;
@@ -49,25 +90,52 @@ bool ForwardToRunningInstance(const std::vector<std::string>& args) {
     return false;
   }
 
+  const DWORD timeout_ms = 300;
+  ::setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO,
+               reinterpret_cast<const char*>(&timeout_ms), sizeof(timeout_ms));
+  ::setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO,
+               reinterpret_cast<const char*>(&timeout_ms), sizeof(timeout_ms));
+
   sockaddr_in addr{};
   addr.sin_family = AF_INET;
   addr.sin_port = htons(static_cast<u_short>(kActivatePort));
   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
-  bool sent = false;
+  bool acked = false;
   if (::connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0) {
-    std::string payload = "OMNINEST_ACTIVATE";
+    std::string payload = "OMNINEST_ACTIVATE " + token;
     std::string deep_link;
     if (ContainsDeepLink(args, &deep_link)) {
       payload += " " + deep_link;
     }
     payload += "\n";
-    ::send(sock, payload.c_str(), static_cast<int>(payload.size()), 0);
-    sent = true;
+    const int sent =
+        ::send(sock, payload.c_str(), static_cast<int>(payload.size()), 0);
+    if (sent == static_cast<int>(payload.size())) {
+      std::string response;
+      char recv_buf[64] = {};
+      while (response.size() < 64) {
+        const int n = ::recv(sock, recv_buf, sizeof(recv_buf), 0);
+        if (n <= 0) {
+          break;
+        }
+        response.append(recv_buf, static_cast<size_t>(n));
+        if (response.find('\n') != std::string::npos) {
+          break;
+        }
+      }
+      const auto newline_pos = response.find('\n');
+      std::string first_line =
+          newline_pos == std::string::npos ? response : response.substr(0, newline_pos);
+      if (!first_line.empty() && first_line.back() == '\r') {
+        first_line.pop_back();
+      }
+      acked = (first_line == "OK");
+    }
   }
   ::closesocket(sock);
   ::WSACleanup();
-  return sent;
+  return acked;
 }
 
 }  // namespace
@@ -92,10 +160,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   if (single_instance_mutex != nullptr &&
       mutex_error == ERROR_ALREADY_EXISTS) {
     std::vector<std::string> args = GetCommandLineArguments();
-    ForwardToRunningInstance(args);
-    ::CloseHandle(single_instance_mutex);
-    ::CoUninitialize();
-    return EXIT_SUCCESS;
+    if (ForwardToRunningInstance(args)) {
+      ::CloseHandle(single_instance_mutex);
+      ::CoUninitialize();
+      return EXIT_SUCCESS;
+    }
+    // 令牌缺失或对端未回 OK（旧版本/正在退出）：退回正常启动，与 Dart 侧
+    // ensureSingleDesktopInstance 的降级策略保持一致，避免用户点图标毫无反应。
   }
 
   flutter::DartProject project(L"data");

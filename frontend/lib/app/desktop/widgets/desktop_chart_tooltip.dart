@@ -111,12 +111,12 @@ class _DesktopBarTipOverlayState extends State<DesktopBarTipOverlay> {
       controller: _portalController,
       overlayChildBuilder: (context) {
         if (!widget.visible || !_hasContent) {
-          return const SizedBox.shrink();
+          return const ExcludeSemantics(child: SizedBox.shrink());
         }
-        return Positioned(
-          top: 0,
-          left: 0,
-          child: ExcludeSemantics(
+        return ExcludeSemantics(
+          child: Positioned(
+            top: 0,
+            left: 0,
             child: CompositedTransformFollower(
               link: _layerLink,
               showWhenUnlinked: false,

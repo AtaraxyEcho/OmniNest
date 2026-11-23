@@ -511,12 +511,15 @@ class _DesktopModalSurfaceState extends State<_DesktopModalSurface>
   /// 打开时是否已有别的弹层：有则本层用浅遮罩、不做背景模糊。
   bool _nested = false;
 
-  /// 抽屉退场：播完（或被销毁）再交给外层拆 Overlay。
+  /// 抽屉退场：关闭前先释放弹层焦点，播完（或被销毁）再交给外层拆 Overlay。
   void playExit(VoidCallback onDone) {
     if (_closing) {
       return;
     }
     _closing = true;
+    if (_scope.hasFocus) {
+      _scope.unfocus();
+    }
     _pendingExit = onDone;
     if (widget.slideWidth <= 0) {
       _finishExit();
@@ -534,6 +537,9 @@ class _DesktopModalSurfaceState extends State<_DesktopModalSurface>
   }
 
   void _finishExit() {
+    if (_scope.hasFocus) {
+      _scope.unfocus();
+    }
     final done = _pendingExit;
     _pendingExit = null;
     done?.call();
@@ -578,6 +584,9 @@ class _DesktopModalSurfaceState extends State<_DesktopModalSurface>
     _pendingExit = null;
     if (pending != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => pending());
+    }
+    if (_scope.hasFocus) {
+      _scope.unfocus();
     }
     _exit.dispose();
     _scope.dispose();

@@ -709,9 +709,8 @@ class _DesktopMusicPageState extends ConsumerState<DesktopMusicPage> {
               ),
             )
           else ...[
-            // 音乐页头部（标题 + 导入 + 分类栏）保持普通滚动内容：样例里音乐页
-            // 没有吸顶头，投入粘性容器会让标题与导入按钮常驻并压住滚动内容。
-            SliverToBoxAdapter(
+            // 音乐页头部（标题 + 导入 + 分类栏）统一走吸顶磨砂分类栏。
+            DesktopStickySliver(
               child: DesktopPageHead(
                 eyebrow:
                     l10n

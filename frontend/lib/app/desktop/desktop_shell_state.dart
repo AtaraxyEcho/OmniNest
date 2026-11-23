@@ -12,6 +12,7 @@ class DesktopAppearance {
     this.ambient = 70,
     this.reduceMotion = false,
     this.compact = false,
+    this.dynamicBg = true,
   });
 
   final DesktopAccent accent;
@@ -21,17 +22,22 @@ class DesktopAppearance {
   final bool reduceMotion;
   final bool compact;
 
+  /// 随封面变色的动态背景开关（关闭时全站切至纯净 Plain 背景）。
+  final bool dynamicBg;
+
   DesktopAppearance copyWith({
     DesktopAccent? accent,
     double? ambient,
     bool? reduceMotion,
     bool? compact,
+    bool? dynamicBg,
   }) {
     return DesktopAppearance(
       accent: accent ?? this.accent,
       ambient: ambient ?? this.ambient,
       reduceMotion: reduceMotion ?? this.reduceMotion,
       compact: compact ?? this.compact,
+      dynamicBg: dynamicBg ?? this.dynamicBg,
     );
   }
 }
@@ -48,6 +54,7 @@ class DesktopAppearanceController extends Notifier<DesktopAppearance> {
   static const _ambientKey = 'omninest.desktop.ambient';
   static const _reduceKey = 'omninest.desktop.reduceMotion';
   static const _compactKey = 'omninest.desktop.compact';
+  static const _dynamicBgKey = 'omninest.desktop.dynamicBg';
 
   bool _loaded = false;
 
@@ -65,6 +72,7 @@ class DesktopAppearanceController extends Notifier<DesktopAppearance> {
       ambient: (prefs.getDouble(_ambientKey) ?? 70).clamp(0, 100),
       reduceMotion: prefs.getBool(_reduceKey) ?? false,
       compact: prefs.getBool(_compactKey) ?? false,
+      dynamicBg: prefs.getBool(_dynamicBgKey) ?? true,
     );
   }
 
@@ -90,6 +98,12 @@ class DesktopAppearanceController extends Notifier<DesktopAppearance> {
     state = state.copyWith(compact: value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_compactKey, value);
+  }
+
+  Future<void> setDynamicBg(bool value) async {
+    state = state.copyWith(dynamicBg: value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_dynamicBgKey, value);
   }
 }
 

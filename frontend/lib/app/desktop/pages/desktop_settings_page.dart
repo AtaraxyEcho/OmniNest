@@ -428,6 +428,15 @@ class _AppearanceSection extends ConsumerWidget {
           child: Column(
             children: [
               _SettingsPreferenceRow(
+                title: l10n.desktopDynamicBackground,
+                hint: l10n.desktopDynamicBackgroundHint,
+                child: DesktopToggle(
+                  value: appearance.dynamicBg,
+                  onChanged: controller.setDynamicBg,
+                  label: l10n.desktopDynamicBackground,
+                ),
+              ),
+              _SettingsPreferenceRow(
                 title: l10n.desktopAmbientLight,
                 hint: l10n.desktopAmbientHint,
                 child: SizedBox(

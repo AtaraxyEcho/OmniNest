@@ -96,6 +96,10 @@ public class MovieLibraryService {
      * 标题关键词长度上限，与管理端搜索同口径。
      */
     private static final int LIBRARY_KEYWORD_MAX_LENGTH = 200;
+    /**
+     * 旧版无分页列表接口的内存上限，避免大库全量拉取耗尽堆内存。
+     */
+    private static final int LEGACY_LIST_LIMIT = 500;
 
     private final MediaVideoItemRepository videoItemRepository;
     private final MediaTvSeriesRepository tvSeriesRepository;
@@ -237,6 +241,9 @@ public class MovieLibraryService {
         );
         List<MediaVideoItem> recentItems = deduplicateBySeries(
                 videoItemRepository.findReadableOriginals(ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED, readableLibraryIds, recentPage).getContent()
+                        .stream()
+                        .filter(item -> !isUnidentifiedMetadataStatus(item.getMetadataStatus()))
+                        .toList()
         ).stream().limit(12).toList();
         List<MovieVideoItemDto> recentlyAdded = videoItemDtoConverter.toVideoDtos(ownerUserId, recentItems);
         List<MediaPlaybackProgress> progresses = progressService.latest(ownerUserId, MediaPlaybackType.VIDEO);
@@ -450,7 +457,10 @@ public class MovieLibraryService {
         var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
         Set<UUID> readableLibraryIds = scope.librarySourceIds();
         List<MediaTvSeries> items = tvSeriesRepository
-                .findActiveReadableBySeriesType(ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED, readableLibraryIds, seriesType);
+                .findActiveReadableBySeriesType(ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED, readableLibraryIds, seriesType)
+                .stream()
+                .limit(LEGACY_LIST_LIMIT)
+                .toList();
         return toSeriesDtos(ownerUserId, items);
     }
 
@@ -702,7 +712,7 @@ public class MovieLibraryService {
                 ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED,
                 readableLibraryIds,
                 since
-        ));
+        )).stream().limit(LEGACY_LIST_LIMIT).toList();
         return videoItemDtoConverter.toVideoDtos(ownerUserId, items);
     }
 
@@ -1088,8 +1098,11 @@ public class MovieLibraryService {
                 ownerUserId, scope.sharedSpaceReadable(), SpaceType.SHARED,
                 readableLibraryIds,
                 videoItemIds
-        );
+        ).stream()
+                .filter(item -> !isUnidentifiedMetadataStatus(item.getMetadataStatus()))
+                .toList();
         Map<UUID, MovieVideoItemDto> itemIndex = videoItemDtoConverter.toVideoDtos(ownerUserId, items).stream()
+                .filter(item -> !isUnidentifiedMetadataStatus(item.metadataStatus()))
                 .collect(Collectors.toMap(
                         MovieVideoItemDto::id,
                         item -> item,
@@ -1176,6 +1189,17 @@ public class MovieLibraryService {
             return null;
         }
         return value.trim();
+    }
+
+    /**
+     * 黑名单排除待识别（PENDING）与识别失败（FAILED）条目；保留 null 以兼容单测夹具与历史记录。
+     */
+    private boolean isUnidentifiedMetadataStatus(String status) {
+        if (status == null) {
+            return false;
+        }
+        return MetadataStatus.FAILED.getValue().equalsIgnoreCase(status)
+                || MetadataStatus.PENDING.getValue().equalsIgnoreCase(status);
     }
 
     private String normalizeMetadataStatus(String value) {

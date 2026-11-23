@@ -4,7 +4,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
-import 'package:omninest/app/desktop/desktop_backdrop_layer.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
@@ -141,7 +140,6 @@ class _DesktopSidebarState extends ConsumerState<DesktopSidebar>
       desktopShellProvider.select((s) => s.sidebarExpanded),
     );
     _syncLabelAnimation(context, expanded);
-    final backdropActive = desktopBackdropVisibleForRoute(ref, widget.path);
     // 只订阅「紧凑」这一位：整份 watch 会让拖动环境光强度滑杆时每帧重建
     // 整条侧栏（含每个导航项的图标与文字）。
     final compact = ref.watch(
@@ -159,7 +157,7 @@ class _DesktopSidebarState extends ConsumerState<DesktopSidebar>
               : DesktopMetrics.sidebarSlimWidth,
       clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
-        color: skin.bg.withValues(alpha: backdropActive ? 0.38 : 0.40),
+        color: skin.bg.withValues(alpha: 0.38),
         border: Border(right: BorderSide(color: skin.line)),
       ),
       // 内容按展开宽度固定排版，收窄时只被裁切：跟样例
@@ -272,14 +270,13 @@ class _DesktopSidebarState extends ConsumerState<DesktopSidebar>
         ),
       ),
     );
-    return backdropActive
-        ? DesktopGlassSurface(
-          borderRadius: BorderRadius.zero,
-          blur: 26,
-          saturation: 1.4,
-          child: rail,
-        )
-        : rail;
+    // 全时固定玻璃拓扑，避免切页时条件包裹导致子树重建与闪动。
+    return DesktopGlassSurface(
+      borderRadius: BorderRadius.zero,
+      blur: 26,
+      saturation: 1.4,
+      child: rail,
+    );
   }
 }
 
@@ -362,9 +359,8 @@ class _SidebarItem extends StatelessWidget {
     final item = Semantics(
       button: true,
       selected: active,
-      // 折叠态下文字被 ExcludeSemantics 屏蔽，外显 label 是唯一来源；
-      // 展开态若同时保留子节点语义会被播报两次（"Admin\nAdmin"），
-      // 因此整行语义由这里独占，计数折进 label 一并播报。
+      // 整行语义由这里独占（excludeSemantics: true），计数折进 label 一并播报，
+      // 避免展开态重复播报与折叠态冗余嵌套 ExcludeSemantics。
       label: count == null ? label : '$label · $count',
       excludeSemantics: true,
       child: DesktopFocusOutline(
@@ -404,55 +400,52 @@ class _SidebarItem extends StatelessWidget {
                                   : skin.text2,
                         ),
                         Expanded(
-                          child: ExcludeSemantics(
-                            excluding: !expanded,
-                            child: FadeTransition(
-                              opacity: labelOpacity,
-                              alwaysIncludeSemantics: true,
-                              child: Padding(
-                                padding: const EdgeInsets.only(left: 12),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        label,
-                                        maxLines: 1,
-                                        softWrap: false,
-                                        overflow: TextOverflow.fade,
-                                        style:
-                                            dense
-                                                ? DesktopType.navSub(
-                                                  active || hovered
-                                                      ? skin.text
-                                                      : skin.text2,
-                                                )
-                                                : DesktopType.navItem(
-                                                  active || hovered
-                                                      ? skin.text
-                                                      : skin.text2,
-                                                ),
-                                      ),
+                          child: FadeTransition(
+                            opacity: labelOpacity,
+                            alwaysIncludeSemantics: true,
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 12),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      label,
+                                      maxLines: 1,
+                                      softWrap: false,
+                                      overflow: TextOverflow.fade,
+                                      style:
+                                          dense
+                                              ? DesktopType.navSub(
+                                                active || hovered
+                                                    ? skin.text
+                                                    : skin.text2,
+                                              )
+                                              : DesktopType.navItem(
+                                                active || hovered
+                                                    ? skin.text
+                                                    : skin.text2,
+                                              ),
                                     ),
-                                    if (shortcut != null) ...[
-                                      const SizedBox(width: 8),
-                                      Opacity(
-                                        opacity: hovered ? 0.8 : 0,
-                                        alwaysIncludeSemantics: true,
-                                        child: Text(
-                                          shortcut!,
-                                          style: DesktopType.nano(skin.text3),
-                                        ),
-                                      ),
-                                    ],
-                                    if (count != null) ...[
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        '$count',
+                                  ),
+                                  if (shortcut != null) ...[
+                                    const SizedBox(width: 8),
+                                    Opacity(
+                                      opacity: hovered ? 0.8 : 0,
+                                      alwaysIncludeSemantics: true,
+                                      child: Text(
+                                        shortcut!,
                                         style: DesktopType.nano(skin.text3),
                                       ),
-                                    ],
+                                    ),
                                   ],
-                                ),
+                                  if (count != null) ...[
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '$count',
+                                      style: DesktopType.nano(skin.text3),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                           ),
@@ -465,14 +458,11 @@ class _SidebarItem extends StatelessWidget {
         ),
       ),
     );
-    if (!expanded) {
-      return Tooltip(
-        message: tooltipMessage,
-        waitDuration: const Duration(milliseconds: 300),
-        child: item,
-      );
-    }
-    return item;
+    return Tooltip(
+      message: expanded ? '' : tooltipMessage,
+      waitDuration: const Duration(milliseconds: 300),
+      child: item,
+    );
   }
 }
 
@@ -502,87 +492,127 @@ class _StorageCard extends StatelessWidget {
             : unlimited
             ? l10n.desktopStorageUnlimited(used)
             : l10n.desktopStorageUsage(used, total!);
+    final tip = 'OmniCloud · $caption';
+    final percentText = unlimited ? '∞' : '${(ratio * 100).round()}%';
 
-    final card = DesktopHover(
-      builder:
-          (context, hovered) => GestureDetector(
-            onTap: () => desktopGo(context, DesktopRoutes.filesStorage),
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: hovered ? skin.raise2 : skin.raise,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: skin.line),
-              ),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 38,
-                    height: 38,
-                    child: CustomPaint(
-                      painter: _RingPainter(
-                        fraction: ratio,
-                        track: skin.raise3,
-                        value: skin.accent,
-                      ),
-                      child: Center(
-                        child: Text(
-                          unlimited ? '∞' : '${(ratio * 100).round()}%',
-                          style: DesktopType.nano(skin.text).copyWith(
-                            fontWeight: FontWeight.w600,
-                            fontSize: unlimited ? 13 : null,
+    final card = Semantics(
+      button: true,
+      label: tip,
+      excludeSemantics: true,
+      child: DesktopHover(
+        builder:
+            (context, hovered) => GestureDetector(
+              onTap: () => desktopGo(context, DesktopRoutes.filesStorage),
+              behavior: HitTestBehavior.opaque,
+              child:
+                  !expanded
+                      ? Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: hovered ? skin.raise2 : skin.raise,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: skin.line),
+                          ),
+                          child: Center(
+                            child: SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: CustomPaint(
+                                painter: _RingPainter(
+                                  fraction: ratio,
+                                  track: skin.raise3,
+                                  value: skin.accent,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    percentText,
+                                    style: DesktopType.nano(skin.text).copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: unlimited ? 13 : 9.5,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: ExcludeSemantics(
-                      excluding: !expanded,
-                      child: FadeTransition(
-                        opacity: labelOpacity,
-                        alwaysIncludeSemantics: true,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                // 样例 `Shell.tsx:180` 的服务器名。
-                                'OmniCloud',
-                                maxLines: 1,
-                                softWrap: false,
-                                overflow: TextOverflow.fade,
-                                style: DesktopType.denseStrong(skin.text),
+                      )
+                      : Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: hovered ? skin.raise2 : skin.raise,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: skin.line),
+                        ),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 38,
+                              height: 38,
+                              child: CustomPaint(
+                                painter: _RingPainter(
+                                  fraction: ratio,
+                                  track: skin.raise3,
+                                  value: skin.accent,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    percentText,
+                                    style: DesktopType.nano(skin.text).copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: unlimited ? 13 : null,
+                                    ),
+                                  ),
+                                ),
                               ),
-                              Text(
-                                caption,
-                                maxLines: 1,
-                                softWrap: false,
-                                overflow: TextOverflow.fade,
-                                style: DesktopType.micro(skin.text3),
+                            ),
+                            Expanded(
+                              child: FadeTransition(
+                                opacity: labelOpacity,
+                                alwaysIncludeSemantics: true,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(left: 12),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        // 样例 `Shell.tsx:180` 的服务器名。
+                                        'OmniCloud',
+                                        maxLines: 1,
+                                        softWrap: false,
+                                        overflow: TextOverflow.fade,
+                                        style: DesktopType.denseStrong(
+                                          skin.text,
+                                        ),
+                                      ),
+                                      Text(
+                                        caption,
+                                        maxLines: 1,
+                                        softWrap: false,
+                                        overflow: TextOverflow.fade,
+                                        style: DesktopType.micro(skin.text3),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ),
-                ],
-              ),
             ),
-          ),
+      ),
     );
-    if (!expanded) {
-      return Tooltip(
-        message: 'OmniCloud · $caption',
-        waitDuration: const Duration(milliseconds: 300),
-        child: card,
-      );
-    }
-    return card;
+    return Tooltip(
+      message: expanded ? '' : tip,
+      waitDuration: const Duration(milliseconds: 300),
+      child: card,
+    );
   }
 }
 

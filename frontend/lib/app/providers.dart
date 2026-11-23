@@ -200,7 +200,14 @@ final localDatabaseInitProvider = Provider<LocalDatabase>((ref) {
   // 解耦至进程级作用域去重 + 3 秒延后静默执行，避免启动期重复触发磁盘清理。
   final scopeKey =
       (userId == null || userId.isEmpty) ? '__anonymous__' : userId;
-  _scheduleExpiredCacheCleanup(scopeKey, localStorage, imageRepository);
+  final cleanupTimer = _scheduleExpiredCacheCleanup(
+    scopeKey,
+    localStorage,
+    imageRepository,
+  );
+  if (cleanupTimer != null) {
+    ref.onDispose(cleanupTimer.cancel);
+  }
 
   return db;
 });
@@ -235,17 +242,18 @@ final syncReplayFailuresProvider = StreamProvider<int>((ref) {
   return listener.replayFailureStream;
 });
 
-void _scheduleExpiredCacheCleanup(
+Timer? _scheduleExpiredCacheCleanup(
   String scopeKey,
   ReaderLocalStorage localStorage,
   ReaderImageRepository imageRepository,
 ) {
   if (!_cleanedCacheScopes.add(scopeKey)) {
-    return;
+    return null;
   }
-  Timer(_cacheCleanupDelay, () {
+  final timer = Timer(_cacheCleanupDelay, () {
     unawaited(_autoCleanExpiredCache(localStorage, imageRepository));
   });
+  return timer;
 }
 
 /// 启动后静默清理超过 30 天未访问的章节和图片缓存。

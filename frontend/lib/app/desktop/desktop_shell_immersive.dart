@@ -101,6 +101,16 @@ class _AmbientLayerState extends ConsumerState<_AmbientLayer> {
     return null;
   }
 
+  static bool _isMediaAmbientRoute(String path) {
+    final routePath = Uri.tryParse(path)?.path ?? path.split('?').first;
+    return routePath == '/' ||
+        routePath == '/portal' ||
+        routePath.startsWith('/video') ||
+        routePath.startsWith('/photos') ||
+        routePath.startsWith('/music') ||
+        routePath.startsWith('/reader');
+  }
+
   @override
   void dispose() {
     _homeLockTimer?.cancel();
@@ -286,7 +296,7 @@ class _AmbientLayerState extends ConsumerState<_AmbientLayer> {
     }
     return const _ResolvedAmbientSpec(
       imageUrl: bundledDefaultWallpaperAssetPath,
-      showArt: false,
+      showArt: true,
       artPreset: EditorialArtPreset.ambientSubtle,
     );
   }
@@ -330,13 +340,21 @@ class _AmbientLayerState extends ConsumerState<_AmbientLayer> {
 
   @override
   Widget build(BuildContext context) {
+    final dynamicBg = ref.watch(
+      desktopAppearanceProvider.select((appearance) => appearance.dynamicBg),
+    );
+    if (!dynamicBg || !_isMediaAmbientRoute(widget.path)) {
+      return const ExcludeSemantics(child: DesktopAmbientPlain());
+    }
     final intensity = ref.watch(
       desktopAppearanceProvider.select((appearance) => appearance.ambient),
     );
     final reduceMotion = ref.watch(
       desktopAppearanceProvider.select((appearance) => appearance.reduceMotion),
     );
-    final isHome = _modulePrefix(widget.path) == null;
+    final prefix = _modulePrefix(widget.path);
+    final isHome = prefix == null;
+    final isReaderRoute = prefix == '/reader';
     final rawSpec = _resolveRawSpec(ref);
     final spec = isHome ? _applyHomeAntiFlicker(rawSpec) : rawSpec;
 
@@ -348,6 +366,7 @@ class _AmbientLayerState extends ConsumerState<_AmbientLayer> {
         showArt: spec.showArt,
         artPreset: spec.artPreset,
         fallbackTone: spec.fallbackTone,
+        isReaderRoute: isReaderRoute,
       ),
     );
   }

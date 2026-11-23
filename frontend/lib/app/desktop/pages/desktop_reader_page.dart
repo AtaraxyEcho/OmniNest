@@ -67,6 +67,15 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
   bool _libraryGrid = true;
 
   @override
+  void didUpdateWidget(covariant DesktopReaderPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialLibrary != widget.initialLibrary) {
+      _view =
+          widget.initialLibrary ? _ReaderView.library : _ReaderView.overview;
+    }
+  }
+
+  @override
   void dispose() {
     _librarySearch.dispose();
     super.dispose();
@@ -83,8 +92,8 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
       return DesktopErrorView(
         message: failureToast(
           l10n,
-          l10n.readerChapterLoadFailed,
-          centerAsync.error ?? l10n.readerChapterLoadFailed,
+          l10n.readerLibraryLoadFailed,
+          centerAsync.error ?? l10n.readerLibraryLoadFailed,
         ),
         onRetry: () => ref.invalidate(readerCenterControllerProvider),
       );

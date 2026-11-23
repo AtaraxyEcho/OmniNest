@@ -3038,7 +3038,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'{used} / {total}'**
-  String filesUsedOf(Object total, Object used);
+  String filesUsedOf(Object used, Object total);
 
   /// No description provided for @filesStorageSpace.
   ///
@@ -7531,7 +7531,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'Delete role {name} ({code})? Roles still bound to users cannot be deleted.'**
-  String adminRoleDeleteConfirmMessage(Object code, Object name);
+  String adminRoleDeleteConfirmMessage(Object name, Object code);
 
   /// No description provided for @adminRoleSuperAdminLocked.
   ///
@@ -9229,7 +9229,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'Page {current} of {total}'**
-  String adminListPageOf(Object current, Object total);
+  String adminListPageOf(String current, Object total);
 
   /// No description provided for @adminListActions.
   ///
@@ -9247,7 +9247,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'{count} selected'**
-  String adminListSelectedCount(Object count);
+  String adminListSelectedCount(int count);
 
   /// No description provided for @adminListSelectAll.
   ///
@@ -9679,7 +9679,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'Scanning and media access stop for \"{name}\" until you enable it again.'**
-  String adminStorageDisableConfirmBody(Object name);
+  String adminStorageDisableConfirmBody(String name);
 
   /// No description provided for @adminStorageDisableAction.
   ///
@@ -9703,7 +9703,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'This permanently removes the \"{name}\" registration. Imported content is not affected.'**
-  String adminStorageDeleteConfirmBody(Object name);
+  String adminStorageDeleteConfirmBody(String name);
 
   /// No description provided for @adminStorageDeleteAction.
   ///
@@ -12906,6 +12906,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The chapter could not be loaded. Please try again.'**
   String get readerChapterLoadFailed;
+
+  /// No description provided for @readerLibraryLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load library. Please retry.'**
+  String get readerLibraryLoadFailed;
 
   /// TXT 章节离线不可读时的提示
   ///
@@ -23344,19 +23350,19 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'{trackCount} tracks · {albumCount} albums'**
-  String musicModuleSubtitle(Object albumCount, Object trackCount);
+  String musicModuleSubtitle(Object trackCount, Object albumCount);
 
   /// No description provided for @photosModuleSubtitle.
   ///
   /// In en, this message translates to:
   /// **'{photoCount} photos · {albumCount} albums'**
-  String photosModuleSubtitle(Object albumCount, Object photoCount);
+  String photosModuleSubtitle(Object photoCount, Object albumCount);
 
   /// No description provided for @moviesModuleSubtitle.
   ///
   /// In en, this message translates to:
   /// **'{titleCount} titles · {continueCount} in progress'**
-  String moviesModuleSubtitle(Object continueCount, Object titleCount);
+  String moviesModuleSubtitle(Object titleCount, Object continueCount);
 
   /// No description provided for @notificationGroupToday.
   ///
@@ -26081,6 +26087,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Atmosphere'**
   String get desktopAtmosphere;
+
+  /// No description provided for @desktopDynamicBackground.
+  ///
+  /// In en, this message translates to:
+  /// **'Artwork-tinted backgrounds'**
+  String get desktopDynamicBackground;
+
+  /// No description provided for @desktopDynamicBackgroundHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Home, Movies, Photos, Music and Reader take their colour from covers and pictures. Off gives a calm, plain surface.'**
+  String get desktopDynamicBackgroundHint;
 
   /// No description provided for @desktopAmbientLight.
   ///

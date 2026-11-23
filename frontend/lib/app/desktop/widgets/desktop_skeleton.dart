@@ -6,7 +6,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/core/theme/motion_token.dart';
-import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 
 /// 骨架占位文案字号（对齐样例 13px 的 `sk-line` 标签）。
 const _skeletonLabelSize = 13.0;
@@ -239,8 +238,9 @@ class DesktopSkeletonSwitcher extends StatefulWidget {
 }
 
 class _DesktopSkeletonSwitcherState extends State<DesktopSkeletonSwitcher> {
-  int _swapSeq = 0;
+  int _revealSeq = 0;
   late bool _lastShowSkeleton;
+  bool _animateNextReveal = false;
 
   bool _computeShowSkeleton() {
     final seen =
@@ -268,46 +268,47 @@ class _DesktopSkeletonSwitcherState extends State<DesktopSkeletonSwitcher> {
     super.didUpdateWidget(oldWidget);
     _markSeenIfReady();
     final nextShowSkeleton = _computeShowSkeleton();
-    if (nextShowSkeleton != _lastShowSkeleton) {
-      _lastShowSkeleton = nextShowSkeleton;
-      _swapSeq += 1;
+    if (_lastShowSkeleton && !nextShowSkeleton) {
+      _revealSeq += 1;
+      _animateNextReveal = true;
+    } else if (nextShowSkeleton) {
+      _animateNextReveal = false;
     }
+    _lastShowSkeleton = nextShowSkeleton;
   }
 
   @override
   Widget build(BuildContext context) {
     final showSkeleton = _computeShowSkeleton();
-    if (showSkeleton != _lastShowSkeleton) {
-      _lastShowSkeleton = showSkeleton;
-      _swapSeq += 1;
+    if (_lastShowSkeleton && !showSkeleton) {
+      _revealSeq += 1;
+      _animateNextReveal = true;
+    } else if (showSkeleton) {
+      _animateNextReveal = false;
     }
-    return AnimatedSwitcher(
-      duration: DesktopMotion.of(context, DesktopMotion.skeletonReveal),
-      switchInCurve: DesktopMotion.ease,
-      switchOutCurve: DesktopMotion.exitCurve,
-      layoutBuilder:
-          (currentChild, previousChildren) => excludeExitingSemanticsStack(
-            currentChild,
-            previousChildren,
-            alignment: Alignment.topLeft,
+    _lastShowSkeleton = showSkeleton;
+
+    // loading 态直接单槽展示已带 ExcludeSemantics 的骨架，内容就绪后单槽直接淡入，
+    // 彻底移除 AnimatedSwitcher + excludeExitingSemanticsStack 动态套壳引发的 AXTree 断链。
+    if (showSkeleton) {
+      return ExcludeSemantics(child: widget.skeleton);
+    }
+    final duration = DesktopMotion.of(context, DesktopMotion.skeletonReveal);
+    if (!_animateNextReveal || duration == Duration.zero) {
+      return widget.child;
+    }
+    return TweenAnimationBuilder<double>(
+      key: ValueKey<int>(_revealSeq),
+      tween: Tween<double>(begin: 0.0, end: 1.0),
+      duration: duration,
+      curve: DesktopMotion.ease,
+      builder:
+          (context, opacity, child) => Opacity(
+            opacity: opacity,
+            alwaysIncludeSemantics: true,
+            child: child,
           ),
-      transitionBuilder: semanticsSafeFadeTransition,
-      child:
-          showSkeleton
-              ? KeyedSubtree(
-                key: ValueKey<(int, String)>((
-                  _swapSeq,
-                  'desktop-skeleton-loading',
-                )),
-                child: ExcludeSemantics(child: widget.skeleton),
-              )
-              : KeyedSubtree(
-                key: ValueKey<(int, String)>((
-                  _swapSeq,
-                  'desktop-skeleton-content',
-                )),
-                child: widget.child,
-              ),
+      child: widget.child,
     );
   }
 }

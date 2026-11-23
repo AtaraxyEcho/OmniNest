@@ -180,11 +180,20 @@ class _DesktopTextFieldState extends State<DesktopTextField> {
     final fillFocused = page ? skin.bg2 : skin.raise2;
     final bad = widget.error != null;
     final lineColor = bad ? DesktopPalette.bad : skin.line2;
-    // 仅在边框外侧绘制镂空聚焦光环（0% 内部渗色、0px 布局抖动），
-    // focusRing == false 时只保留 1px 强调色边框。
+    final borderColor =
+        !widget.enabled
+            ? skin.line
+            : (focused && !bad ? skin.accent : lineColor);
+    final motionDuration = MotionToken.reduced(
+      context,
+      const Duration(milliseconds: 200),
+    );
+    // 将圆角底色、1px 边框与外侧镂空聚焦光环统一绘制在同一个外层容器上，
+    // 内部 TextField 透明无边框并在单行时垂直居中撑满容器，彻底消除底部断层，
+    // 1:1 对齐样例 desktop.css:105-106。
     final field = TweenAnimationBuilder<double>(
       tween: Tween<double>(end: (widget.focusRing && focused) ? 1.0 : 0.0),
-      duration: MotionToken.reduced(context, const Duration(milliseconds: 200)),
+      duration: motionDuration,
       curve: Curves.easeOut,
       builder: (context, t, child) {
         final shadows =
@@ -197,9 +206,9 @@ class _DesktopTextFieldState extends State<DesktopTextField> {
                             ? const Color(
                               0xFFE0655F,
                             ).withValues(alpha: 0.18 * t)
-                            : skin.accent.withValues(alpha: 0.16 * t),
+                            : skin.accent.withValues(alpha: 0.18 * t),
                     blurRadius: 0,
-                    spreadRadius: 3,
+                    spreadRadius: 4,
                   ),
                 ];
         return DesktopOutsetShadow(
@@ -208,8 +217,17 @@ class _DesktopTextFieldState extends State<DesktopTextField> {
           child: child!,
         );
       },
-      child: SizedBox(
+      child: AnimatedContainer(
+        duration: motionDuration,
+        curve: Curves.easeOut,
         height: widget.height,
+        // 不给 alignment：Container 会把 child 包进 Align 并放宽约束，
+        // 输入框只剩文字行高（20px），点击空白处与整框高度都对不上。
+        decoration: BoxDecoration(
+          color: focused ? fillFocused : fill,
+          borderRadius: radius,
+          border: Border.all(color: borderColor, width: 1),
+        ),
         child: TextField(
           key:
               widget.keyName == null ? null : ValueKey<String>(widget.keyName!),
@@ -227,7 +245,8 @@ class _DesktopTextFieldState extends State<DesktopTextField> {
           maxLines: multiline ? null : 1,
           minLines: multiline ? null : 1,
           expands: multiline,
-          textAlignVertical: multiline ? TextAlignVertical.top : null,
+          textAlignVertical:
+              multiline ? TextAlignVertical.top : TextAlignVertical.center,
           maxLength: widget.maxLength,
           keyboardType: widget.keyboardType,
           textInputAction: widget.textInputAction,
@@ -247,8 +266,8 @@ class _DesktopTextFieldState extends State<DesktopTextField> {
           ],
           decoration: InputDecoration(
             isDense: true,
-            filled: true,
-            fillColor: focused ? fillFocused : fill,
+            filled: false,
+            fillColor: Colors.transparent,
             hintText: widget.hint,
             hintStyle: DesktopType.field(skin.text3),
             prefixIcon:
@@ -266,24 +285,14 @@ class _DesktopTextFieldState extends State<DesktopTextField> {
             ),
             contentPadding: EdgeInsets.symmetric(
               horizontal: multiline ? 12 : (widget.prefixIcon == null ? 12 : 0),
-              vertical: multiline ? 10 : 8,
+              vertical: multiline ? 10 : 0,
             ),
-            border: OutlineInputBorder(
-              borderRadius: radius,
-              borderSide: BorderSide(color: lineColor),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: radius,
-              borderSide: BorderSide(color: lineColor),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: radius,
-              borderSide: BorderSide(color: bad ? lineColor : skin.accent),
-            ),
-            disabledBorder: OutlineInputBorder(
-              borderRadius: radius,
-              borderSide: BorderSide(color: skin.line),
-            ),
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            disabledBorder: InputBorder.none,
+            errorBorder: InputBorder.none,
+            focusedErrorBorder: InputBorder.none,
           ),
         ),
       ),

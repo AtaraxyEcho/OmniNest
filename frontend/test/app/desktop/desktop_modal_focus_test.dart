@@ -189,10 +189,20 @@ void main() {
     expect(find.text('A title is required'), findsOneWidget);
 
     final field = tester.widget<TextField>(find.byType(TextField));
-    expect(
-      field.decoration!.enabledBorder!.borderSide.color,
-      DesktopPalette.bad,
-    );
+    // 描边由外层容器绘制（TextField 自身 InputBorder.none），错误态取容器边框色。
+    final box =
+        tester
+                .widget<AnimatedContainer>(
+                  find
+                      .ancestor(
+                        of: find.byType(TextField),
+                        matching: find.byType(AnimatedContainer),
+                      )
+                      .first,
+                )
+                .decoration!
+            as BoxDecoration;
+    expect(box.border!.top.color, DesktopPalette.bad);
     expect(field.maxLength, isNull);
 
     // 计数跟随输入刷新。

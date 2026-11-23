@@ -10,13 +10,13 @@ import 'package:flutter_test/flutter_test.dart';
 /// `ui::AXTree` 断链崩溃（"will not be in the tree and is not the new root"）。
 ///
 /// 本守卫扫描 `frontend/lib/` 下所有源码，要求：
-/// 1. 所有 `AnimatedOpacity(` 与 `FadeTransition(` 均显式设置
+/// 1. 所有 `Opacity(`、`AnimatedOpacity(` 与 `FadeTransition(` 均显式设置
 ///    `alwaysIncludeSemantics: true`，或处于 `ExcludeSemantics(` 子树内；
 /// 2. 所有 `AnimatedSwitcher(` 均使用 `excludeExitingSemanticsStack`，
 ///    或处于 `ExcludeSemantics(` 子树内。
 void main() {
   test(
-    'AnimatedOpacity 与 FadeTransition 必须具备 alwaysIncludeSemantics: true 或位于 ExcludeSemantics 内',
+    'Opacity、AnimatedOpacity 与 FadeTransition 必须具备 alwaysIncludeSemantics: true 或位于 ExcludeSemantics 内',
     () {
       final offenders = _scanOpacityAndFadeOffenders();
       expect(
@@ -24,7 +24,7 @@ void main() {
         isEmpty,
         reason:
             '发现未开启 alwaysIncludeSemantics: true（且未包 ExcludeSemantics）的 '
-            'AnimatedOpacity / FadeTransition，请补齐以防 Windows ui::AXTree 断链：\n'
+            'Opacity / AnimatedOpacity / FadeTransition，请补齐以防 Windows ui::AXTree 断链：\n'
             '${offenders.join('\n')}',
       );
     },
@@ -53,7 +53,7 @@ List<String> _scanOpacityAndFadeOffenders() {
   }
   final offenders = <String>[];
   final widgetPattern = RegExp(
-    r'(?<![A-Za-z0-9_])(AnimatedOpacity|FadeTransition)\s*\(',
+    r'(?<![A-Za-z0-9_\.])(Opacity|AnimatedOpacity|FadeTransition)\s*\(',
   );
   final alwaysIncludePattern = RegExp(r'alwaysIncludeSemantics\s*:\s*true\b');
 
@@ -73,8 +73,8 @@ List<String> _scanOpacityAndFadeOffenders() {
         continue;
       }
 
-      final argsSlice = masked.substring(openParen, closeParen + 1);
-      if (!alwaysIncludePattern.hasMatch(argsSlice)) {
+      final topLevelArgs = _extractTopLevelArgs(masked, openParen, closeParen);
+      if (!alwaysIncludePattern.hasMatch(topLevelArgs)) {
         final line = _lineNumberAt(raw, match.start);
         offenders.add('$path:$line ($widgetName)');
       }
@@ -242,6 +242,45 @@ bool _isInsideAnySpan(int offset, List<(int, int)> spans) {
     }
   }
   return false;
+}
+
+/// 仅保留当前函数/构造调用的顶层参数文本，防止嵌套子 Widget 的同名参数掩盖外层遗漏。
+String _extractTopLevelArgs(String masked, int openIndex, int closeIndex) {
+  final buffer = StringBuffer();
+  var parenDepth = 0;
+  var bracketDepth = 0;
+  var braceDepth = 0;
+  for (var i = openIndex; i <= closeIndex; i++) {
+    final ch = masked.codeUnitAt(i);
+    if (ch == 0x28) {
+      parenDepth++;
+      continue;
+    }
+    if (ch == 0x29) {
+      parenDepth--;
+      continue;
+    }
+    if (ch == 0x5B) {
+      bracketDepth++;
+      continue;
+    }
+    if (ch == 0x5D) {
+      bracketDepth--;
+      continue;
+    }
+    if (ch == 0x7B) {
+      braceDepth++;
+      continue;
+    }
+    if (ch == 0x7D) {
+      braceDepth--;
+      continue;
+    }
+    if (parenDepth == 1 && bracketDepth == 0 && braceDepth == 0) {
+      buffer.writeCharCode(ch);
+    }
+  }
+  return buffer.toString();
 }
 
 int _findMatchingParen(String masked, int openIndex) {

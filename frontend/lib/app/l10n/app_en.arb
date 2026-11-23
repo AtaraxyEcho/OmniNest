@@ -48,6 +48,11 @@
   },
   "settingsTitle": "Settings",
   "settingsLoadFailed": "Failed to load: {error}",
+  "@settingsLoadFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
   "settingsAppearance": "Appearance",
   "settingsThemeSystem": "System",
   "settingsThemeLight": "Light",
@@ -294,6 +299,11 @@
   "profileWeatherCitySave": "Save",
   "profileWeatherCityNotSet": "Not set (GPS / System default)",
   "profileWeatherCitySaveFailed": "Failed to save city preference: {error}",
+  "@profileWeatherCitySaveFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
   "profileNotificationSettings": "Notification Settings",
   "profileNotificationMasterSwitch": "Master Switch",
   "profileNotificationMasterSwitchHint": "Disable to stop all notifications",
@@ -304,7 +314,17 @@
   "profileNotificationPreview": "Notification Preview",
   "profileNotificationPreviewHint": "Show message content in notifications",
   "profileNotificationTypes": "Notification Types ({count})",
+  "@profileNotificationTypes": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "profileLoadFailed": "Failed to load: {error}",
+  "@profileLoadFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
   "profileSessionManagement": "Session Management",
   "profileSessionManagementSubtitle": "View and manage current login sessions",
   "profileActiveSessions": "Active Sessions",
@@ -372,6 +392,11 @@
   "changePasswordWrongOld": "Incorrect current password",
   "changePasswordFailed": "Password change failed, please retry",
   "changePasswordEnterField": "Please enter {field}",
+  "@changePasswordEnterField": {
+    "placeholders": {
+      "field": {}
+    }
+  },
   "loginWelcome": "Welcome Back",
   "loginDescription": "Sign in with your OmniNest account.",
   "loginSubtitle": "Consolidate family media, reading, files, and automation tasks into one stable personal space.",
@@ -543,9 +568,15 @@
   "filesSharedSpaceInfo": "Used {used} of {capacity} · {items} items",
   "@filesSharedSpaceInfo": {
     "placeholders": {
-      "used": { "type": "String" },
-      "capacity": { "type": "String" },
-      "items": { "type": "int" }
+      "used": {
+        "type": "String"
+      },
+      "capacity": {
+        "type": "String"
+      },
+      "items": {
+        "type": "int"
+      }
     }
   },
   "filesSharedSpaceUnlimited": "No limit",
@@ -599,7 +630,19 @@
   "filesUnlimited": "Unlimited",
   "filesUnlimitedQuota": "Unlimited quota",
   "filesUsedPercent": "{percent}% used · {remaining} remaining",
+  "@filesUsedPercent": {
+    "placeholders": {
+      "percent": {},
+      "remaining": {}
+    }
+  },
   "filesUsedOf": "{used} / {total}",
+  "@filesUsedOf": {
+    "placeholders": {
+      "used": {},
+      "total": {}
+    }
+  },
   "filesStorageSpace": "Storage Space",
   "filesFolders": "Folders",
   "filesFiles": "Files",
@@ -723,10 +766,21 @@
   },
   "filesDropToUpload": "Drop files here to upload",
   "filesUploadProcessing": "Processing {count} files · Progress {progress}",
+  "@filesUploadProcessing": {
+    "placeholders": {
+      "count": {},
+      "progress": {}
+    }
+  },
   "filesViewAll": "View All",
   "filesCollapseQueue": "Collapse upload queue",
   "filesExpandQueue": "Expand upload queue",
   "filesMoreInQueue": "{count} more tasks in upload queue",
+  "@filesMoreInQueue": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "filesSortBy": "Sort By",
   "filesSortName": "Name",
   "filesSortTime": "Time",
@@ -742,6 +796,11 @@
   "filesPurge": "Permanently Delete",
   "filesCopyToEllipsis": "Copy to…",
   "filesCopiedFile": "Copied \"{name}\"",
+  "@filesCopiedFile": {
+    "placeholders": {
+      "name": {}
+    }
+  },
   "filesCopyFailed": "Copy failed",
   "filesMoveToEllipsis": "Move to…",
   "filesDownload": "Download",
@@ -1735,13 +1794,33 @@
   "adminUserProtectedTooltip": "Super admin accounts are protected and cannot be disabled, deleted, or batch-updated.",
   "adminUserDisableConfirmTitle": "Disable account",
   "adminUserDisableConfirmMessage": "Disable {name}? The account will be signed out and denied login until re-enabled.",
+  "@adminUserDisableConfirmMessage": {
+    "placeholders": {
+      "name": {}
+    }
+  },
   "adminUserEnableConfirmTitle": "Enable account",
   "adminUserEnableConfirmMessage": "Enable {name}? The account will be allowed to sign in again.",
+  "@adminUserEnableConfirmMessage": {
+    "placeholders": {
+      "name": {}
+    }
+  },
   "adminDeleteUser": "Delete user",
   "adminDeleteUserConfirmMessage": "Permanently delete {name}. Only empty accounts with no content ownership can be deleted; type the username to confirm.",
+  "@adminDeleteUserConfirmMessage": {
+    "placeholders": {
+      "name": {}
+    }
+  },
   "adminResetTwoFactor": "Reset two-factor",
   "adminResetTwoFactorSuccess": "Two-factor reset. All sessions of this user were ended.",
   "adminResetTwoFactorConfirmMessage": "Clear {name}'s authenticator secret and backup codes, then end all of their sessions. Use this after a lost authenticator or a credential-key rotation; the user can enrol again with their password.",
+  "@adminResetTwoFactorConfirmMessage": {
+    "placeholders": {
+      "name": {}
+    }
+  },
   "adminRequirePasswordChangeLabel": "Require a new password at first sign-in",
   "adminRequirePasswordChangeHint": "The user must replace this temporary password before accessing OmniNest.",
   "adminEditRolesHint": "Assign one or more system roles. Changing roles immediately updates the user's permissions and visible menus.",
@@ -1758,13 +1837,31 @@
   "adminRoleNameRequired": "Display name is required",
   "adminRoleDelete": "Delete role",
   "adminRoleDeleteConfirmMessage": "Delete role {name} ({code})? Roles still bound to users cannot be deleted.",
+  "@adminRoleDeleteConfirmMessage": {
+    "placeholders": {
+      "name": {},
+      "code": {}
+    }
+  },
   "adminRoleSuperAdminLocked": "SUPER_ADMIN holds every permission and is read-only by design.",
   "adminRolePermissionSummary": "{count} permissions granted across {modules} modules",
+  "@adminRolePermissionSummary": {
+    "placeholders": {
+      "count": {},
+      "modules": {}
+    }
+  },
   "adminRoleBuiltinTag": "Built-in",
   "adminRoleCustomTag": "Custom",
   "adminPermissionMatrixTitle": "Business module permission matrix",
   "adminPermissionMatrixSubtitle": "Derived from the permission catalog grouped by module; open a role to edit its bindings.",
   "adminPermissionSelectedCount": "{selected} / {total} permissions selected",
+  "@adminPermissionSelectedCount": {
+    "placeholders": {
+      "selected": {},
+      "total": {}
+    }
+  },
   "adminPermissionSelectAll": "Select all",
   "adminPermissionClear": "Clear",
   "adminPermissionGroupToggle": "Toggle group",
@@ -2084,17 +2181,18 @@
   "adminListEmpty": "No data. Try adjusting the filters.",
   "adminListPageOf": "Page {current} of {total}",
   "@adminListPageOf": {
-    "placeholder": {
+    "placeholders": {
       "current": {
         "type": "String"
-      }
+      },
+      "total": {}
     }
   },
   "adminListActions": "Actions",
   "adminListIndex": "#",
   "adminListSelectedCount": "{count} selected",
   "@adminListSelectedCount": {
-    "placeholder": {
+    "placeholders": {
       "count": {
         "type": "int"
       }
@@ -2214,7 +2312,7 @@
   "adminStorageDisableConfirmTitle": "Disable storage location",
   "adminStorageDisableConfirmBody": "Scanning and media access stop for \"{name}\" until you enable it again.",
   "@adminStorageDisableConfirmBody": {
-    "placeholder": {
+    "placeholders": {
       "name": {
         "type": "String"
       }
@@ -2225,7 +2323,7 @@
   "adminStorageDeleteConfirmTitle": "Delete storage location",
   "adminStorageDeleteConfirmBody": "This permanently removes the \"{name}\" registration. Imported content is not affected.",
   "@adminStorageDeleteConfirmBody": {
-    "placeholder": {
+    "placeholders": {
       "name": {
         "type": "String"
       }
@@ -2267,7 +2365,9 @@
   "adminOAuthProviderAccountTitle": "{provider} account",
   "@adminOAuthProviderAccountTitle": {
     "placeholders": {
-      "provider": { "type": "String" }
+      "provider": {
+        "type": "String"
+      }
     }
   },
   "adminOAuthSecretStorageHint": "Stored encrypted. Never shown again.",
@@ -2343,6 +2443,11 @@
   },
   "adminMountLibraryProvisionFailed": "Failed to configure mount media library",
   "adminLibraryOrphanLocation": "{count} mount location(s) no longer referenced by any library source. Clean them up in the list above.",
+  "@adminLibraryOrphanLocation": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "adminLibraryCleanupOrphan": "Clean up mount location",
   "adminLibraryColumnName": "Name",
   "adminLibraryColumnLocation": "Location · Root",
@@ -2855,14 +2960,20 @@
   "readerChapterPagePosition": "Ch. page {current}/{total}",
   "@readerChapterPagePosition": {
     "placeholders": {
-      "current": { "type": "int" },
-      "total": { "type": "int" }
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "readerProgressPercent": "{percent}%",
   "@readerProgressPercent": {
     "placeholders": {
-      "percent": { "type": "int" }
+      "percent": {
+        "type": "int"
+      }
     }
   },
   "readerFontSize": "Font Size",
@@ -3045,9 +3156,30 @@
   "readerStatsBooks": "Books",
   "readerStatsHoursTitle": "Hours",
   "readerStatsMinutes": "{count} min",
+  "@readerStatsMinutes": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "readerStatsHoursMinutes": "{hours}h {minutes}m",
+  "@readerStatsHoursMinutes": {
+    "placeholders": {
+      "hours": {},
+      "minutes": {}
+    }
+  },
   "readerStatsHours": "{hours}h",
+  "@readerStatsHours": {
+    "placeholders": {
+      "hours": {}
+    }
+  },
   "readerStatsDays": "{count}d",
+  "@readerStatsDays": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "readerNoContent": "No content",
   "readerTtsPlay": "Play",
   "readerTtsPause": "Pause",
@@ -3079,6 +3211,7 @@
   "readerOperationFailed": "Operation failed, please try again later",
   "readerOperationSubmitted": "Operation submitted",
   "readerChapterLoadFailed": "The chapter could not be loaded. Please try again.",
+  "readerLibraryLoadFailed": "Failed to load library. Please retry.",
   "readerChapterNeedsNetwork": "This chapter is not cached for offline reading. Connect to the network and try again.",
   "@readerChapterNeedsNetwork": {
     "description": "TXT 章节离线不可读时的提示"
@@ -3915,6 +4048,11 @@
     }
   },
   "photosHostedToolbarCount": "{count} photos",
+  "@photosHostedToolbarCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "photosHostedRecentTitle": "Recent",
   "photosHostedAlbumsEyebrow": "MADE BY YOU",
   "photosHostedMomentsEyebrow": "THIS WEEK",
@@ -4290,7 +4428,17 @@
   "photosAlbumEmptyHint": "Pick photos from your library to add to this album.",
   "photosAddPhotos": "Add photos",
   "photosPickerAddCount": "Add {count}",
+  "@photosPickerAddCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "photosPickerAddSuccess": "Added {count} photos",
+  "@photosPickerAddSuccess": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "photosPickerNoCandidates": "No photos available to add",
   "photosSharePhoto": "Share Photo",
   "photosSharedItemPasswordRequired": "This share requires password access",
@@ -4356,6 +4504,11 @@
   "photosCreateLink": "Create Link",
   "photosShareNoLinkYet": "No link yet",
   "photosShareOtherLinksHint": "{count} other links",
+  "@photosShareOtherLinksHint": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "photosShareSummaryPassword": "Password set",
   "photosShareLinkCreated": "Share link created: {link}",
   "@photosShareLinkCreated": {
@@ -4704,8 +4857,18 @@
   "profileTaskSystemNotificationsHint": "Send a system notification when tasks complete or fail",
   "settingsCheckUpdate": "Check for Updates",
   "settingsCheckUpdateFailed": "Check for updates failed: {error}",
+  "@settingsCheckUpdateFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
   "settingsAlreadyLatest": "You are on the latest version",
   "settingsNewVersionFound": "New version {version} available",
+  "@settingsNewVersionFound": {
+    "placeholders": {
+      "version": {}
+    }
+  },
   "settingsOpenDownloadPage": "Open download page",
   "filesOpRefresh": "Refresh file list",
   "filesOpSwitchSpace": "Switch space",
@@ -5476,6 +5639,12 @@
   "videoSearchNoHitsLoadMore": "Not found in loaded results. Load more or clear filters",
   "videoSeriesLoadMore": "Load more",
   "videoSeriesLoadedCount": "{loaded} of {total} series loaded",
+  "@videoSeriesLoadedCount": {
+    "placeholders": {
+      "loaded": {},
+      "total": {}
+    }
+  },
   "@videoSearchScopeLoadedOnly": {
     "placeholders": {
       "count": {
@@ -5801,8 +5970,26 @@
   "modulePhotosTitle": "Photos",
   "moduleMoviesTitle": "Movies",
   "musicModuleSubtitle": "{trackCount} tracks · {albumCount} albums",
+  "@musicModuleSubtitle": {
+    "placeholders": {
+      "trackCount": {},
+      "albumCount": {}
+    }
+  },
   "photosModuleSubtitle": "{photoCount} photos · {albumCount} albums",
+  "@photosModuleSubtitle": {
+    "placeholders": {
+      "photoCount": {},
+      "albumCount": {}
+    }
+  },
   "moviesModuleSubtitle": "{titleCount} titles · {continueCount} in progress",
+  "@moviesModuleSubtitle": {
+    "placeholders": {
+      "titleCount": {},
+      "continueCount": {}
+    }
+  },
   "notificationGroupToday": "TODAY",
   "notificationGroupYesterday": "YESTERDAY",
   "notificationGroupEarlier": "EARLIER",
@@ -5850,6 +6037,11 @@
   "musicFavoriteToggleFailed": "Failed to toggle favorite, please retry",
   "readerImportCandidatesLoadFailed": "Failed to load import candidates",
   "syncReplayPendingWarning": "{count} offline operations are pending and will retry automatically when back online",
+  "@syncReplayPendingWarning": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "commonRetry": "Retry",
   "profileEditProfile": "Edit Profile",
   "profileEditProfileTitle": "Edit Profile",
@@ -5873,8 +6065,18 @@
   "notificationTypeMediaImportFailedDesc": "An uploaded file could not be imported automatically",
   "notificationMediaImportCompleted": "Media was imported into the library automatically",
   "notificationMediaImportCompletedWithName": "File {fileName} was imported into the library automatically",
+  "@notificationMediaImportCompletedWithName": {
+    "placeholders": {
+      "fileName": {}
+    }
+  },
   "notificationMediaImportFailed": "Automatic media import failed; check the file and re-upload or import manually",
   "notificationMediaImportFailedWithName": "Automatic import of file {fileName} failed; check the file and re-upload or import manually",
+  "@notificationMediaImportFailedWithName": {
+    "placeholders": {
+      "fileName": {}
+    }
+  },
   "favoriteAdded": "Added to favorites",
   "favoriteRemoved": "Removed from favorites",
   "mobileNavLibrary": "Library",
@@ -6633,6 +6835,8 @@
   "desktopShortcutSeek": "Seek 5s",
   "desktopAccentHint": "Soft, low-saturation tones tuned for long sessions.",
   "desktopAtmosphere": "Atmosphere",
+  "desktopDynamicBackground": "Artwork-tinted backgrounds",
+  "desktopDynamicBackgroundHint": "Home, Movies, Photos, Music and Reader take their colour from covers and pictures. Off gives a calm, plain surface.",
   "desktopAmbientLight": "Ambient light",
   "desktopAmbientHint": "Blurred artwork glow behind the interface",
   "desktopReduceMotion": "Reduce motion",
@@ -6687,7 +6891,13 @@
   "desktopStatListeningSub": "This week",
   "desktopStatHours": "h",
   "desktopStatLibraryAddedToday": "+{count} today",
-  "@desktopStatLibraryAddedToday": {"placeholders": {"count": {"type": "int"}}},
+  "@desktopStatLibraryAddedToday": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "desktopForYou": "For you",
   "desktopSortRecent": "Recent",
   "desktopSortRating": "Rating",
@@ -7344,7 +7554,13 @@
   "desktopBackdropKindImage": "Image",
   "desktopBackdropKindVideo": "Video",
   "desktopBackdropKindGif": "GIF",
-  "@desktopBackdropClearUploadsBody": {"placeholders": {"count": {"type": "int"}}},
+  "@desktopBackdropClearUploadsBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "desktopPhotosEmptyBody": "Photos you add or import will show up here.",
   "desktopMoviesEmptyFavoritesTitle": "No favourites yet",
   "desktopMoviesEmptyFavoritesBody": "Heart a title on its page to keep it here.",
@@ -7362,13 +7578,31 @@
   "desktopMoviesMarkWatched": "Mark as watched",
   "desktopMoviesMarkUnwatched": "Mark as unwatched",
   "desktopMoviesMarkedWatched": "Marked “{title}” as watched",
-  "@desktopMoviesMarkedWatched": {"placeholders": {"title": {"type": "String"}}},
+  "@desktopMoviesMarkedWatched": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
   "desktopMoviesMarkedUnwatched": "Marked “{title}” as unwatched",
-  "@desktopMoviesMarkedUnwatched": {"placeholders": {"title": {"type": "String"}}},
+  "@desktopMoviesMarkedUnwatched": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
   "photosDownload": "Download",
   "photosSavedCount": "Saved {count}",
   "photosDownloadNeedsOriginal": "Open a photo first - list data has no original file URL",
-  "@photosSavedCount": {"placeholders": {"count": {"type": "int"}}},
+  "@photosSavedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "adminSortLabel": "Sort",
   "adminSortName": "Name",
   "adminSortStorageUsed": "Storage used",

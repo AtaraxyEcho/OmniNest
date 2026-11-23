@@ -452,7 +452,21 @@ class _RailItemState extends State<_RailItem> {
       onWillAcceptWithDetails: (details) => details.data.isNotEmpty,
       onAcceptWithDetails: (details) async {
         setState(() => _dropping = false);
-        await onDropFiles(details.data);
+        try {
+          await onDropFiles(details.data);
+        } on Object catch (error) {
+          // 捕获的是 build 的 BuildContext 参数，必须用它自己的 mounted 判定。
+          if (!context.mounted) {
+            return;
+          }
+          final l10n = AppLocalizations.of(context);
+          showDesktopToast(
+            context,
+            failureToast(l10n, l10n.filesOpMove, error),
+            kind: DesktopToastKind.error,
+            icon: DesktopIcons.info,
+          );
+        }
       },
       onMove: (_) {
         if (!_dropping) {

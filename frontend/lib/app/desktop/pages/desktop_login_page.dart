@@ -417,6 +417,8 @@ class _TwoFactorCardState extends ConsumerState<_TwoFactorCard> {
     (_) => TextEditingController(),
   );
   final List<FocusNode> _nodes = List.generate(6, (_) => FocusNode());
+  final TextEditingController _backupCode = TextEditingController();
+  bool _useBackupCode = false;
   bool _busy = false;
   String? _error;
 
@@ -438,12 +440,13 @@ class _TwoFactorCardState extends ConsumerState<_TwoFactorCard> {
     for (final node in _nodes) {
       node.dispose();
     }
+    _backupCode.dispose();
     super.dispose();
   }
 
   Future<void> _verify() async {
     final code = _digits.map((controller) => controller.text).join();
-    if (code.length != 6) {
+    if (code.length != 6 || _busy) {
       return;
     }
     setState(() {
@@ -476,20 +479,71 @@ class _TwoFactorCardState extends ConsumerState<_TwoFactorCard> {
     }
   }
 
+  Future<void> _verifyBackupCode() async {
+    final code = _backupCode.text.trim();
+    if (code.isEmpty || _busy) {
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref
+          .read(authSessionProvider.notifier)
+          .signInWithTwoFactor(
+            challengeToken: widget.challengeToken,
+            code: code,
+          );
+      if (!mounted) {
+        return;
+      }
+      widget.onSucceeded();
+    } on Exception {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _busy = false;
+        _error = AppLocalizations.of(context).loginFailed;
+      });
+    }
+  }
+
+  void _toggleBackupMode() {
+    if (_busy) {
+      return;
+    }
+    setState(() {
+      _useBackupCode = !_useBackupCode;
+      _error = null;
+    });
+    if (!_useBackupCode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _nodes.first.requestFocus();
+        }
+      });
+    }
+  }
+
   void _onChanged(int index, String value) {
-    final digit = value.replaceAll(RegExp(r'\D'), '');
-    if (digit.length > 1) {
-      // 粘贴整串验证码：逐位分发后直接校验。
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+    if (digits.length >= 6) {
+      // 粘贴整串 6 位验证码：逐位分发后自动校验。
       for (var i = 0; i < 6; i++) {
-        _digits[i].text = i < digit.length ? digit[i] : '';
+        _digits[i].text = digits[i];
+        _digits[i].selection = const TextSelection.collapsed(offset: 1);
       }
       _nodes.last.requestFocus();
       _verify();
       return;
     }
-    _digits[index].text = digit;
-    _digits[index].selection = TextSelection.collapsed(offset: digit.length);
-    if (digit.isNotEmpty && index < 5) {
+    // 单格已有字符继续键入时仅覆盖当前格，不重置前序格子。
+    final single = digits.isEmpty ? '' : digits[digits.length - 1];
+    _digits[index].text = single;
+    _digits[index].selection = TextSelection.collapsed(offset: single.length);
+    if (single.isNotEmpty && index < 5) {
       _nodes[index + 1].requestFocus();
     }
     if (_digits.every((controller) => controller.text.isNotEmpty)) {
@@ -508,47 +562,92 @@ class _TwoFactorCardState extends ConsumerState<_TwoFactorCard> {
         DesktopEyebrow(l10n.desktopTwoFactor),
         const SizedBox(height: 8),
         Text(
-          l10n.desktopEnterYourCode,
+          _useBackupCode
+              ? l10n.twoFactorEnrollBackupTitle
+              : l10n.desktopEnterYourCode,
           style: DesktopType.authTitle(skin.text),
         ),
         const SizedBox(height: 8),
-        Text(l10n.desktopAuthCodeHint, style: DesktopType.dense(skin.text2)),
+        Text(
+          _useBackupCode
+              ? l10n.loginTwoFactorUseBackupHint
+              : l10n.desktopAuthCodeHint,
+          style: DesktopType.dense(skin.text2),
+        ),
         const SizedBox(height: 24),
-        Row(
-          children: [
-            for (var index = 0; index < 6; index++)
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(right: index == 5 ? 0 : 10),
-                  child: _OtpBox(
-                    controller: _digits[index],
-                    focusNode: _nodes[index],
-                    onChanged: (value) => _onChanged(index, value),
-                    onBackspace:
-                        index == 0
-                            ? null
-                            : () => _nodes[index - 1].requestFocus(),
+        if (_useBackupCode) ...[
+          DesktopTextField(
+            controller: _backupCode,
+            label: l10n.twoFactorEnrollBackupTitle,
+            hint: 'XXXX-XXXX',
+            autofocus: true,
+            enabled: !_busy,
+            onSubmitted: (_) => _verifyBackupCode(),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(_error!, style: DesktopType.dense(skin.bad)),
+          ],
+          const SizedBox(height: 16),
+          DesktopButton(
+            label: l10n.loginTwoFactorVerifyAndSignIn,
+            variant: DesktopButtonVariant.primary,
+            large: true,
+            fullWidth: true,
+            busy: _busy,
+            onPressed: _busy ? null : _verifyBackupCode,
+          ),
+        ] else ...[
+          Row(
+            children: [
+              for (var index = 0; index < 6; index++)
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(right: index == 5 ? 0 : 10),
+                    child: _OtpBox(
+                      controller: _digits[index],
+                      focusNode: _nodes[index],
+                      onChanged: (value) => _onChanged(index, value),
+                      onBackspace:
+                          index == 0
+                              ? null
+                              : () => _nodes[index - 1].requestFocus(),
+                    ),
                   ),
                 ),
-              ),
-          ],
-        ),
-        if (_error != null) ...[
-          const SizedBox(height: 12),
-          Text(_error!, style: DesktopType.dense(skin.bad)),
-        ],
-        if (_busy) ...[
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const AppLoading(),
-              const SizedBox(width: 10),
-              Text(l10n.desktopVerifying, style: DesktopType.dense(skin.text2)),
             ],
           ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(_error!, style: DesktopType.dense(skin.bad)),
+          ],
+          if (_busy) ...[
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const AppLoading(),
+                const SizedBox(width: 10),
+                Text(
+                  l10n.desktopVerifying,
+                  style: DesktopType.dense(skin.text2),
+                ),
+              ],
+            ),
+          ],
         ],
         const SizedBox(height: 20),
+        Center(
+          child: DesktopLink(
+            label:
+                _useBackupCode
+                    ? l10n.loginTwoFactorCodeHint
+                    : l10n.loginTwoFactorUseBackupHint,
+            trailing: false,
+            onPressed: _toggleBackupMode,
+          ),
+        ),
+        const SizedBox(height: 12),
         Center(
           child: DesktopLink(
             label: l10n.desktopBackToSignIn,
@@ -597,6 +696,7 @@ class _OtpBox extends StatelessWidget {
             duration: MotionToken.reduced(context, MotionToken.fast),
             curve: MotionToken.curve,
             height: 62,
+            transform: Matrix4.translationValues(0, focused ? -3 : 0, 0),
             decoration: BoxDecoration(
               color: skin.raise,
               borderRadius: BorderRadius.circular(14),
@@ -615,23 +715,30 @@ class _OtpBox extends StatelessWidget {
                       ]
                       : null,
             ),
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              textAlign: TextAlign.center,
-              keyboardType: TextInputType.number,
-              cursorColor: skin.accent,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
-              ],
-              onChanged: onChanged,
-              style: DesktopType.displaySm(skin.text),
-              decoration: const InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                counterText: '',
+            child: Center(
+              child: TextField(
+                controller: controller,
+                focusNode: focusNode,
+                textAlign: TextAlign.center,
+                textAlignVertical: TextAlignVertical.center,
+                keyboardType: TextInputType.number,
+                cursorColor: skin.accent,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
+                ],
+                onChanged: onChanged,
+                style: DesktopType.displaySm(skin.text),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  filled: false,
+                  fillColor: Colors.transparent,
+                  contentPadding: EdgeInsets.zero,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  counterText: '',
+                ),
               ),
             ),
           );

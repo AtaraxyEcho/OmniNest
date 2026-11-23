@@ -20,6 +20,24 @@ const String _windowsProtocolExePrefsKey = 'desktop.deeplink.windows_exe.v1';
 /// 首帧后延迟初始化非关键桌面外围能力（托盘、全局媒体键、深链协议注册）。
 const Duration _deferredShellInitDelay = Duration(milliseconds: 500);
 
+Timer? _deferredShellInitTimer;
+bool _deferredShellInitCancelled = false;
+
+/// 串行保证桌面端 `windowManager.ensureInitialized()` 完成，避免并发初始化竞态。
+Future<void> ensureDesktopWindowManagerInitialized() async {
+  if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) {
+    return;
+  }
+  await windowManager.ensureInitialized();
+}
+
+/// 取消尚未触发的延迟壳层初始化计时器（如用户在首帧 500ms 内触发退出）。
+void cancelDeferredDesktopShellInit() {
+  _deferredShellInitCancelled = true;
+  _deferredShellInitTimer?.cancel();
+  _deferredShellInitTimer = null;
+}
+
 /// 桌面壳层引导：单实例锁 + 系统托盘 + 关闭确认流程（退出或最小化到托盘）。
 ///
 /// 由条件导入门面在 IO 平台调用，移动端与 Web 为空实现。
@@ -32,16 +50,32 @@ Future<void> bootstrapDesktopShell() async {
   if (!PlatformCapabilities.current().supportsSystemTray) {
     return;
   }
-  await windowManager.ensureInitialized();
-  await windowManager.setPreventClose(true);
+  await ensureDesktopWindowManagerInitialized();
   final trayService = DesktopTrayService();
   DesktopCloseFlow.instance.bind(
     hideWindow: windowManager.hide,
-    quitApp: trayService.quit,
+    quitApp: () {
+      cancelDeferredDesktopShellInit();
+      return trayService.quit();
+    },
   );
+  // 先挂载 WindowListener 再开启 preventClose，消除首帧 500ms 内早关窗空窗。
+  trayService.attachWindowListener();
+  await windowManager.setPreventClose(true);
+  _deferredShellInitTimer?.cancel();
+  _deferredShellInitTimer = null;
+  _deferredShellInitCancelled = false;
   // 托盘、媒体键与深链协议注册移出冷启动关键路径，首帧渲染完成 500ms 后再执行。
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    Timer(_deferredShellInitDelay, () {
+    if (_deferredShellInitCancelled) {
+      return;
+    }
+    _deferredShellInitTimer?.cancel();
+    _deferredShellInitTimer = Timer(_deferredShellInitDelay, () {
+      _deferredShellInitTimer = null;
+      if (_deferredShellInitCancelled) {
+        return;
+      }
       unawaited(_initDeferredDesktopShell(trayService));
     });
   });

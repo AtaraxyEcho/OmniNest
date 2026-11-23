@@ -1,5 +1,6 @@
 package com.omninest.modules.video.service;
 
+import com.omninest.common.api.PageClamps;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.CollectionType;
 import com.omninest.common.enums.ErrorCode;
@@ -28,6 +29,8 @@ import com.omninest.modules.video.repository.MediaVideoCollectionRepository;
 import com.omninest.modules.video.repository.MediaVideoFavoriteRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import com.omninest.modules.video.repository.MediaWatchHistoryRepository;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +67,10 @@ public class MovieEngagementService {
 
     /** 首页摘要类列表的上限；完整列表走对应的分页方法。 */
     private static final int SUMMARY_LIST_LIMIT = 200;
+    /** 非分页兼容列表的硬上限，避免高基数全量查询把海量实体装进内存。 */
+    private static final int LEGACY_LIST_LIMIT = 2000;
+    /** IN 子句批量分片大小。 */
+    private static final int IN_BATCH_SIZE = 500;
 
     @Transactional(readOnly = true)
     public List<MovieVideoItemDto> favorites(UUID ownerUserId) {
@@ -86,7 +93,7 @@ public class MovieEngagementService {
     @Transactional(readOnly = true)
     public Page<MovieVideoItemDto> favoritesPage(UUID ownerUserId, int page, int size) {
         Page<MediaVideoFavorite> favorites = favoriteRepository.findPageByOwnerUserIdOrderByCreatedAtDesc(
-                ownerUserId, PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
+                ownerUserId, PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size)));
         return new PageImpl<>(
                 toFavoriteDtos(ownerUserId, favorites.getContent()),
                 favorites.getPageable(),
@@ -100,10 +107,9 @@ public class MovieEngagementService {
         }
         List<UUID> videoItemIds = favorites.stream().map(MediaVideoFavorite::getVideoItemId).toList();
         var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
-        Map<UUID, MediaVideoItem> itemIndex = videoItemRepository.findReadableByIds(
+        Map<UUID, MediaVideoItem> itemIndex = findReadableVideosInBatches(
                         ownerUserId,
                         scope.sharedSpaceReadable(),
-                        SpaceType.SHARED,
                         scope.librarySourceIds(),
                         videoItemIds
                 )
@@ -166,7 +172,7 @@ public class MovieEngagementService {
     @Transactional(readOnly = true)
     public Page<MovieWatchHistoryDto> historyPage(UUID ownerUserId, int page, int size) {
         Page<MediaWatchHistory> histories = historyRepository.findPageByOwnerUserIdOrderByPlayedAtDesc(
-                ownerUserId, PageRequest.of(Math.max(page, 0), Math.max(size, 1)));
+                ownerUserId, PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size)));
         return new PageImpl<>(
                 toHistoryDtos(ownerUserId, histories.getContent()),
                 histories.getPageable(),
@@ -197,10 +203,10 @@ public class MovieEngagementService {
      */
     @Transactional(readOnly = true)
     public List<MovieWatchHistoryDto> historyForSeries(UUID ownerUserId, UUID seriesId) {
-        return toHistoryDtos(
-                ownerUserId,
-                historyRepository.findByOwnerUserIdAndSeriesIdOrderByPlayedAtDesc(ownerUserId, seriesId)
-        );
+        List<MediaWatchHistory> histories = limitList(
+                historyRepository.findByOwnerUserIdAndSeriesIdOrderByPlayedAtDesc(ownerUserId, seriesId),
+                LEGACY_LIST_LIMIT);
+        return toHistoryDtos(ownerUserId, histories);
     }
 
     private List<MovieWatchHistoryDto> toHistoryDtos(UUID ownerUserId, List<MediaWatchHistory> histories) {
@@ -209,10 +215,9 @@ public class MovieEngagementService {
         }
         List<UUID> videoItemIds = histories.stream().map(MediaWatchHistory::getVideoItemId).distinct().toList();
         var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
-        List<MediaVideoItem> items = videoItemRepository.findReadableByIds(
+        List<MediaVideoItem> items = findReadableVideosInBatches(
                 ownerUserId,
                 scope.sharedSpaceReadable(),
-                SpaceType.SHARED,
                 scope.librarySourceIds(),
                 videoItemIds
         );
@@ -247,23 +252,17 @@ public class MovieEngagementService {
 
     @Transactional(readOnly = true)
     public List<MovieCollectionDto> collections(UUID ownerUserId) {
-        List<MediaVideoCollection> collections = collectionRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId)
-                .stream()
-                .filter(collection -> !CollectionType.WATCHLIST.getValue().equals(collection.getCollectionType()))
-                .toList();
+        List<MediaVideoCollection> collections = limitList(
+                collectionRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId)
+                        .stream()
+                        .filter(collection -> !CollectionType.WATCHLIST.getValue().equals(collection.getCollectionType()))
+                        .toList(),
+                LEGACY_LIST_LIMIT);
         if (collections.isEmpty()) {
             return List.of();
         }
-        Map<UUID, Long> countMap = collectionItemRepository
-                .countByOwnerUserIdAndCollectionIdIn(
-                        ownerUserId,
-                        collections.stream().map(MediaVideoCollection::getId).toList()
-                )
-                .stream()
-                .collect(Collectors.toMap(
-                        row -> (UUID) row[0],
-                        row -> (Long) row[1]
-                ));
+        Map<UUID, Long> countMap = countCollectionItemsInBatches(
+                ownerUserId, collections.stream().map(MediaVideoCollection::getId).toList());
         return collections.stream()
                 .map(c -> toCollectionDto(c, countMap.getOrDefault(c.getId(), 0L)))
                 .toList();
@@ -375,17 +374,18 @@ public class MovieEngagementService {
     public List<MovieVideoItemDto> collectionItems(UUID ownerUserId, UUID collectionId) {
         collectionRepository.findByIdAndOwnerUserId(collectionId, ownerUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "合集不存在"));
-        List<MediaVideoCollectionItem> collectionItems = collectionItemRepository
-                .findByOwnerUserIdAndCollectionIdOrderBySortOrderAsc(ownerUserId, collectionId);
+        List<MediaVideoCollectionItem> collectionItems = limitList(
+                collectionItemRepository
+                        .findByOwnerUserIdAndCollectionIdOrderBySortOrderAsc(ownerUserId, collectionId),
+                LEGACY_LIST_LIMIT);
         if (collectionItems.isEmpty()) {
             return List.of();
         }
         List<UUID> videoItemIds = collectionItems.stream().map(MediaVideoCollectionItem::getVideoItemId).toList();
         var scope = mediaLibraryAccessService.visibilityScope(ownerUserId);
-        Map<UUID, MediaVideoItem> itemIndex = videoItemRepository.findReadableByIds(
+        Map<UUID, MediaVideoItem> itemIndex = findReadableVideosInBatches(
                         ownerUserId,
                         scope.sharedSpaceReadable(),
-                        SpaceType.SHARED,
                         scope.librarySourceIds(),
                         videoItemIds
                 )
@@ -510,6 +510,43 @@ public class MovieEngagementService {
      */
     private void invalidateDashboardCache(UUID ownerUserId) {
         readThroughCache.invalidate("omninest:dashboard:video:" + ownerUserId);
+    }
+
+    private List<MediaVideoItem> findReadableVideosInBatches(
+            UUID ownerUserId,
+            boolean sharedSpaceReadable,
+            Collection<UUID> librarySourceIds,
+            List<UUID> videoItemIds
+    ) {
+        if (videoItemIds.size() <= IN_BATCH_SIZE) {
+            return videoItemRepository.findReadableByIds(
+                    ownerUserId, sharedSpaceReadable, SpaceType.SHARED, librarySourceIds, videoItemIds);
+        }
+        List<MediaVideoItem> result = new ArrayList<>(videoItemIds.size());
+        for (int start = 0; start < videoItemIds.size(); start += IN_BATCH_SIZE) {
+            int end = Math.min(start + IN_BATCH_SIZE, videoItemIds.size());
+            result.addAll(videoItemRepository.findReadableByIds(
+                    ownerUserId, sharedSpaceReadable, SpaceType.SHARED, librarySourceIds,
+                    videoItemIds.subList(start, end)));
+        }
+        return result;
+    }
+
+    private Map<UUID, Long> countCollectionItemsInBatches(UUID ownerUserId, List<UUID> collectionIds) {
+        Map<UUID, Long> counts = new LinkedHashMap<>();
+        for (int start = 0; start < collectionIds.size(); start += IN_BATCH_SIZE) {
+            List<UUID> batch = collectionIds.size() <= IN_BATCH_SIZE
+                    ? collectionIds
+                    : collectionIds.subList(start, Math.min(start + IN_BATCH_SIZE, collectionIds.size()));
+            for (Object[] row : collectionItemRepository.countByOwnerUserIdAndCollectionIdIn(ownerUserId, batch)) {
+                counts.put((UUID) row[0], (Long) row[1]);
+            }
+        }
+        return counts;
+    }
+
+    private static <T> List<T> limitList(List<T> items, int limit) {
+        return items.size() <= limit ? items : items.subList(0, limit);
     }
 
     private MediaVideoItem findVideo(UUID ownerUserId, UUID videoItemId) {

@@ -6,11 +6,10 @@ import 'package:material_ui/material_ui.dart';
 
 import 'package:omninest/app/desktop/desktop_ambient_mesh.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
-import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 
-/// 原子环境光场景帧：将 4×3 色网与可选右侧柔焦艺术面板打包为一个双缓冲单元。
+/// 原子环境光场景帧：将 4×3 色网与可选全出血艺术层打包为一个双缓冲单元。
 @immutable
 class _AmbientSceneFrame {
   const _AmbientSceneFrame({
@@ -19,6 +18,7 @@ class _AmbientSceneFrame {
     required this.showArt,
     required this.artPreset,
     required this.fallbackTone,
+    required this.isReaderRoute,
     required this.meshGrid,
   });
 
@@ -27,22 +27,25 @@ class _AmbientSceneFrame {
   final bool showArt;
   final EditorialArtPreset artPreset;
   final Color? fallbackTone;
+  final bool isReaderRoute;
   final AmbientMeshGrid? meshGrid;
 
   bool get hasCover => imageUrl != null && imageUrl!.isNotEmpty;
   bool get hasMesh => hasCover || meshGrid != null || fallbackTone != null;
-  bool get hasArt => hasCover && showArt;
+  bool get hasArt => !isReaderRoute && hasCover && showArt;
 
   bool matchesSpec({
     required String? imageUrl,
     required bool showArt,
     required EditorialArtPreset artPreset,
     required Color? fallbackTone,
+    required bool isReaderRoute,
   }) {
     return this.imageUrl == imageUrl &&
         this.showArt == showArt &&
         this.artPreset == artPreset &&
-        this.fallbackTone == fallbackTone;
+        this.fallbackTone == fallbackTone &&
+        this.isReaderRoute == isReaderRoute;
   }
 
   _AmbientSceneFrame copyWith({AmbientMeshGrid? meshGrid}) {
@@ -52,18 +55,18 @@ class _AmbientSceneFrame {
       showArt: showArt,
       artPreset: artPreset,
       fallbackTone: fallbackTone,
+      isReaderRoute: isReaderRoute,
       meshGrid: meshGrid ?? this.meshGrid,
     );
   }
 }
 
-/// 桌面环境光层。
+/// 桌面环境光层（v16 稳态 0fps，移除 blobs）。
 ///
-/// 四大独立重绘边界：
-/// - `ambient-cover`：4×3 矢量色网双缓冲层（彻底废除 40s `_drift`）；
-/// - `ambient-art`：右侧静态轻柔焦艺术面板双缓冲层（与色网同步 720ms 交叉淡入淡出）；
-/// - `ambient-blobs`：三团事件驱动 2.4s 缓动色场，落位后自动停表（稳态 0fps GPU 唤醒）；
-/// - `ambient-veil`：深浅色精细差异化暗纱与预烘焙 128×128 噪点瓦片。
+/// 重绘边界：
+/// - `ambient-cover`：深色/Reader 4×3 矢量色网双缓冲层，浅色非 Reader 为 `#F4F6F2` 底色；
+/// - `ambient-art`：非 Reader 媒体页全出血艺术图双缓冲层（Reader 路由隐藏）；
+/// - `ambient-veil`：深色非 Reader 单层 35% 暗纱，Reader 深/浅色中心光池，浅色非 Reader 不渲染。
 class DesktopAmbient extends StatefulWidget {
   const DesktopAmbient({
     required this.imageUrl,
@@ -72,6 +75,7 @@ class DesktopAmbient extends StatefulWidget {
     this.showArt = false,
     this.artPreset = EditorialArtPreset.landscape,
     this.fallbackTone,
+    this.isReaderRoute = false,
     super.key,
   });
 
@@ -81,82 +85,25 @@ class DesktopAmbient extends StatefulWidget {
   final double intensity;
   final bool reduceMotion;
 
-  /// 是否启用右侧静态轻柔焦编辑艺术面板。
+  /// 是否启用全出血艺术图（Reader 路由下强制隐藏）。
   final bool showArt;
 
-  /// 右侧艺术面板的构图与柔焦预设。
+  /// 媒体艺术图预设。
   final EditorialArtPreset artPreset;
 
   /// 无封面图时的兜底色调（如 Reader 无封面图书的纸色）。
   final Color? fallbackTone;
+
+  /// 是否处于 Reader 路由：隐藏艺术图，仅渲染柔焦 4×3 色网与中心光池。
+  final bool isReaderRoute;
 
   @override
   State<DesktopAmbient> createState() => _DesktopAmbientState();
 }
 
 class _DesktopAmbientState extends State<DesktopAmbient>
-    with TickerProviderStateMixin {
-  /// 预烘焙噪点瓦片边长（128×128 离屏 ui.Image，进程级复用一次生成）。
-  static const int _grainTileSize = 128;
-  static const Duration _blobSettleDuration = Duration(milliseconds: 2400);
+    with SingleTickerProviderStateMixin {
   static const Duration _sceneCrossfadeDuration = Duration(milliseconds: 720);
-
-  static ui.Image? _grainImageCache;
-  static Future<ui.Image>? _grainImageFuture;
-
-  static Future<ui.Image> _ensureGrainImage() {
-    final cached = _grainImageCache;
-    if (cached != null) {
-      return Future<ui.Image>.value(cached);
-    }
-    return _grainImageFuture ??= _bakeGrainImage().then((image) {
-      _grainImageCache = image;
-      return image;
-    });
-  }
-
-  static Future<ui.Image> _bakeGrainImage() async {
-    final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder);
-    final random = math.Random(20261114);
-    final paint = Paint()..color = DesktopPalette.grain;
-    const dotCount = 18;
-    for (var i = 0; i < dotCount; i++) {
-      canvas.drawRect(
-        Rect.fromLTWH(
-          random.nextDouble() * _grainTileSize,
-          random.nextDouble() * _grainTileSize,
-          1,
-          1,
-        ),
-        paint,
-      );
-    }
-    final picture = recorder.endRecording();
-    try {
-      return await picture.toImage(_grainTileSize, _grainTileSize);
-    } finally {
-      picture.dispose();
-    }
-  }
-
-  // 三团色场改为事件驱动 2.4s 缓动：挂载、切页或换封面时平滑推到新相位并自动停表，
-  // 稳态 0fps GPU 唤醒；窗口缩放时仅 stop() 保留当前相位不跳变。
-  late final AnimationController _blobA = AnimationController(
-    duration: _blobSettleDuration,
-    value: 0.35,
-    vsync: this,
-  );
-  late final AnimationController _blobB = AnimationController(
-    duration: _blobSettleDuration,
-    value: 0.62,
-    vsync: this,
-  );
-  late final AnimationController _blobC = AnimationController(
-    duration: _blobSettleDuration,
-    value: 0.18,
-    vsync: this,
-  );
 
   // 双缓冲原子场景帧交叉淡入淡出控制器（720ms Curves.easeInOutCubic）。
   late final AnimationController _crossfade = AnimationController(
@@ -174,39 +121,34 @@ class _DesktopAmbientState extends State<DesktopAmbient>
   ).animate(_crossfadeIn);
 
   Size? _lastSize;
+  bool? _lastIsDark;
+  bool _isDark = true;
   Timer? _resizeSettle;
   bool _resizing = false;
   int _sceneSeq = 0;
   int _prepareToken = 0;
-  int _blobStep = 0;
   bool _initialScenePrepared = false;
   _AmbientSceneFrame? _activeFrame;
   _AmbientSceneFrame? _outgoingFrame;
-  ui.Image? _grainImage = _grainImageCache;
 
   @override
   void initState() {
     super.initState();
     _crossfade.addStatusListener(_handleCrossfadeStatus);
     _seedInitialFrameSync();
-    if (_grainImage == null) {
-      unawaited(
-        _ensureGrainImage().then((image) {
-          if (mounted) {
-            setState(() => _grainImage = image);
-          }
-        }),
-      );
-    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final size = MediaQuery.sizeOf(context);
+    final isDark = DesktopSkin.of(context).isDark;
+    final polarityChanged = _lastIsDark != null && _lastIsDark != isDark;
+    _isDark = isDark;
+    _lastIsDark = isDark;
+
     if (_lastSize != null && size != _lastSize) {
       _resizing = true;
-      _pauseBlobsInPlace();
       _resizeSettle?.cancel();
       _resizeSettle = Timer(const Duration(milliseconds: 220), () {
         if (!mounted) return;
@@ -214,12 +156,14 @@ class _DesktopAmbientState extends State<DesktopAmbient>
       });
     }
     _lastSize = size;
+
+    // 严禁在 didChangeDependencies 同步 setState / precacheImage / 启动动画，
+    // 统一经 scheduleMicrotask 异步调度场景准备。
     if (!_initialScenePrepared) {
       _initialScenePrepared = true;
-      _prepareScene(isInitial: true);
-      if (_canAnimate) {
-        _triggerBlobSettle();
-      }
+      _schedulePrepareScene(isInitial: true);
+    } else if (polarityChanged) {
+      _schedulePrepareScene(isInitial: false);
     }
   }
 
@@ -230,31 +174,20 @@ class _DesktopAmbientState extends State<DesktopAmbient>
         oldWidget.imageUrl != widget.imageUrl ||
         oldWidget.showArt != widget.showArt ||
         oldWidget.artPreset != widget.artPreset ||
-        oldWidget.fallbackTone != widget.fallbackTone;
+        oldWidget.fallbackTone != widget.fallbackTone ||
+        oldWidget.isReaderRoute != widget.isReaderRoute;
 
-    if (!_canAnimate) {
-      _pauseBlobsInPlace();
-      if (_outgoingFrame != null || _crossfade.isAnimating) {
-        _crossfade
-          ..stop()
-          ..value = 1.0;
-        _outgoingFrame = null;
-      }
+    if (!_canAnimate && (_outgoingFrame != null || _crossfade.isAnimating)) {
+      _crossfade
+        ..stop()
+        ..value = 1.0;
+      _outgoingFrame = null;
     }
 
-    if (sceneChanged) {
-      _prepareScene(isInitial: false);
-    } else if (!oldWidget.reduceMotion && widget.reduceMotion) {
-      _pauseBlobsInPlace();
-    } else if ((oldWidget.reduceMotion && !widget.reduceMotion) ||
-        (oldWidget.intensity <= 0 && widget.intensity > 0)) {
-      if (oldWidget.intensity <= 0 && widget.intensity > 0) {
-        // 强度从 0 恢复：补跑一次场景准备，把被跳过的色网与艺术层补上。
-        _prepareScene(isInitial: false);
-      }
-      if (_canAnimate) {
-        _triggerBlobSettle();
-      }
+    // 严禁在 didUpdateWidget 同步 setState / precacheImage / 启动动画，
+    // 统一经 scheduleMicrotask 异步调度，同时推进 token 取消旧任务监听。
+    if (sceneChanged || (oldWidget.intensity <= 0 && widget.intensity > 0)) {
+      _schedulePrepareScene(isInitial: false);
     }
   }
 
@@ -274,44 +207,6 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     }
   }
 
-  /// 仅停止色场动画，严格保留当前相位不重置，避免缩放或停帧时突然跳回原点。
-  void _pauseBlobsInPlace() {
-    for (final controller in [_blobA, _blobB, _blobC]) {
-      if (controller.isAnimating) {
-        controller.stop();
-      }
-    }
-  }
-
-  /// 事件驱动 2.4s 缓动：每次挂载/切页/换封面推进三团色场到新相位后自动停表。
-  void _triggerBlobSettle() {
-    if (!_canAnimate) {
-      _pauseBlobsInPlace();
-      return;
-    }
-    _blobStep += 1;
-    final targets = <double>[
-      _nextBlobPhase(_blobA.value, 0.27 + (_blobStep % 3) * 0.04),
-      _nextBlobPhase(_blobB.value, 0.31 + ((_blobStep + 1) % 3) * 0.05),
-      _nextBlobPhase(_blobC.value, 0.23 + ((_blobStep + 2) % 3) * 0.04),
-    ];
-    final controllers = <AnimationController>[_blobA, _blobB, _blobC];
-    for (var i = 0; i < controllers.length; i++) {
-      unawaited(
-        controllers[i].animateTo(
-          targets[i],
-          duration: _blobSettleDuration,
-          curve: Curves.easeInOutCubic,
-        ),
-      );
-    }
-  }
-
-  static double _nextBlobPhase(double current, double delta) {
-    final shifted = (current - 0.08 + delta) % 0.84;
-    return (0.08 + shifted).clamp(0.08, 0.92);
-  }
-
   /// 首帧同步建立初始 `_activeFrame`，确保首帧即挂载有效节点且无白闪。
   void _seedInitialFrameSync() {
     final source = widget.imageUrl;
@@ -325,30 +220,44 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     _activeFrame = _AmbientSceneFrame(
       id: ++_sceneSeq,
       imageUrl: hasCover ? source : null,
-      showArt: widget.showArt,
+      showArt: widget.showArt && !widget.isReaderRoute,
       artPreset: widget.artPreset,
       fallbackTone: widget.fallbackTone,
+      isReaderRoute: widget.isReaderRoute,
       meshGrid: grid,
     );
   }
 
-  /// 后台并行采样色网 + 预解码艺术面板（220ms 软超时），就绪后原子切换双缓冲。
-  void _prepareScene({required bool isInitial}) {
-    // 强度为 0 时整层不构建：跳过色网采样与艺术层预解码，避免无谓的网络请求。
+  /// 统一经 `scheduleMicrotask` 调度，彻底杜绝生命周期内同步卡死与旧 token 残留。
+  void _schedulePrepareScene({required bool isInitial}) {
+    final token = ++_prepareToken;
+    scheduleMicrotask(() {
+      if (!mounted || token != _prepareToken) return;
+      _prepareScene(isInitial: isInitial, token: token);
+    });
+  }
+
+  /// 后台按需采样色网 + 预解码艺术图（220ms 软超时），就绪后原子切换双缓冲。
+  void _prepareScene({required bool isInitial, required int token}) {
+    if (!mounted || token != _prepareToken) return;
     if (widget.intensity <= 0) {
       return;
     }
-    final token = ++_prepareToken;
     final rawUrl = widget.imageUrl;
     final source = (rawUrl != null && rawUrl.isNotEmpty) ? rawUrl : null;
-    final showArt = widget.showArt;
+    final isReaderRoute = widget.isReaderRoute;
+    final showArt = widget.showArt && !isReaderRoute;
     final artPreset = widget.artPreset;
     final fallbackTone = widget.fallbackTone;
+    // 浅色非 Reader 路由完全跳过 4×3 色网采样。
+    final skipMeshSampling = !_isDark && !isReaderRoute;
 
     // 纯纸色或无封面：同步落帧，不等待异步 I/O。
     if (source == null) {
       final grid =
-          fallbackTone != null ? AmbientMeshGrid.fromTone(fallbackTone) : null;
+          (!skipMeshSampling && fallbackTone != null)
+              ? AmbientMeshGrid.fromTone(fallbackTone)
+              : null;
       if (isInitial && _activeFrame != null) {
         if (_activeFrame!.meshGrid != grid) {
           setState(() => _activeFrame = _activeFrame!.copyWith(meshGrid: grid));
@@ -362,16 +271,18 @@ class _DesktopAmbientState extends State<DesktopAmbient>
           showArt: false,
           artPreset: artPreset,
           fallbackTone: fallbackTone,
+          isReaderRoute: isReaderRoute,
           meshGrid: grid,
         ),
       );
       return;
     }
 
-    final cachedGrid = DesktopAmbientMeshCache.instance.peek(source);
+    final cachedGrid =
+        skipMeshSampling ? null : DesktopAmbientMeshCache.instance.peek(source);
+
     if (isInitial) {
-      // 首帧已命中色网缓存且不需等艺术预热时直接完成；否则后台补齐色网不闪黑。
-      if (cachedGrid != null && !showArt) {
+      if ((skipMeshSampling || cachedGrid != null) && !showArt) {
         return;
       }
       unawaited(
@@ -381,6 +292,8 @@ class _DesktopAmbientState extends State<DesktopAmbient>
           showArt: showArt,
           artPreset: artPreset,
           cachedGrid: cachedGrid,
+          skipMeshSampling: skipMeshSampling,
+          isCancelled: () => !mounted || token != _prepareToken,
         ).then((grid) {
           if (!mounted || token != _prepareToken) return;
           final current = _activeFrame;
@@ -390,10 +303,11 @@ class _DesktopAmbientState extends State<DesktopAmbient>
                 showArt: showArt,
                 artPreset: artPreset,
                 fallbackTone: fallbackTone,
+                isReaderRoute: isReaderRoute,
               )) {
             return;
           }
-          if (grid != null && current.meshGrid != grid) {
+          if (!skipMeshSampling && grid != null && current.meshGrid != grid) {
             setState(() {
               _activeFrame = current.copyWith(meshGrid: grid);
             });
@@ -403,7 +317,6 @@ class _DesktopAmbientState extends State<DesktopAmbient>
       return;
     }
 
-    // 切页 / 换图：保持旧帧稳定可见，后台并行采样 + precacheImage（220ms 软超时）。
     unawaited(
       resolveAmbientSceneAssets(
         context: context,
@@ -411,14 +324,18 @@ class _DesktopAmbientState extends State<DesktopAmbient>
         showArt: showArt,
         artPreset: artPreset,
         cachedGrid: cachedGrid,
+        skipMeshSampling: skipMeshSampling,
+        isCancelled: () => !mounted || token != _prepareToken,
       ).then((grid) {
         if (!mounted || token != _prepareToken) return;
         final effectiveGrid =
-            grid ??
-            DesktopAmbientMeshCache.instance.peek(source) ??
-            (fallbackTone != null
-                ? AmbientMeshGrid.fromTone(fallbackTone)
-                : null);
+            skipMeshSampling
+                ? null
+                : (grid ??
+                    DesktopAmbientMeshCache.instance.peek(source) ??
+                    (fallbackTone != null
+                        ? AmbientMeshGrid.fromTone(fallbackTone)
+                        : null));
         _commitScene(
           _AmbientSceneFrame(
             id: ++_sceneSeq,
@@ -426,6 +343,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
             showArt: showArt,
             artPreset: artPreset,
             fallbackTone: fallbackTone,
+            isReaderRoute: isReaderRoute,
             meshGrid: effectiveGrid,
           ),
         );
@@ -442,6 +360,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
           showArt: nextFrame.showArt,
           artPreset: nextFrame.artPreset,
           fallbackTone: nextFrame.fallbackTone,
+          isReaderRoute: nextFrame.isReaderRoute,
         ) &&
         previous.meshGrid == nextFrame.meshGrid) {
       return;
@@ -464,18 +383,15 @@ class _DesktopAmbientState extends State<DesktopAmbient>
       _activeFrame = nextFrame;
     });
     _crossfade.forward(from: 0.0);
-    _triggerBlobSettle();
   }
 
   @override
   void dispose() {
+    ++_prepareToken;
     _resizeSettle?.cancel();
     _crossfade.removeStatusListener(_handleCrossfadeStatus);
     _crossfadeIn.dispose();
     _crossfade.dispose();
-    _blobA.dispose();
-    _blobB.dispose();
-    _blobC.dispose();
     super.dispose();
   }
 
@@ -487,14 +403,17 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     final skin = DesktopSkin.of(context);
     final profile = AmbientThemeProfile.of(isDark: skin.isDark);
     final targetIntensity = (widget.intensity / 100).clamp(0.0, 1.0);
-    final viewport = MediaQuery.sizeOf(context);
-    final unit = math.max(viewport.width, viewport.height);
     final activeFrame = _activeFrame;
     final outgoingFrame = _outgoingFrame;
+    final isReaderRoute = widget.isReaderRoute;
+    final isLightMedia = !skin.isDark && !isReaderRoute;
     final showCoverLayer =
-        (activeFrame?.hasMesh ?? false) || (outgoingFrame?.hasMesh ?? false);
+        isLightMedia ||
+        (activeFrame?.hasMesh ?? false) ||
+        (outgoingFrame?.hasMesh ?? false);
     final showArtLayer =
-        (activeFrame?.hasArt ?? false) || (outgoingFrame?.hasArt ?? false);
+        !isReaderRoute &&
+        ((activeFrame?.hasArt ?? false) || (outgoingFrame?.hasArt ?? false));
 
     return ExcludeSemantics(
       child: IgnorePointer(
@@ -506,32 +425,47 @@ class _DesktopAmbientState extends State<DesktopAmbient>
             if (intensityFactor <= 0.001) {
               return const SizedBox.shrink();
             }
-            final veilOpacity = (profile.veilOpacity * intensityFactor).clamp(
-              0.0,
-              1.0,
-            );
-            final veilColor = skin.veil.withValues(
-              alpha: (skin.veil.a * veilOpacity).clamp(0.0, 1.0),
-            );
-            final linearVeilColor = veilColor.withValues(
-              alpha: (veilColor.a * profile.linearFactor).clamp(0.0, 1.0),
-            );
             return Stack(
               fit: StackFit.expand,
               children: [
-                // 边界 1：4×3 矢量色网双缓冲层（彻底废除 40s _drift 晃动）。
+                // 边界 1：浅色非 Reader 为纯底色 #F4F6F2；深色/Reader 为 4×3 矢量色网双缓冲。
                 if (showCoverLayer)
                   RepaintBoundary(
                     key: const ValueKey('ambient-cover'),
-                    child: _buildDualBufferMesh(
-                      skin: skin,
-                      profile: profile,
-                      intensityFactor: intensityFactor,
-                      active: activeFrame,
-                      outgoing: outgoingFrame,
-                    ),
+                    child:
+                        isLightMedia
+                            ? const ColoredBox(
+                              color: desktopAmbientLightBaseColor,
+                            )
+                            : isReaderRoute
+                            ? ClipRect(
+                              child: Transform.scale(
+                                scale: 1.04,
+                                child: ImageFiltered(
+                                  imageFilter: ui.ImageFilter.blur(
+                                    sigmaX: 2.0,
+                                    sigmaY: 2.0,
+                                    tileMode: ui.TileMode.clamp,
+                                  ),
+                                  child: _buildDualBufferMesh(
+                                    skin: skin,
+                                    profile: profile,
+                                    intensityFactor: intensityFactor,
+                                    active: activeFrame,
+                                    outgoing: outgoingFrame,
+                                  ),
+                                ),
+                              ),
+                            )
+                            : _buildDualBufferMesh(
+                              skin: skin,
+                              profile: profile,
+                              intensityFactor: intensityFactor,
+                              active: activeFrame,
+                              outgoing: outgoingFrame,
+                            ),
                   ),
-                // 边界 2：右侧静态轻柔焦艺术面板双缓冲层（与色网同步 720ms 过渡）。
+                // 边界 2：全出血无模糊无 mask 艺术图双缓冲（Reader 路由隐藏）。
                 if (showArtLayer)
                   RepaintBoundary(
                     key: const ValueKey('ambient-art'),
@@ -543,74 +477,28 @@ class _DesktopAmbientState extends State<DesktopAmbient>
                       outgoing: outgoingFrame,
                     ),
                   ),
-                // 边界 3：三团事件驱动 2.4s 缓动色场，落位停表 0fps GPU 唤醒。
-                RepaintBoundary(
-                  key: const ValueKey('ambient-blobs'),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      _blobLayer(
-                        controller: _blobA,
-                        base: Offset(viewport.width * 0.06, -unit * 0.12),
-                        radius: unit * 0.52,
-                        color: skin.accent,
-                        alpha: (skin.isDark ? 0.25 : 0.16) * intensityFactor,
-                        size: viewport,
-                        unit: unit,
-                      ),
-                      _blobLayer(
-                        controller: _blobB,
-                        base: Offset(
-                          viewport.width * 0.96,
-                          viewport.height * 1.04,
+                // 边界 3：Reader 深/浅色中心光池；深色媒体页单层平铺暗纱（35%）；浅色媒体页无暗纱无噪点。
+                if (isReaderRoute)
+                  RepaintBoundary(
+                    key: const ValueKey('ambient-veil'),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          center: const Alignment(0.1, -0.1),
+                          radius: 0.70,
+                          colors:
+                              skin.isDark
+                                  ? desktopReaderDarkPoolColors
+                                  : desktopReaderLightPoolColors,
                         ),
-                        radius: unit * 0.50,
-                        color: skin.warm,
-                        alpha: (skin.isDark ? 0.14 : 0.10) * intensityFactor,
-                        size: viewport,
-                        unit: unit,
                       ),
-                      _blobLayer(
-                        controller: _blobC,
-                        base: Offset(
-                          viewport.width * 0.52,
-                          viewport.height * 0.55,
-                        ),
-                        radius: unit * 0.34,
-                        color: DesktopPalette.ambientCool,
-                        alpha: (skin.isDark ? 0.12 : 0.08) * intensityFactor,
-                        size: viewport,
-                        unit: unit,
-                      ),
-                    ],
+                    ),
+                  )
+                else if (skin.isDark)
+                  const RepaintBoundary(
+                    key: ValueKey('ambient-veil'),
+                    child: ColoredBox(color: desktopAmbientDarkVeilColor),
                   ),
-                ),
-                // 边界 4：深浅色精细差异化暗纱 + 预烘焙 128×128 噪点瓦片。
-                RepaintBoundary(
-                  key: const ValueKey('ambient-veil'),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      ColoredBox(color: linearVeilColor),
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: RadialGradient(
-                            center: Alignment.topCenter,
-                            radius: 1.25,
-                            colors: [Colors.transparent, veilColor],
-                            stops: profile.radialStops,
-                          ),
-                        ),
-                      ),
-                      CustomPaint(
-                        painter: _GrainPainter(
-                          image: _grainImage,
-                          opacity: veilOpacity,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             );
           },
@@ -745,112 +633,116 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     }
     return Stack(fit: StackFit.expand, children: layers);
   }
+}
 
-  Widget _blobLayer({
-    required AnimationController controller,
-    required Offset base,
-    required double radius,
-    required Color color,
-    required double alpha,
-    required Size size,
-    required double unit,
-  }) {
-    final alignment = Alignment(
-      base.dx / size.width * 2 - 1,
-      base.dy / size.height * 2 - 1,
-    );
-    return AnimatedBuilder(
-      animation: controller,
-      child: RepaintBoundary(
-        child: CustomPaint(
-          painter: _BlobBasePainter(
-            center: base,
-            radius: radius,
-            color: color,
-            alpha: alpha,
+/// 纯净模式（Plain）背景：用于非五大媒体路由或用户关闭「随封面变色的背景」时。
+///
+/// 由 `skin.bg` 底色 + 右上角强调色径向光晕（深色 9% / 浅色 7%）+ 顶部纵向微渐变 +
+/// 极轻静态噪点组成，整体外包 `RepaintBoundary`，稳态 0fps、零动画回调。
+class DesktopAmbientPlain extends StatelessWidget {
+  const DesktopAmbientPlain({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    return ExcludeSemantics(
+      child: IgnorePointer(
+        child: RepaintBoundary(
+          key: const ValueKey('ambient-plain'),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ColoredBox(color: skin.bg),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(0.92, -0.88),
+                    radius: 1.05,
+                    colors: <Color>[
+                      skin.accent.withValues(alpha: skin.isDark ? 0.09 : 0.07),
+                      skin.accent.withValues(alpha: 0.0),
+                    ],
+                    stops: const <double>[0.0, 0.72],
+                  ),
+                ),
+              ),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: <Color>[
+                      (skin.isDark ? Colors.white : Colors.black).withValues(
+                        alpha: skin.isDark ? 0.03 : 0.025,
+                      ),
+                      Colors.transparent,
+                    ],
+                    stops: const <double>[0.0, 0.36],
+                  ),
+                ),
+              ),
+              CustomPaint(
+                painter: _PlainGrainPainter(isDark: skin.isDark),
+                child: const SizedBox.expand(),
+              ),
+            ],
           ),
-          child: const SizedBox.expand(),
         ),
       ),
-      builder: (context, child) {
-        final a = Curves.easeInOut.transform(controller.value.clamp(0.0, 1.0));
-        final s = (radius + 0.2 * a * unit) / radius;
-        return Transform(
-          alignment: alignment,
-          transform:
-              Matrix4.identity()
-                ..translateByDouble(a * unit * 0.08, a * unit * 0.06, 0, 1)
-                ..scaleByDouble(s, s, s, 1),
-          child: child,
-        );
-      },
     );
   }
 }
 
-/// 单团色光的静态基帧：一圈径向渐变，位置/半径/配色不变时不重录。
-class _BlobBasePainter extends CustomPainter {
-  const _BlobBasePainter({
-    required this.center,
-    required this.radius,
-    required this.color,
-    required this.alpha,
-  });
+/// Plain 模式极轻静态噪点绘制器（仅在外层 `RepaintBoundary` 首次光栅化一次）。
+class _PlainGrainPainter extends CustomPainter {
+  const _PlainGrainPainter({required this.isDark});
 
-  final Offset center;
-  final double radius;
-  final Color color;
-  final double alpha;
+  final bool isDark;
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..shader = RadialGradient(
-          colors: [color.withValues(alpha: alpha), color.withValues(alpha: 0)],
-          stops: const [0.0, 0.68],
-        ).createShader(Rect.fromCircle(center: center, radius: radius)),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_BlobBasePainter oldDelegate) =>
-      oldDelegate.center != center ||
-      oldDelegate.radius != radius ||
-      oldDelegate.color != color ||
-      oldDelegate.alpha != alpha;
-}
-
-/// 预烘焙 128×128 离屏噪点瓦片 + ImageShader 平铺，单次 drawRect 完成绘制。
-class _GrainPainter extends CustomPainter {
-  const _GrainPainter({required this.image, required this.opacity});
-
-  final ui.Image? image;
-  final double opacity;
+  static const double _tileSize = 128.0;
+  static const List<Offset> _dots = <Offset>[
+    Offset(12, 19),
+    Offset(47, 8),
+    Offset(89, 27),
+    Offset(115, 14),
+    Offset(26, 54),
+    Offset(68, 46),
+    Offset(103, 61),
+    Offset(18, 92),
+    Offset(55, 84),
+    Offset(94, 98),
+    Offset(38, 118),
+    Offset(79, 112),
+    Offset(121, 107),
+    Offset(7, 73),
+  ];
 
   @override
   void paint(Canvas canvas, Size size) {
-    final tile = image;
-    if (tile == null || size.isEmpty || opacity <= 0) {
-      return;
-    }
+    if (size.isEmpty) return;
     final paint =
         Paint()
-          ..shader = ui.ImageShader(
-            tile,
-            ui.TileMode.repeated,
-            ui.TileMode.repeated,
-            Matrix4.identity().storage,
+          ..color = (isDark ? Colors.white : Colors.black).withValues(
+            alpha: isDark ? 0.025 : 0.020,
           );
-    if (opacity < 1.0) {
-      paint.color = Color.fromRGBO(255, 255, 255, opacity.clamp(0.0, 1.0));
+    final cols = math.min((size.width / _tileSize).ceil(), 32);
+    final rows = math.min((size.height / _tileSize).ceil(), 20);
+    for (var r = 0; r < rows; r++) {
+      final baseY = r * _tileSize;
+      for (var c = 0; c < cols; c++) {
+        final baseX = c * _tileSize;
+        for (final dot in _dots) {
+          final x = baseX + dot.dx;
+          final y = baseY + dot.dy;
+          if (x < size.width && y < size.height) {
+            canvas.drawRect(Rect.fromLTWH(x, y, 1, 1), paint);
+          }
+        }
+      }
     }
-    canvas.drawRect(Offset.zero & size, paint);
   }
 
   @override
-  bool shouldRepaint(_GrainPainter oldDelegate) =>
-      !identical(oldDelegate.image, image) || oldDelegate.opacity != opacity;
+  bool shouldRepaint(_PlainGrainPainter oldDelegate) =>
+      oldDelegate.isDark != isDark;
 }

@@ -10,10 +10,12 @@ import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover_field.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
+import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/platform/file_pick.dart';
 import 'package:omninest/features/music/music_portal.dart';
 
@@ -522,51 +524,58 @@ class _DesktopMusicMetadataDrawerState
     required ValueChanged<bool> onFocusChange,
     required ValueChanged<String> onChanged,
   }) {
+    final radius = BorderRadius.circular(DesktopMetrics.radiusButton);
+    final motionDuration = MotionToken.reduced(
+      context,
+      const Duration(milliseconds: 200),
+    );
     return Focus(
       onFocusChange: onFocusChange,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(DesktopMetrics.radiusButton),
-          boxShadow:
-              focused
-                  ? [
-                    BoxShadow(
-                      color: skin.accent.withValues(alpha: 0.18),
-                      blurRadius: 0,
-                      spreadRadius: 4,
-                    ),
-                  ]
-                  : const [],
-        ),
-        child: TextField(
-          controller: controller,
-          onChanged: onChanged,
-          minLines: minLines,
-          maxLines: maxLines,
-          keyboardType: TextInputType.multiline,
-          textAlignVertical: TextAlignVertical.top,
-          style: DesktopType.field(skin.text),
-          cursorColor: skin.accent,
-          decoration: InputDecoration(
-            hintText: hintText,
-            hintStyle: DesktopType.field(skin.text3),
-            filled: true,
-            fillColor: focused ? skin.raise2 : skin.raise,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 10,
+      child: DesktopOutsetShadow(
+        borderRadius: radius,
+        shadows:
+            focused
+                ? [
+                  BoxShadow(
+                    color: skin.accent.withValues(alpha: 0.18),
+                    blurRadius: 0,
+                    spreadRadius: 4,
+                  ),
+                ]
+                : const <BoxShadow>[],
+        child: AnimatedContainer(
+          duration: motionDuration,
+          curve: Curves.easeOut,
+          decoration: BoxDecoration(
+            color: focused ? skin.raise2 : skin.raise,
+            borderRadius: radius,
+            border: Border.all(
+              color: focused ? skin.accent : skin.line2,
+              width: 1.0,
             ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(DesktopMetrics.radiusButton),
-              borderSide: BorderSide(color: skin.line2),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(DesktopMetrics.radiusButton),
-              borderSide: BorderSide(color: skin.line2),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(DesktopMetrics.radiusButton),
-              borderSide: BorderSide(color: skin.accent),
+          ),
+          child: TextField(
+            controller: controller,
+            onChanged: onChanged,
+            minLines: minLines,
+            maxLines: maxLines,
+            keyboardType: TextInputType.multiline,
+            textAlignVertical: TextAlignVertical.top,
+            style: DesktopType.field(skin.text),
+            cursorColor: skin.accent,
+            decoration: InputDecoration(
+              hintText: hintText,
+              hintStyle: DesktopType.field(skin.text3),
+              filled: false,
+              fillColor: Colors.transparent,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
             ),
           ),
         ),

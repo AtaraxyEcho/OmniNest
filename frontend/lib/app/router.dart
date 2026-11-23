@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -165,10 +167,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ),
       ),
-      StatefulShellRoute.indexedStack(
+      StatefulShellRoute(
         builder: (context, state, navigationShell) {
           return MobileAppShell(navigationShell: navigationShell);
         },
+        navigatorContainerBuilder: _buildSemanticsSafeBranchContainer,
         branches: [
           StatefulShellBranch(
             routes: [
@@ -522,21 +525,73 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     router.dispose();
     authRefreshListenable.dispose();
   });
-  // 宿主路由路径驱动背景场景可见性过滤：IndexedStack 常驻分支声明的
-  // pathPrefix 不匹配当前路径时不参与生效，portal 等可见分支得以恢复。
-  void updateBackdropScenePath() {
+  // 宿主路由路径驱动背景场景可见性过滤：改为 scheduleMicrotask + lastPath 去重，
+  // 避免路由切换同帧内同步写入 Provider 触发冗余重建。
+  String? lastPath;
+  var syncScheduled = false;
+  var disposed = false;
+
+  void flushBackdropScenePath() {
+    syncScheduled = false;
+    if (disposed) {
+      return;
+    }
+    final nextPath = router.routeInformationProvider.value.uri.path;
+    if (nextPath == lastPath) {
+      return;
+    }
+    lastPath = nextPath;
     ref
         .read(appBackdropSceneControllerProvider.notifier)
-        .setActivePath(router.routeInformationProvider.value.uri.path);
+        .setActivePath(nextPath);
+  }
+
+  void updateBackdropScenePath() {
+    if (syncScheduled || disposed) {
+      return;
+    }
+    syncScheduled = true;
+    scheduleMicrotask(flushBackdropScenePath);
   }
 
   updateBackdropScenePath();
   router.routeInformationProvider.addListener(updateBackdropScenePath);
   ref.onDispose(() {
+    disposed = true;
     router.routeInformationProvider.removeListener(updateBackdropScenePath);
   });
   return router;
 });
+
+/// 为 StatefulShellRoute 非活跃分支包裹 `ExcludeSemantics(excluding: index != currentIndex)`
+/// 并在根节点声明 `Semantics(explicitChildNodes: true)`，彻底消除 Windows `Offstage`
+/// 切换分支引发的 `ui::AXTree` 语义断链。
+Widget _buildSemanticsSafeBranchContainer(
+  BuildContext context,
+  StatefulNavigationShell navigationShell,
+  List<Widget> children,
+) {
+  final currentIndex = navigationShell.currentIndex;
+  return Semantics(
+    explicitChildNodes: true,
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        for (var index = 0; index < children.length; index++)
+          Offstage(
+            offstage: index != currentIndex,
+            child: TickerMode(
+              enabled: index == currentIndex,
+              child: ExcludeSemantics(
+                excluding: index != currentIndex,
+                child: children[index],
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
 
 bool _isDesktopRouteContext(BuildContext context) {
   return !shouldUseResponsiveMobileShell(

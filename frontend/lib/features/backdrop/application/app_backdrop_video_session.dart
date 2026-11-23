@@ -112,6 +112,26 @@ class AppBackdropVideoSession {
   static int _disposeFailureCount = 0;
   static int get disposeFailureCount => _disposeFailureCount;
 
+  /// 应用退出前异步暂停并释放所有活跃背景视频会话（受外层退出预算约束）。
+  static Future<void> releaseActiveSessionsForExit() async {
+    final sessions = List<AppBackdropVideoSession>.of(_sessionsByPath.values);
+    if (sessions.isEmpty) {
+      return;
+    }
+    await Future.wait<void>(
+      sessions.map((session) async {
+        try {
+          session._pauseCurrentPlayer();
+          await session._disposeCurrentSession();
+        } on Object catch (error) {
+          if (kDebugMode) {
+            devLog('应用退出释放背景视频会话失败（忽略继续退出）: $error');
+          }
+        }
+      }),
+    );
+  }
+
   Player? _player;
   VideoController? _controller;
   StreamSubscription<Duration>? _positionSub;

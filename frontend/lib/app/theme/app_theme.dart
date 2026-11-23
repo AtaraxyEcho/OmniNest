@@ -289,10 +289,19 @@ class OmniNestTheme {
         border: inputBorder,
         enabledBorder: inputBorder,
         focusedBorder: inputBorder.copyWith(
-          borderSide: BorderSide(color: colors.primary, width: 1.5),
+          borderSide: BorderSide(
+            color: colors.primary,
+            width: isDesktopDensity ? 1.0 : 1.5,
+          ),
         ),
         errorBorder: inputBorder.copyWith(
           borderSide: BorderSide(color: colors.error),
+        ),
+        focusedErrorBorder: inputBorder.copyWith(
+          borderSide: BorderSide(
+            color: colors.error,
+            width: isDesktopDensity ? 1.0 : 1.5,
+          ),
         ),
         labelStyle: TextStyle(color: colors.onSurfaceVariant),
         hintStyle: TextStyle(color: colors.onSurfaceVariant),

@@ -61,6 +61,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class PhotoAlbumService {
 
     private static final int DEFAULT_PAGE_SIZE = 50;
+    private static final int LEGACY_LIST_LIMIT = 2000;
+    private static final int IN_BATCH_SIZE = 500;
 
     private final PhotoAlbumRepository albumRepository;
     private final PhotoAlbumItemRepository albumItemRepository;
@@ -73,7 +75,9 @@ public class PhotoAlbumService {
 
     @Transactional(readOnly = true)
     public List<PhotoAlbumDto> listAlbums(UUID ownerUserId) {
-        return toDtos(albumRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId));
+        return toDtos(albumRepository
+                .findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId, PageRequest.of(0, LEGACY_LIST_LIMIT))
+                .getContent());
     }
 
     @Transactional(readOnly = true)
@@ -155,11 +159,7 @@ public class PhotoAlbumService {
         if (photoIds == null || photoIds.isEmpty()) {
             return;
         }
-        Set<UUID> activePhotoIds = photoItemRepository
-                .findActiveByOwnerUserIdAndIdIn(ownerUserId, photoIds)
-                .stream()
-                .map(PhotoItem::getId)
-                .collect(Collectors.toSet());
+        Set<UUID> activePhotoIds = findActivePhotoIdsInBatches(ownerUserId, photoIds);
         List<UUID> candidates = photoIds.stream()
                 .filter(Objects::nonNull)
                 .distinct()
@@ -171,7 +171,7 @@ public class PhotoAlbumService {
                 .mapToInt(PhotoAlbumItem::getSortOrder)
                 .max()
                 .orElse(-1) + 1;
-        Set<UUID> existing = new HashSet<>(albumItemRepository.findExistingPhotoIds(albumId, candidates));
+        Set<UUID> existing = findExistingPhotoIdsInBatches(albumId, candidates);
         List<PhotoAlbumItem> items = new ArrayList<>();
         for (UUID photoId : candidates) {
             if (existing.add(photoId)) {
@@ -554,15 +554,8 @@ public class PhotoAlbumService {
                 .filter(album -> !coverUrls.containsKey(album.getId()))
                 .toList();
         if (!fallbackAlbums.isEmpty()) {
-            Map<UUID, UUID> fallbackCoverFileIds = albumItemRepository
-                    .findFirstActiveCoverFileIdsByAlbumIds(
-                            fallbackAlbums.stream().map(PhotoAlbum::getId).toList())
-                    .stream()
-                    .collect(Collectors.toMap(
-                            PhotoAlbumFirstCoverProjection::getAlbumId,
-                            PhotoAlbumFirstCoverProjection::getCoverFileId,
-                            (left, right) -> left
-                    ));
+            Map<UUID, UUID> fallbackCoverFileIds = findFirstActiveCoverFileIdsInBatches(
+                    fallbackAlbums.stream().map(PhotoAlbum::getId).toList());
             Map<UUID, String> fallbackUrls = signCoversByOwner(fallbackAlbums, fallbackCoverFileIds);
             coverUrls.putAll(fallbackUrls);
         }
@@ -608,6 +601,53 @@ public class PhotoAlbumService {
             }
         });
         return coverUrls;
+    }
+
+    private Set<UUID> findActivePhotoIdsInBatches(UUID ownerUserId, List<UUID> photoIds) {
+        if (photoIds.size() <= IN_BATCH_SIZE) {
+            return photoItemRepository.findActiveByOwnerUserIdAndIdIn(ownerUserId, photoIds)
+                    .stream()
+                    .map(PhotoItem::getId)
+                    .collect(Collectors.toSet());
+        }
+        Set<UUID> result = new HashSet<>();
+        for (int start = 0; start < photoIds.size(); start += IN_BATCH_SIZE) {
+            int end = Math.min(start + IN_BATCH_SIZE, photoIds.size());
+            for (PhotoItem item : photoItemRepository.findActiveByOwnerUserIdAndIdIn(
+                    ownerUserId, photoIds.subList(start, end))) {
+                result.add(item.getId());
+            }
+        }
+        return result;
+    }
+
+    private Set<UUID> findExistingPhotoIdsInBatches(UUID albumId, List<UUID> candidates) {
+        if (candidates.isEmpty()) {
+            return new HashSet<>();
+        }
+        if (candidates.size() <= IN_BATCH_SIZE) {
+            return new HashSet<>(albumItemRepository.findExistingPhotoIds(albumId, candidates));
+        }
+        Set<UUID> result = new HashSet<>();
+        for (int start = 0; start < candidates.size(); start += IN_BATCH_SIZE) {
+            int end = Math.min(start + IN_BATCH_SIZE, candidates.size());
+            result.addAll(albumItemRepository.findExistingPhotoIds(albumId, candidates.subList(start, end)));
+        }
+        return result;
+    }
+
+    private Map<UUID, UUID> findFirstActiveCoverFileIdsInBatches(List<UUID> albumIds) {
+        Map<UUID, UUID> result = new HashMap<>();
+        for (int start = 0; start < albumIds.size(); start += IN_BATCH_SIZE) {
+            List<UUID> batch = albumIds.size() <= IN_BATCH_SIZE
+                    ? albumIds
+                    : albumIds.subList(start, Math.min(start + IN_BATCH_SIZE, albumIds.size()));
+            for (PhotoAlbumFirstCoverProjection projection :
+                    albumItemRepository.findFirstActiveCoverFileIdsByAlbumIds(batch)) {
+                result.putIfAbsent(projection.getAlbumId(), projection.getCoverFileId());
+            }
+        }
+        return result;
     }
 
     private void recordAlbumEvent(UUID ownerUserId, PhotoAlbum album, SyncAction action) {

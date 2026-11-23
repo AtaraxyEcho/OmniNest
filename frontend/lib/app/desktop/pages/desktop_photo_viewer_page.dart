@@ -13,6 +13,7 @@ import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_error_view.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/desktop/widgets/desktop_window_controls.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -32,6 +33,7 @@ import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.
 import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_overlays.dart';
 
 part 'desktop_photo_viewer_filmstrip.dart';
+part 'desktop_photo_viewer_nav.dart';
 
 /// 桌面照片查看器（样例 `PhotoViewer`）：柔和模糊背景 + 上下暗纱渐变 + 顶栏 +
 /// 左右翻页 + 缩放/旋转舞台 + 底部胶片条/幻灯片分段进度 + 右侧信息面板。
@@ -83,31 +85,39 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
     _zoom.addListener(_syncScale);
     _slideProgress.addStatusListener(_onSlideProgressStatus);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _rememberCurrentPhotoAmbient();
+      if (mounted) _rememberCurrentPhotoAmbient();
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant DesktopPhotoViewerPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.photoId != widget.photoId) {
+      _currentId = widget.photoId;
+      _rotation = 0;
+      _scale = 1;
+      _zoom.value = Matrix4.identity();
+      _info = false;
+      _shareOpen = false;
+      if (_slideshow) _slideProgress.forward(from: 0);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _rememberCurrentPhotoAmbient();
+      });
+    }
   }
 
   void _rememberCurrentPhotoAmbient() {
     final photo = _currentPhoto();
-    if (photo == null) {
-      return;
-    }
+    if (photo == null) return;
     ref
         .read(desktopAmbientHintProvider.notifier)
         .rememberPhotoViewed(photo.coverUrl);
   }
 
   void _onPhotoImageError(String url) {
-    if (!mounted || url.isEmpty) {
-      return;
-    }
+    if (!mounted || url.isEmpty) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ref
           .read(desktopAmbientHintProvider.notifier)
           .clearPhotoViewedIfMatches(url);
@@ -127,28 +137,21 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
   }
 
   void _onSlideProgressStatus(AnimationStatus status) {
-    if (status != AnimationStatus.completed || !_slideshow || !mounted) {
-      return;
-    }
+    if (status != AnimationStatus.completed || !_slideshow || !mounted) return;
     final previousId = _currentId;
     _step(1);
-    if (_slideshow && _currentId == previousId) {
-      _slideProgress.forward(from: 0);
-    }
+    if (_slideshow && _currentId == previousId) _slideProgress.forward(from: 0);
   }
 
   void _syncScale() {
     final value = _zoom.value.getMaxScaleOnAxis();
-    if ((value - _scale).abs() > 0.01) {
-      setState(() => _scale = value);
-    }
+    if ((value - _scale).abs() > 0.01) setState(() => _scale = value);
   }
 
   void _setPointerInsideViewer(bool value) {
-    if (_pointerInsideViewer == value) {
-      return;
+    if (_pointerInsideViewer != value) {
+      setState(() => _pointerInsideViewer = value);
     }
-    setState(() => _pointerInsideViewer = value);
   }
 
   @override
@@ -173,8 +176,8 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
     };
     final index = list.indexWhere((photo) => photo.id == _currentId);
     final fallback = index >= 0 ? list[index] : null;
-    final detail = ref.watch(photoDetailProvider(_currentId)).asData?.value;
-    final photo = detail ?? fallback;
+    final detailAsync = ref.watch(photoDetailProvider(_currentId));
+    final photo = detailAsync.asData?.value ?? fallback;
     final chromeVisible = !_slideshow || _pointerInsideViewer;
 
     return Focus(
@@ -201,14 +204,14 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
                       ),
                       switchInCurve: Curves.easeInOutCubic,
                       switchOutCurve: Curves.easeInOutCubic,
+                      transitionBuilder: semanticsSafeFadeTransition,
                       layoutBuilder:
-                          (currentChild, previousChildren) => Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              ...previousChildren,
-                              if (currentChild != null) currentChild,
-                            ],
-                          ),
+                          (currentChild, previousChildren) =>
+                              excludeExitingSemanticsStack(
+                                currentChild,
+                                previousChildren,
+                                fit: StackFit.expand,
+                              ),
                       child:
                           photo == null
                               ? const ColoredBox(
@@ -223,9 +226,57 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
                   ),
                 ),
               ),
-              if (photo == null)
-                const Center(child: SizedBox(width: 32, height: 32))
-              else ...[
+              if (photo == null) ...[
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: 64,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      const DesktopWindowDragRegion(child: SizedBox.expand()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: DesktopIconButton(
+                            icon: DesktopIcons.left,
+                            size: 36,
+                            iconSize: 18,
+                            tooltip: l10n.photosClose,
+                            onPressed: _close,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Center(
+                  child:
+                      detailAsync.isLoading && !detailAsync.hasError
+                          ? SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: skin.accent,
+                            ),
+                          )
+                          : DesktopErrorView(
+                            message:
+                                detailAsync.hasError
+                                    ? errorReason(detailAsync.error!, l10n)
+                                    : l10n.photosNoPhotos,
+                            onBack: _close,
+                            onRetry:
+                                () => ref.invalidate(
+                                  photoDetailProvider(_currentId),
+                                ),
+                            minHeightFactor: 0,
+                          ),
+                ),
+              ] else ...[
                 _ViewerStage(
                   stageKey: _stageKey,
                   photo: photo,
@@ -353,13 +404,6 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
                   onDone: () => setState(() => _shareOpen = false),
                 ),
               ],
-              if (list.isEmpty && photo == null)
-                Center(
-                  child: Text(
-                    AppLocalizations.of(context).photosNoPhotos,
-                    style: DesktopType.body(skin.text3),
-                  ),
-                ),
             ],
           ),
         ),
@@ -508,19 +552,14 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
   }
 
   void _onWheel(PointerSignalEvent event) {
-    if (event is! PointerScrollEvent) {
-      return;
-    }
-    final delta = -event.scrollDelta.dy * 0.002;
-    _setScale(_scale + delta);
+    if (event is! PointerScrollEvent) return;
+    _setScale(_scale - event.scrollDelta.dy * 0.002);
   }
 
   // ── 动作 ────────────────────────────────────────────────────────────
 
   void _toggleSlideshow() {
-    setState(() {
-      _slideshow = !_slideshow;
-    });
+    setState(() => _slideshow = !_slideshow);
     if (_slideshow) {
       _slideProgress.forward(from: 0);
     } else {
@@ -604,73 +643,45 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
   }
 
   KeyEventResult _onKey(KeyEvent event) {
-    if (event is! KeyDownEvent) {
-      return KeyEventResult.ignored;
-    }
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
     if (key == LogicalKeyboardKey.escape) {
-      if (_info) {
-        setState(() => _info = false);
-      } else {
-        _close();
-      }
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowRight) {
+      _info ? setState(() => _info = false) : _close();
+    } else if (key == LogicalKeyboardKey.arrowRight) {
       _step(1);
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowLeft) {
+    } else if (key == LogicalKeyboardKey.arrowLeft) {
       _step(-1);
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.delete && !_shareOpen) {
+    } else if (key == LogicalKeyboardKey.delete && !_shareOpen) {
       final photo = _currentPhoto();
-      if (photo != null) {
-        unawaited(_moveToTrash(photo));
-      }
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.keyI) {
+      if (photo != null) unawaited(_moveToTrash(photo));
+    } else if (key == LogicalKeyboardKey.keyI) {
       setState(() => _info = !_info);
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.equal || key == LogicalKeyboardKey.add) {
+    } else if (key == LogicalKeyboardKey.equal ||
+        key == LogicalKeyboardKey.add) {
       _setScale(_scale + 0.5);
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.minus) {
+    } else if (key == LogicalKeyboardKey.minus) {
       _setScale(_scale - 0.5);
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.space) {
+    } else if (key == LogicalKeyboardKey.space) {
       _toggleSlideshow();
-      return KeyEventResult.handled;
+    } else {
+      return KeyEventResult.ignored;
     }
-    return KeyEventResult.ignored;
+    return KeyEventResult.handled;
   }
 
   PhotoItem? _currentPhoto() {
     final detail = ref.read(photoDetailProvider(_currentId)).asData?.value;
-    if (detail != null) {
-      return detail;
-    }
+    if (detail != null) return detail;
     final browseScope = ref.read(photoBrowseScopeProvider);
     if (browseScope.contains(_currentId)) {
       for (final item in browseScope.photos) {
-        if (item.id == _currentId) {
-          return item;
-        }
+        if (item.id == _currentId) return item;
       }
     }
     final items = ref.read(photoListProvider).asData?.value.items;
-    if (items == null) {
-      return null;
-    }
+    if (items == null) return null;
     for (final item in items) {
-      if (item.id == _currentId) {
-        return item;
-      }
+      if (item.id == _currentId) return item;
     }
     return null;
   }
@@ -821,6 +832,7 @@ class _ViewerStage extends StatelessWidget {
                         duration: effectiveCrossfade,
                         switchInCurve: Curves.easeInOutCubic,
                         switchOutCurve: Curves.easeInOutCubic,
+                        transitionBuilder: semanticsSafeFadeTransition,
                         layoutBuilder:
                             (currentChild, previousChildren) =>
                                 excludeExitingSemanticsStack(
@@ -998,38 +1010,6 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-class _NavButton extends StatelessWidget {
-  const _NavButton({
-    required this.alignment,
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final Alignment alignment;
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: alignment,
-      child: Padding(
-        // 样例 `.vw-nav`：52×52 圆钮、图标 26、左右各 20 边距。
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: DesktopIconButton(
-          icon: icon,
-          size: 52,
-          iconSize: 26,
-          tooltip: tooltip,
-          onPressed: onPressed,
-        ),
-      ),
-    );
-  }
-}
-
 class _InfoPanel extends StatelessWidget {
   const _InfoPanel({
     required this.open,
@@ -1178,23 +1158,16 @@ class _InfoPanel extends StatelessWidget {
 /// `gpsLocation` 是后端原样下发的地址字段集合，取第一个可读值。
 String? _placeLabel(PhotoItem photo) {
   final location = photo.gpsLocation;
-  if (location == null || location.isEmpty) {
-    return null;
-  }
+  if (location == null || location.isEmpty) return null;
   for (final key in const ['name', 'displayName', 'locality', 'city']) {
     final value = location[key];
-    if (value is String && value.isNotEmpty) {
-      return value;
-    }
+    if (value is String && value.isNotEmpty) return value;
   }
   return null;
 }
 
 String _formatDateTime(DateTime value) {
-  final local = value.toLocal();
-  final month = local.month.toString().padLeft(2, '0');
-  final day = local.day.toString().padLeft(2, '0');
-  final hour = local.hour.toString().padLeft(2, '0');
-  final minute = local.minute.toString().padLeft(2, '0');
-  return '${local.year}-$month-$day $hour:$minute';
+  final l = value.toLocal();
+  String p(int v) => v.toString().padLeft(2, '0');
+  return '${l.year}-${p(l.month)}-${p(l.day)} ${p(l.hour)}:${p(l.minute)}';
 }

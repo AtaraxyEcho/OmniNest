@@ -140,6 +140,7 @@ class _DesktopColorPickerState extends State<DesktopColorPicker> {
 
   late HSVColor _hsv;
   late TextEditingController _hexController;
+  final FocusNode _hexFocus = FocusNode();
   Color _ownColor = const Color(0xFFFFFFFF);
   List<Color> _recent = const <Color>[];
 
@@ -149,7 +150,14 @@ class _DesktopColorPickerState extends State<DesktopColorPicker> {
     _ownColor = widget.value;
     _hsv = HSVColor.fromColor(widget.value);
     _hexController = TextEditingController(text: colorToHex(widget.value));
+    _hexFocus.addListener(_onHexFocusChanged);
     unawaited(_loadRecent());
+  }
+
+  void _onHexFocusChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -167,6 +175,8 @@ class _DesktopColorPickerState extends State<DesktopColorPicker> {
 
   @override
   void dispose() {
+    _hexFocus.removeListener(_onHexFocusChanged);
+    _hexFocus.dispose();
     _hexController.dispose();
     super.dispose();
   }
@@ -275,40 +285,44 @@ class _DesktopColorPickerState extends State<DesktopColorPicker> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: SizedBox(
+                  child: AnimatedContainer(
+                    duration: DesktopMotion.of(context, DesktopMotion.fast),
                     height: 30,
+                    alignment: Alignment.centerLeft,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(
+                        alpha: _hexFocus.hasFocus ? 0.10 : 0.06,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.white.withValues(
+                          alpha: _hexFocus.hasFocus ? 0.55 : 0.16,
+                        ),
+                        width: 1.0,
+                      ),
+                    ),
                     child: TextField(
                       controller: _hexController,
+                      focusNode: _hexFocus,
                       maxLength: 7,
+                      textAlignVertical: TextAlignVertical.center,
                       style: DesktopType.numeric(
                         Colors.white,
                       ).copyWith(letterSpacing: 0.7),
                       cursorColor: Colors.white,
-                      decoration: InputDecoration(
+                      decoration: const InputDecoration(
                         counterText: '',
                         isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
+                        filled: false,
+                        fillColor: Colors.transparent,
+                        contentPadding: EdgeInsets.symmetric(
                           horizontal: 10,
-                          vertical: 7,
+                          vertical: 0,
                         ),
-                        filled: true,
-                        fillColor: Colors.white.withValues(alpha: 0.06),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.16),
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.16),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Colors.white),
-                        ),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
                       ),
                       onChanged: (text) {
                         final parsed = parseHexColor(text);

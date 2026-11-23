@@ -52,9 +52,19 @@ class DesktopContinueRail extends ConsumerWidget {
             ),
       ),
     );
-    final resume =
-        dashboard?.continueWatching ?? const <MovieContinueWatching>[];
-    final fresh = dashboard?.recentlyAdded ?? const <MovieVideoItem>[];
+    final resume = (dashboard?.continueWatching ??
+            const <MovieContinueWatching>[])
+        .where((item) => item.title.trim() != '待识别')
+        .toList(growable: false);
+    final fresh = (dashboard?.recentlyAdded ?? const <MovieVideoItem>[])
+        .where((item) {
+          final status = item.metadataStatus.toUpperCase();
+          if (status == 'FAILED' || status == 'PENDING') {
+            return false;
+          }
+          return item.title.trim() != '待识别';
+        })
+        .toList(growable: false);
     final Widget content;
     if (resume.isEmpty && fresh.isEmpty) {
       content = DesktopEmpty(
@@ -154,10 +164,24 @@ class _FreshCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final yearText = item.year.trim();
+    final hasYear = yearText.isNotEmpty && yearText != '待识别';
+    final genresShort = item.genres.take(2).join(' / ');
+    final captionParts = <String>[
+      if (hasYear) yearText,
+      if (genresShort.isNotEmpty) genresShort,
+    ];
+    final genresFull = item.genres.join(' / ');
+    final runtimeText = item.runtimeText.trim();
+    final subtitleParts = <String>[
+      if (hasYear) yearText,
+      if (runtimeText.isNotEmpty) runtimeText,
+      if (genresFull.isNotEmpty) genresFull,
+    ];
     return _WideCard(
       imageUrl: item.backdropImageUrl ?? item.posterImageUrl,
       title: item.title,
-      caption: '${item.year} · ${item.genres.take(2).join(' / ')}',
+      caption: captionParts.join(' · '),
       onTap: () => context.push(DesktopRoutes.movieDetail(item.id)),
       onPlay: () => context.push(DesktopRoutes.moviePlay(item.id)),
       onInspect:
@@ -167,8 +191,7 @@ class _FreshCard extends ConsumerWidget {
                 DesktopDetailData(
                   kind: 'film',
                   title: item.title,
-                  subtitle:
-                      '${item.year} · ${item.runtimeText} · ${item.genres.join(' / ')}',
+                  subtitle: subtitleParts.join(' · '),
                   imageUrl: item.backdropImageUrl ?? item.posterImageUrl,
                   about: item.overview,
                   chips: item.castMembers.map((e) => e.name).take(8).toList(),

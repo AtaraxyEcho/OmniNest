@@ -1531,7 +1531,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String filesUsedOf(Object total, Object used) {
+  String filesUsedOf(Object used, Object total) {
     return '$used / $total';
   }
 
@@ -2773,7 +2773,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get portalVisualSync => '同步';
 
   @override
-  String get portalFileManager => 'File Manager';
+  String get portalFileManager => '文件管理';
 
   @override
   String get portalFileManagerSubtitle => '网络存储、文件夹、回收站与对象预览。';
@@ -2785,19 +2785,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get portalMovieCenterSubtitle => '集中管理电影、剧集与动漫，支持元数据同步和直接播放。';
 
   @override
-  String get portalReaderCenter => 'Reader Center';
+  String get portalReaderCenter => '阅读中心';
 
   @override
   String get portalReaderCenterSubtitle => '图书、漫画与阅读进度续接。';
 
   @override
-  String get portalMusic => 'Music';
+  String get portalMusic => '音乐';
 
   @override
   String get portalMusicSubtitle => '无损音乐、播放队列和歌单管理。';
 
   @override
-  String get portalPhotos => 'Photos';
+  String get portalPhotos => '照片';
 
   @override
   String get portalPhotosSubtitle => '相册、自动备份和回忆时间线。';
@@ -3657,7 +3657,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get adminTopBarPortal => 'Portal';
+  String get adminTopBarPortal => '门户';
 
   @override
   String get adminShellTitle => 'OmniNest 管理台';
@@ -3957,7 +3957,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminRoleDelete => '删除角色';
 
   @override
-  String adminRoleDeleteConfirmMessage(Object code, Object name) {
+  String adminRoleDeleteConfirmMessage(Object name, Object code) {
     return '确定删除角色 $name（$code）？仍有用户绑定的角色不可删除。';
   }
 
@@ -4843,7 +4843,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminListEmpty => '暂无数据，可调整筛选条件';
 
   @override
-  String adminListPageOf(Object current, Object total) {
+  String adminListPageOf(String current, Object total) {
     return '第 $current/$total 页';
   }
 
@@ -4854,7 +4854,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminListIndex => '序号';
 
   @override
-  String adminListSelectedCount(Object count) {
+  String adminListSelectedCount(int count) {
     return '已选 $count 项';
   }
 
@@ -5086,7 +5086,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminStorageDisableConfirmTitle => '停用存储位置';
 
   @override
-  String adminStorageDisableConfirmBody(Object name) {
+  String adminStorageDisableConfirmBody(String name) {
     return '停用后\"$name\"将不再参与扫描与媒体读取，可随时重新启用。';
   }
 
@@ -5100,7 +5100,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminStorageDeleteConfirmTitle => '删除存储位置';
 
   @override
-  String adminStorageDeleteConfirmBody(Object name) {
+  String adminStorageDeleteConfirmBody(String name) {
     return '将永久移除\"$name\"的登记信息，已入库内容不受影响。';
   }
 
@@ -5175,7 +5175,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminBucketConfig => '桶配置';
 
   @override
-  String get adminMinioBuckets => 'MinIO Buckets';
+  String get adminMinioBuckets => 'MinIO 存储桶';
 
   @override
   String get adminRecentRecords => '最近记录';
@@ -6828,6 +6828,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get readerChapterLoadFailed => '章节内容加载失败，请重试';
+
+  @override
+  String get readerLibraryLoadFailed => '书库加载失败，请重试';
 
   @override
   String get readerChapterNeedsNetwork => '本章未缓存到本地，需要联网后才能阅读';
@@ -10588,7 +10591,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get readerPortal => 'Portal';
+  String get readerPortal => '门户';
 
   @override
   String get readerCenter => '阅读中心';
@@ -12405,7 +12408,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String notificationTotalSummary(Object count) {
-    return 'TOTAL: $count ITEMS';
+    return '共 $count 条通知';
   }
 
   @override
@@ -12424,17 +12427,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get moduleMoviesTitle => '影视';
 
   @override
-  String musicModuleSubtitle(Object albumCount, Object trackCount) {
+  String musicModuleSubtitle(Object trackCount, Object albumCount) {
     return '$trackCount 首曲目 · $albumCount 张专辑';
   }
 
   @override
-  String photosModuleSubtitle(Object albumCount, Object photoCount) {
+  String photosModuleSubtitle(Object photoCount, Object albumCount) {
     return '$photoCount 张照片 · $albumCount 个相册';
   }
 
   @override
-  String moviesModuleSubtitle(Object continueCount, Object titleCount) {
+  String moviesModuleSubtitle(Object titleCount, Object continueCount) {
     return '$titleCount 部影片 · $continueCount 部在看';
   }
 
@@ -13909,6 +13912,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get desktopAtmosphere => '氛围';
+
+  @override
+  String get desktopDynamicBackground => '随封面变色的背景';
+
+  @override
+  String get desktopDynamicBackgroundHint =>
+      '首页、电影、照片、音乐和阅读器的背景会取自封面与图片的颜色。关闭后为简洁纯净的界面。';
 
   @override
   String get desktopAmbientLight => '环境光';

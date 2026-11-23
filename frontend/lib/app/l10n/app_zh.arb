@@ -543,9 +543,15 @@
   "filesSharedSpaceInfo": "已用 {used} / {capacity} · {items} 个项目",
   "@filesSharedSpaceInfo": {
     "placeholders": {
-      "used": { "type": "String" },
-      "capacity": { "type": "String" },
-      "items": { "type": "int" }
+      "used": {
+        "type": "String"
+      },
+      "capacity": {
+        "type": "String"
+      },
+      "items": {
+        "type": "int"
+      }
     }
   },
   "filesSharedSpaceUnlimited": "不设上限",
@@ -1060,15 +1066,15 @@
   "portalVisualStatusTitle": "需要关注",
   "portalVisualLastReadingLocation": "上次阅读位置",
   "portalVisualSync": "同步",
-  "portalFileManager": "File Manager",
+  "portalFileManager": "文件管理",
   "portalFileManagerSubtitle": "网络存储、文件夹、回收站与对象预览。",
   "portalMovieCenter": "媒体库",
   "portalMovieCenterSubtitle": "集中管理电影、剧集与动漫，支持元数据同步和直接播放。",
-  "portalReaderCenter": "Reader Center",
+  "portalReaderCenter": "阅读中心",
   "portalReaderCenterSubtitle": "图书、漫画与阅读进度续接。",
-  "portalMusic": "Music",
+  "portalMusic": "音乐",
   "portalMusicSubtitle": "无损音乐、播放队列和歌单管理。",
-  "portalPhotos": "Photos",
+  "portalPhotos": "照片",
   "portalPhotosSubtitle": "相册、自动备份和回忆时间线。",
   "portalAdmin": "管理",
   "portalAdminSubtitle": "用户权限、系统配置、任务与运行状态。",
@@ -1476,7 +1482,7 @@
       "percent": {}
     }
   },
-  "adminTopBarPortal": "Portal",
+  "adminTopBarPortal": "门户",
   "adminShellTitle": "OmniNest 管理台",
   "adminShellSubtitle": "集中管控中枢",
   "adminRolePillLabel": "管理",
@@ -1958,7 +1964,7 @@
   "adminListEmpty": "暂无数据，可调整筛选条件",
   "adminListPageOf": "第 {current}/{total} 页",
   "@adminListPageOf": {
-    "placeholder": {
+    "placeholders": {
       "current": {
         "type": "String"
       }
@@ -1968,7 +1974,7 @@
   "adminListIndex": "序号",
   "adminListSelectedCount": "已选 {count} 项",
   "@adminListSelectedCount": {
-    "placeholder": {
+    "placeholders": {
       "count": {
         "type": "int"
       }
@@ -2074,7 +2080,7 @@
   "adminStorageDisableConfirmTitle": "停用存储位置",
   "adminStorageDisableConfirmBody": "停用后\"{name}\"将不再参与扫描与媒体读取，可随时重新启用。",
   "@adminStorageDisableConfirmBody": {
-    "placeholder": {
+    "placeholders": {
       "name": {
         "type": "String"
       }
@@ -2085,7 +2091,7 @@
   "adminStorageDeleteConfirmTitle": "删除存储位置",
   "adminStorageDeleteConfirmBody": "将永久移除\"{name}\"的登记信息，已入库内容不受影响。",
   "@adminStorageDeleteConfirmBody": {
-    "placeholder": {
+    "placeholders": {
       "name": {
         "type": "String"
       }
@@ -2114,7 +2120,7 @@
   "adminStorageCreated": "已添加存储位置。",
   "adminStorageAdvancedLibraries": "媒体库源与挂载控制",
   "adminBucketConfig": "桶配置",
-  "adminMinioBuckets": "MinIO Buckets",
+  "adminMinioBuckets": "MinIO 存储桶",
   "adminRecentRecords": "最近记录",
   "adminWaitingToExecute": "等待执行",
   "adminObjectBuckets": "对象桶",
@@ -2127,7 +2133,9 @@
   "adminOAuthProviderAccountTitle": "{provider} 账户",
   "@adminOAuthProviderAccountTitle": {
     "placeholders": {
-      "provider": { "type": "String" }
+      "provider": {
+        "type": "String"
+      }
     }
   },
   "adminOAuthSecretStorageHint": "密钥会加密保存，之后不会再次显示。",
@@ -2729,14 +2737,20 @@
   "readerChapterPagePosition": "本章第 {current}/{total} 页",
   "@readerChapterPagePosition": {
     "placeholders": {
-      "current": { "type": "int" },
-      "total": { "type": "int" }
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "readerProgressPercent": "{percent}%",
   "@readerProgressPercent": {
     "placeholders": {
-      "percent": { "type": "int" }
+      "percent": {
+        "type": "int"
+      }
     }
   },
   "readerFontSize": "字号",
@@ -2953,6 +2967,7 @@
   "readerOperationFailed": "操作失败，请稍后重试",
   "readerOperationSubmitted": "操作已提交",
   "readerChapterLoadFailed": "章节内容加载失败，请重试",
+  "readerLibraryLoadFailed": "书库加载失败，请重试",
   "readerChapterNeedsNetwork": "本章未缓存到本地，需要联网后才能阅读",
   "@readerChapterNeedsNetwork": {
     "description": "TXT 章节离线不可读时的提示"
@@ -3265,7 +3280,7 @@
   "readerContinueBtn": "继续阅读",
   "readerBookshelfSection": "书架",
   "@readerShowAllBooks": {
-    "placeholder": {
+    "placeholders": {
       "count": {
         "type": "int"
       }
@@ -4741,7 +4756,7 @@
       "extensions": {}
     }
   },
-  "readerPortal": "Portal",
+  "readerPortal": "门户",
   "readerCenter": "阅读中心",
   "readerSortRecent": "最近阅读",
   "readerSortTitle": "标题",
@@ -5651,7 +5666,7 @@
   },
   "notificationFilterAllTooltip": "查看全部通知",
   "notificationFilterUnreadTooltip": "仅查看未读通知",
-  "notificationTotalSummary": "TOTAL: {count} ITEMS",
+  "notificationTotalSummary": "共 {count} 条通知",
   "@notificationTotalSummary": {
     "placeholders": {
       "count": {}
@@ -6326,6 +6341,8 @@
   "desktopShortcutSeek": "快进/快退 5 秒",
   "desktopAccentHint": "低饱和柔和色，适合长时间使用。",
   "desktopAtmosphere": "氛围",
+  "desktopDynamicBackground": "随封面变色的背景",
+  "desktopDynamicBackgroundHint": "首页、电影、照片、音乐和阅读器的背景会取自封面与图片的颜色。关闭后为简洁纯净的界面。",
   "desktopAmbientLight": "环境光",
   "desktopAmbientHint": "界面背后的模糊封面光晕",
   "desktopReduceMotion": "减弱动效",
@@ -6363,7 +6380,13 @@
   "desktopStatListeningSub": "本周聆听",
   "desktopStatHours": "小时",
   "desktopStatLibraryAddedToday": "今日新增 {count} 项",
-  "@desktopStatLibraryAddedToday": {"placeholders": {"count": {"type": "int"}}},
+  "@desktopStatLibraryAddedToday": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "desktopForYou": "为你推荐",
   "desktopSortRecent": "最近",
   "desktopSortRating": "评分",
@@ -6849,7 +6872,13 @@
   "desktopBackdropKindImage": "图片",
   "desktopBackdropKindVideo": "视频",
   "desktopBackdropKindGif": "GIF",
-  "@desktopBackdropClearUploadsBody": {"placeholders": {"count": {"type": "int"}}},
+  "@desktopBackdropClearUploadsBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "desktopPhotosEmptyBody": "导入或上传的照片会出现在这里。",
   "desktopMoviesEmptyFavoritesTitle": "还没有收藏",
   "desktopMoviesEmptyFavoritesBody": "在详情页点心形即可收藏到这里。",
@@ -6867,9 +6896,21 @@
   "desktopMoviesMarkWatched": "标记为已看完",
   "desktopMoviesMarkUnwatched": "标记为未看",
   "desktopMoviesMarkedWatched": "已将“{title}”标记为已看完",
-  "@desktopMoviesMarkedWatched": {"placeholders": {"title": {"type": "String"}}},
+  "@desktopMoviesMarkedWatched": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
   "desktopMoviesMarkedUnwatched": "已将“{title}”标记为未看",
-  "@desktopMoviesMarkedUnwatched": {"placeholders": {"title": {"type": "String"}}},
+  "@desktopMoviesMarkedUnwatched": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
   "photosDownload": "下载",
   "photosSavedCount": "已保存 {count} 张",
   "photosDownloadNeedsOriginal": "请先打开照片——列表数据没有原图地址",

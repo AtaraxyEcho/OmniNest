@@ -1603,7 +1603,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String filesUsedOf(Object total, Object used) {
+  String filesUsedOf(Object used, Object total) {
     return '$used / $total';
   }
 
@@ -4084,7 +4084,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminRoleDelete => 'Delete role';
 
   @override
-  String adminRoleDeleteConfirmMessage(Object code, Object name) {
+  String adminRoleDeleteConfirmMessage(Object name, Object code) {
     return 'Delete role $name ($code)? Roles still bound to users cannot be deleted.';
   }
 
@@ -5020,7 +5020,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminListEmpty => 'No data. Try adjusting the filters.';
 
   @override
-  String adminListPageOf(Object current, Object total) {
+  String adminListPageOf(String current, Object total) {
     return 'Page $current of $total';
   }
 
@@ -5031,7 +5031,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminListIndex => '#';
 
   @override
-  String adminListSelectedCount(Object count) {
+  String adminListSelectedCount(int count) {
     return '$count selected';
   }
 
@@ -5272,7 +5272,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminStorageDisableConfirmTitle => 'Disable storage location';
 
   @override
-  String adminStorageDisableConfirmBody(Object name) {
+  String adminStorageDisableConfirmBody(String name) {
     return 'Scanning and media access stop for \"$name\" until you enable it again.';
   }
 
@@ -5286,7 +5286,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminStorageDeleteConfirmTitle => 'Delete storage location';
 
   @override
-  String adminStorageDeleteConfirmBody(Object name) {
+  String adminStorageDeleteConfirmBody(String name) {
     return 'This permanently removes the \"$name\" registration. Imported content is not affected.';
   }
 
@@ -7063,6 +7063,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get readerChapterLoadFailed =>
       'The chapter could not be loaded. Please try again.';
+
+  @override
+  String get readerLibraryLoadFailed => 'Failed to load library. Please retry.';
 
   @override
   String get readerChapterNeedsNetwork =>
@@ -12873,17 +12876,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get moduleMoviesTitle => 'Movies';
 
   @override
-  String musicModuleSubtitle(Object albumCount, Object trackCount) {
+  String musicModuleSubtitle(Object trackCount, Object albumCount) {
     return '$trackCount tracks · $albumCount albums';
   }
 
   @override
-  String photosModuleSubtitle(Object albumCount, Object photoCount) {
+  String photosModuleSubtitle(Object photoCount, Object albumCount) {
     return '$photoCount photos · $albumCount albums';
   }
 
   @override
-  String moviesModuleSubtitle(Object continueCount, Object titleCount) {
+  String moviesModuleSubtitle(Object titleCount, Object continueCount) {
     return '$titleCount titles · $continueCount in progress';
   }
 
@@ -14399,6 +14402,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get desktopAtmosphere => 'Atmosphere';
+
+  @override
+  String get desktopDynamicBackground => 'Artwork-tinted backgrounds';
+
+  @override
+  String get desktopDynamicBackgroundHint =>
+      'Home, Movies, Photos, Music and Reader take their colour from covers and pictures. Off gives a calm, plain surface.';
 
   @override
   String get desktopAmbientLight => 'Ambient light';

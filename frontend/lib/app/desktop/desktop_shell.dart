@@ -168,7 +168,6 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
     _lastSyncedPath = _path;
     _pathNotifier.value = _lastSyncedPath;
     widget.router.routerDelegate.addListener(_onRouteChanged);
-    widget.router.routeInformationProvider.addListener(_onRouteChanged);
     HardwareKeyboard.instance.addHandler(_handleKey);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
@@ -189,9 +188,7 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.router != widget.router) {
       oldWidget.router.routerDelegate.removeListener(_onRouteChanged);
-      oldWidget.router.routeInformationProvider.removeListener(_onRouteChanged);
       widget.router.routerDelegate.addListener(_onRouteChanged);
-      widget.router.routeInformationProvider.addListener(_onRouteChanged);
       _lastSyncedPath = _path;
       _pathNotifier.value = _lastSyncedPath;
     }
@@ -200,7 +197,6 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
   @override
   void dispose() {
     widget.router.routerDelegate.removeListener(_onRouteChanged);
-    widget.router.routeInformationProvider.removeListener(_onRouteChanged);
     HardwareKeyboard.instance.removeHandler(_handleKey);
     _pathNotifier.dispose();
     super.dispose();
@@ -486,11 +482,16 @@ class _DesktopShellBody extends ConsumerWidget {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            if (!backdropActive)
-                              _AmbientLayer(
-                                key: const ValueKey('desktop-shared-ambient'),
-                                path: path,
+                            Offstage(
+                              offstage: backdropActive,
+                              child: TickerMode(
+                                enabled: !backdropActive,
+                                child: _AmbientLayer(
+                                  key: const ValueKey('desktop-shared-ambient'),
+                                  path: path,
+                                ),
                               ),
+                            ),
                             if (backdropActive ||
                                 mode == DesktopShellMode.chrome)
                               DesktopBackdropLayer(path: path),

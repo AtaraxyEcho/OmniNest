@@ -24,7 +24,10 @@ void main() {
   });
 
   group('forwardSingleInstanceActivate', () {
-    test('向监听端口发送激活信号与深链', () async {
+    const testToken =
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+
+    test('向监听端口发送带令牌激活信号与深链并校验 OK 握手', () async {
       final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(server.close);
       final received = Completer<String>();
@@ -37,21 +40,24 @@ void main() {
               if (!received.isCompleted) {
                 received.complete(line);
               }
+              socket.write('OK\n');
+              unawaited(socket.flush().whenComplete(socket.destroy));
             });
       });
 
       final ok = await forwardSingleInstanceActivate(
         port: server.port,
         arguments: ['omninest://photos/9'],
+        tokenOverride: testToken,
       );
       expect(ok, isTrue);
       expect(
         await received.future.timeout(const Duration(seconds: 2)),
-        'OMNINEST_ACTIVATE omninest://photos/9',
+        'OMNINEST_ACTIVATE $testToken omninest://photos/9',
       );
     });
 
-    test('无深链时仅发送激活前缀', () async {
+    test('无深链时仅发送激活前缀与令牌并等待 OK', () async {
       final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(server.close);
       final received = Completer<String>();
@@ -64,24 +70,49 @@ void main() {
               if (!received.isCompleted) {
                 received.complete(line);
               }
+              socket.write('OK\n');
+              unawaited(socket.flush().whenComplete(socket.destroy));
             });
       });
 
-      final ok = await forwardSingleInstanceActivate(port: server.port);
+      final ok = await forwardSingleInstanceActivate(
+        port: server.port,
+        tokenOverride: testToken,
+      );
       expect(ok, isTrue);
       expect(
         await received.future.timeout(const Duration(seconds: 2)),
-        'OMNINEST_ACTIVATE',
+        'OMNINEST_ACTIVATE $testToken',
       );
     });
 
+    test('对端未回写 OK 时超时返回 false', () async {
+      final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(server.close);
+      server.listen((socket) {
+        socket.listen((_) {});
+      });
+
+      final ok = await forwardSingleInstanceActivate(
+        port: server.port,
+        tokenOverride: testToken,
+      );
+      expect(ok, isFalse);
+    });
+
     test('端口无监听时返回 false（放弃保护或转发失败）', () async {
-      final ok = await forwardSingleInstanceActivate(port: 1);
+      final ok = await forwardSingleInstanceActivate(
+        port: 1,
+        tokenOverride: testToken,
+      );
       expect(ok, isFalse);
     });
   });
 
   group('handleSingleInstanceControlLine', () {
+    const testToken =
+        'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
+
     setUp(() {
       debugOverrideActivateMainWindow = () {};
     });
@@ -89,23 +120,42 @@ void main() {
       debugOverrideActivateMainWindow = null;
     });
 
-    test('omninest 深链转交 desktopDeepLinkHandler', () {
+    test('令牌匹配时 omninest 深链转交 desktopDeepLinkHandler', () {
       Uri? got;
       desktopDeepLinkHandler = (uri) => got = uri;
       addTearDown(() => desktopDeepLinkHandler = null);
 
-      handleSingleInstanceControlLine('OMNINEST_ACTIVATE omninest://reader/3');
+      final accepted = handleSingleInstanceControlLine(
+        'OMNINEST_ACTIVATE $testToken omninest://reader/3',
+        expectedToken: testToken,
+      );
+      expect(accepted, isTrue);
       expect(got?.toString(), 'omninest://reader/3');
     });
 
-    test('非激活前缀或非法 scheme 不触发 handler', () {
+    test('令牌缺失或错误时直接拒绝且不触发 handler', () {
       var called = 0;
       desktopDeepLinkHandler = (_) => called++;
       addTearDown(() => desktopDeepLinkHandler = null);
 
-      handleSingleInstanceControlLine('NOPE');
-      handleSingleInstanceControlLine('OMNINEST_ACTIVATE https://x');
-      handleSingleInstanceControlLine('OMNINEST_ACTIVATE');
+      expect(
+        handleSingleInstanceControlLine(
+          'OMNINEST_ACTIVATE wrong_token omninest://reader/3',
+          expectedToken: testToken,
+        ),
+        isFalse,
+      );
+      expect(
+        handleSingleInstanceControlLine(
+          'OMNINEST_ACTIVATE',
+          expectedToken: testToken,
+        ),
+        isFalse,
+      );
+      expect(
+        handleSingleInstanceControlLine('NOPE', expectedToken: testToken),
+        isFalse,
+      );
       expect(called, 0);
     });
   });

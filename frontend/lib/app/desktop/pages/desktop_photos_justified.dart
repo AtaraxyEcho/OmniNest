@@ -332,6 +332,8 @@ mixin _JustifiedPhotosStateMixin<W extends StatefulWidget>
     _ghostPose.value = initialPose;
     final entry = OverlayEntry(
       builder: (overlayContext) {
+        // Positioned 必须直贴 Overlay 的 Stack：语义隔离要放在 Positioned 内部，
+        // 否则 ExcludeSemantics 的代理 RenderObject 会截走 StackParentData。
         return ValueListenableBuilder<_GhostPose?>(
           valueListenable: _ghostPose,
           builder: (context, pose, _) {
@@ -341,13 +343,15 @@ mixin _JustifiedPhotosStateMixin<W extends StatefulWidget>
               top: pose.top,
               width: pose.width,
               height: pose.height,
-              child: IgnorePointer(
-                child: _PhotoDragFeedback(
-                  photos: payload.movingPhotos,
-                  fanOffsets: payload.fanOffsets,
-                  width: pose.width,
-                  height: pose.height,
-                  dropping: pose.dropping,
+              child: ExcludeSemantics(
+                child: IgnorePointer(
+                  child: _PhotoDragFeedback(
+                    photos: payload.movingPhotos,
+                    fanOffsets: payload.fanOffsets,
+                    width: pose.width,
+                    height: pose.height,
+                    dropping: pose.dropping,
+                  ),
                 ),
               ),
             );
@@ -1110,6 +1114,7 @@ class _JustifiedPhotosState extends State<_JustifiedPhotos>
 /// 按行 Sliver 虚拟化的 Justified 照片流，供 [SliverMainAxisGroup] 按日分组消费。
 class _SliverJustifiedPhotos extends StatefulWidget {
   const _SliverJustifiedPhotos({
+    super.key,
     required this.photos,
     required this.targetHeight,
     required this.selection,

@@ -1,6 +1,7 @@
 package com.omninest.modules.music.service;
 
 import com.omninest.common.access.SharedSpaceAccessQuery;
+import com.omninest.common.api.PageClamps;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.music.domain.PlaylistType;
@@ -46,6 +47,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class MusicPlaylistService {
+    private static final int LEGACY_LIST_LIMIT = 2000;
+    private static final int IN_BATCH_SIZE = 500;
+
     private final MusicPlaylistRepository playlistRepository;
     private final MusicPlaylistItemRepository playlistItemRepository;
     private final MusicTrackRepository trackRepository;
@@ -57,20 +61,13 @@ public class MusicPlaylistService {
 
     @Transactional(readOnly = true)
     public List<MusicPlaylistDto> playlists(UUID ownerUserId) {
-        List<MusicPlaylist> playlists = playlistRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId);
-        if (playlists.isEmpty()) {
+        List<MusicPlaylist> rawPlaylists = playlistRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId);
+        if (rawPlaylists.isEmpty()) {
             return List.of();
         }
-        Map<UUID, Long> countMap = playlistItemRepository
-                .countByOwnerUserIdAndPlaylistIdIn(
-                        ownerUserId,
-                        playlists.stream().map(MusicPlaylist::getId).toList()
-                )
-                .stream()
-                .collect(Collectors.toMap(
-                        row -> (UUID) row[0],
-                        row -> (Long) row[1]
-                ));
+        List<MusicPlaylist> playlists = limitList(rawPlaylists, LEGACY_LIST_LIMIT, "playlists");
+        List<UUID> playlistIds = playlists.stream().map(MusicPlaylist::getId).toList();
+        Map<UUID, Long> countMap = countItemsByPlaylistIdsInBatches(ownerUserId, playlistIds);
         Map<UUID, String> coverMap = firstTrackCovers(ownerUserId, playlists);
         return playlists.stream()
                 .map(playlist -> toDto(
@@ -133,8 +130,8 @@ public class MusicPlaylistService {
 
     @Transactional(readOnly = true)
     public Page<MusicTrackDto> playlistTracksPage(UUID ownerUserId, UUID playlistId, int page, int size) {
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.max(size, 1);
+        int safePage = PageClamps.safePage(page);
+        int safeSize = PageClamps.safeSize(size);
         Pageable pageable = PageRequest.of(safePage, safeSize);
         requirePlaylist(ownerUserId, playlistId);
         Page<MusicPlaylistItem> itemPage = playlistItemRepository
@@ -164,20 +161,23 @@ public class MusicPlaylistService {
 
     public List<MusicTrackDto> playlistTracks(UUID ownerUserId, UUID playlistId) {
         requirePlaylist(ownerUserId, playlistId);
-        List<UUID> trackIds = playlistItemRepository
-                .findByOwnerUserIdAndPlaylistIdOrderBySortOrderAscCreatedAtAsc(ownerUserId, playlistId)
-                .stream()
-                .map(MusicPlaylistItem::getTrackId)
-                .toList();
+        List<UUID> trackIds = limitList(
+                playlistItemRepository
+                        .findByOwnerUserIdAndPlaylistIdOrderBySortOrderAscCreatedAtAsc(ownerUserId, playlistId)
+                        .stream()
+                        .map(MusicPlaylistItem::getTrackId)
+                        .toList(),
+                LEGACY_LIST_LIMIT,
+                "playlistTracks");
         if (trackIds.isEmpty()) {
             return List.of();
         }
         Map<UUID, MusicTrack> tracksById =
-                trackRepository.findTracksVisibleToUserByIds(
-                        ownerUserId, sharedVisibility(ownerUserId), trackIds).stream()
+                findVisibleTracksByIdsInBatches(ownerUserId, sharedVisibility(ownerUserId), trackIds).stream()
                         .collect(Collectors.toMap(
                                 MusicTrack::getId,
-                                Function.identity()
+                                Function.identity(),
+                                (first, second) -> first
                         ));
         List<MusicTrack> orderedTracks = trackIds.stream()
                 .map(tracksById::get)
@@ -260,20 +260,21 @@ public class MusicPlaylistService {
     private Map<UUID, String> firstTrackCovers(UUID ownerUserId, List<MusicPlaylist> playlists) {
         List<UUID> playlistIds = playlists.stream().map(MusicPlaylist::getId).toList();
         Map<UUID, UUID> firstTrackIds = new LinkedHashMap<>();
-        for (MusicPlaylistItem item : playlistItemRepository.findOrderedByOwnerAndPlaylistIds(
-                ownerUserId,
-                playlistIds
-        )) {
-            firstTrackIds.putIfAbsent(item.getPlaylistId(), item.getTrackId());
+        for (int start = 0; start < playlistIds.size(); start += IN_BATCH_SIZE) {
+            List<UUID> batch = playlistIds.size() <= IN_BATCH_SIZE
+                    ? playlistIds
+                    : playlistIds.subList(start, Math.min(start + IN_BATCH_SIZE, playlistIds.size()));
+            for (MusicPlaylistItem item : playlistItemRepository.findOrderedByOwnerAndPlaylistIds(ownerUserId, batch)) {
+                firstTrackIds.putIfAbsent(item.getPlaylistId(), item.getTrackId());
+            }
         }
         if (firstTrackIds.isEmpty()) {
             return Map.of();
         }
-        Map<UUID, MusicTrack> tracks = trackRepository
-                .findTracksVisibleToUserByIds(
+        Map<UUID, MusicTrack> tracks = findVisibleTracksByIdsInBatches(
                         ownerUserId, sharedVisibility(ownerUserId), new ArrayList<>(firstTrackIds.values()))
                 .stream()
-                .collect(Collectors.toMap(MusicTrack::getId, Function.identity()));
+                .collect(Collectors.toMap(MusicTrack::getId, Function.identity(), (first, second) -> first));
         Map<UUID, String> covers = new LinkedHashMap<>();
         firstTrackIds.forEach((playlistId, trackId) -> {
             MusicTrack track = tracks.get(trackId);
@@ -325,6 +326,44 @@ public class MusicPlaylistService {
                 itemCount,
                 playlist.getUpdatedAt()
         );
+    }
+
+    private Map<UUID, Long> countItemsByPlaylistIdsInBatches(UUID ownerUserId, List<UUID> playlistIds) {
+        Map<UUID, Long> counts = new LinkedHashMap<>();
+        for (int start = 0; start < playlistIds.size(); start += IN_BATCH_SIZE) {
+            List<UUID> batch = playlistIds.size() <= IN_BATCH_SIZE
+                    ? playlistIds
+                    : playlistIds.subList(start, Math.min(start + IN_BATCH_SIZE, playlistIds.size()));
+            for (Object[] row : playlistItemRepository.countByOwnerUserIdAndPlaylistIdIn(ownerUserId, batch)) {
+                counts.put((UUID) row[0], (Long) row[1]);
+            }
+        }
+        return counts;
+    }
+
+    private List<MusicTrack> findVisibleTracksByIdsInBatches(
+            UUID ownerUserId,
+            SpaceType sharedType,
+            List<UUID> trackIds
+    ) {
+        if (trackIds.size() <= IN_BATCH_SIZE) {
+            return trackRepository.findTracksVisibleToUserByIds(ownerUserId, sharedType, trackIds);
+        }
+        List<MusicTrack> result = new ArrayList<>(trackIds.size());
+        for (int start = 0; start < trackIds.size(); start += IN_BATCH_SIZE) {
+            int end = Math.min(start + IN_BATCH_SIZE, trackIds.size());
+            result.addAll(trackRepository.findTracksVisibleToUserByIds(
+                    ownerUserId, sharedType, trackIds.subList(start, end)));
+        }
+        return result;
+    }
+
+    private <T> List<T> limitList(List<T> items, int limit, String context) {
+        if (items.size() <= limit) {
+            return items;
+        }
+        log.warn("{} 结果集超过安全上限 {}: actual={}", context, limit, items.size());
+        return items.subList(0, limit);
     }
 
     private void recordPlaylistEvent(UUID ownerUserId, MusicPlaylist playlist, SyncAction action) {

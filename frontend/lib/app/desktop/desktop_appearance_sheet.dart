@@ -155,6 +155,15 @@ class DesktopAppearanceSheet extends ConsumerWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       row(
+                        title: l10n.desktopDynamicBackground,
+                        hint: l10n.desktopDynamicBackgroundHint,
+                        trailing: DesktopToggle(
+                          value: appearance.dynamicBg,
+                          label: l10n.desktopDynamicBackground,
+                          onChanged: controller.setDynamicBg,
+                        ),
+                      ),
+                      row(
                         title: l10n.desktopAmbientLight,
                         hint: l10n.desktopAmbientHint,
                         trailing: SizedBox(

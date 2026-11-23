@@ -53,14 +53,17 @@ class DesktopWindowFrame extends ConsumerWidget {
         height: height,
         // 按下即进入缩放：原生边框也是 mousedown 就开始，等手势滑动
         // 识别（18px 滑动阈值）会让 5px 的边上"按下去没反应"。
-        child: IgnorePointer(
-          ignoring: disableResize,
-          child: MouseRegion(
-            cursor: cursor,
-            child: Listener(
-              behavior: HitTestBehavior.opaque,
-              onPointerDown: (_) => controller.startResizing(edge),
-              child: const SizedBox.expand(),
+        // 8 条缩放边为纯指针热区，外包 ExcludeSemantics 防止污染 Windows AXTree。
+        child: ExcludeSemantics(
+          child: IgnorePointer(
+            ignoring: disableResize,
+            child: MouseRegion(
+              cursor: cursor,
+              child: Listener(
+                behavior: HitTestBehavior.opaque,
+                onPointerDown: (_) => controller.startResizing(edge),
+                child: const SizedBox.expand(),
+              ),
             ),
           ),
         ),

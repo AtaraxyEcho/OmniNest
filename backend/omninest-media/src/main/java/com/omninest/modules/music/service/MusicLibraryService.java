@@ -76,6 +76,10 @@ public class MusicLibraryService {
     private static final Set<String> TRACK_SORT_FIELDS = Set.of("title", "artistName", "updatedAt");
     private static final Set<String> ALBUM_SORT_FIELDS = Set.of("updatedAt", "title");
     private static final Set<String> ARTIST_SORT_FIELDS = Set.of("name");
+    /** 非分页兼容列表的硬上限，避免高基数全量查询把海量实体与签名装进内存。 */
+    private static final int LEGACY_LIST_LIMIT = 2000;
+    /** IN 子句批量分片大小，避免超长参数列表触发数据库/驱动限制。 */
+    private static final int IN_BATCH_SIZE = 500;
 
     private final MusicTrackRepository trackRepository;
     private final MusicAlbumRepository albumRepository;
@@ -177,8 +181,11 @@ public class MusicLibraryService {
     @Transactional(readOnly = true)
     public List<MusicTrackDto> albumTracks(UUID ownerUserId, UUID albumId) {
         MusicAlbum album = requireVisibleAlbum(ownerUserId, albumId);
-        return toTrackSummaryDtos(ownerUserId, trackRepository.findVisibleAlbumTracks(
-                ownerUserId, sharedVisibility(ownerUserId), album.getId()));
+        List<MusicTrack> tracks = limitList(
+                trackRepository.findVisibleAlbumTracks(ownerUserId, sharedVisibility(ownerUserId), album.getId()),
+                LEGACY_LIST_LIMIT,
+                "albumTracks");
+        return toTrackSummaryDtos(ownerUserId, tracks);
     }
 
     /**
@@ -206,8 +213,11 @@ public class MusicLibraryService {
     @Transactional(readOnly = true)
     public List<MusicTrackDto> artistTracks(UUID ownerUserId, UUID artistId) {
         MusicArtist artist = requireVisibleArtist(ownerUserId, artistId);
-        return toTrackSummaryDtos(ownerUserId, trackRepository.findVisibleArtistTracks(
-                ownerUserId, sharedVisibility(ownerUserId), artist.getId()));
+        List<MusicTrack> tracks = limitList(
+                trackRepository.findVisibleArtistTracks(ownerUserId, sharedVisibility(ownerUserId), artist.getId()),
+                LEGACY_LIST_LIMIT,
+                "artistTracks");
+        return toTrackSummaryDtos(ownerUserId, tracks);
     }
 
     /**
@@ -227,7 +237,7 @@ public class MusicLibraryService {
 
     /// 曲目分页请求：排序由各分页查询自带，此处只钳制页码与页长。
     private Pageable trackPageRequest(int page, int size) {
-        return PageRequest.of(Math.max(page, 0), Math.max(size, 1));
+        return PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size));
     }
 
     @Transactional(readOnly = true)
@@ -300,8 +310,12 @@ public class MusicLibraryService {
      */
     @Transactional(readOnly = true)
     public List<MusicAlbumDto> artistAlbums(UUID ownerUserId, UUID artistId) {
-        return albumRepository.findVisibleActiveAlbumsByArtist(
-                        ownerUserId, sharedVisibility(ownerUserId), artistId).stream()
+        List<MusicAlbum> albums = limitList(
+                albumRepository.findVisibleActiveAlbumsByArtist(
+                        ownerUserId, sharedVisibility(ownerUserId), artistId),
+                LEGACY_LIST_LIMIT,
+                "artistAlbums");
+        return albums.stream()
                 .map(this::toAlbumDto)
                 .toList();
     }
@@ -312,9 +326,35 @@ public class MusicLibraryService {
         if (trackIds.isEmpty()) {
             return List.of();
         }
-        return toTrackSummaryDtos(ownerUserId, orderByPreferred(trackIds,
-                trackRepository.findTracksVisibleToUserByIds(
-                        ownerUserId, sharedVisibility(ownerUserId), trackIds)));
+        List<UUID> boundedIds = limitList(trackIds, LEGACY_LIST_LIMIT, "favorites");
+        List<MusicTrack> visibleTracks = findVisibleTracksByIdsInBatches(
+                ownerUserId, sharedVisibility(ownerUserId), boundedIds);
+        return toTrackSummaryDtos(ownerUserId, orderByPreferred(boundedIds, visibleTracks));
+    }
+
+    private List<MusicTrack> findVisibleTracksByIdsInBatches(
+            UUID ownerUserId,
+            SpaceType sharedType,
+            List<UUID> trackIds
+    ) {
+        if (trackIds.size() <= IN_BATCH_SIZE) {
+            return trackRepository.findTracksVisibleToUserByIds(ownerUserId, sharedType, trackIds);
+        }
+        List<MusicTrack> result = new ArrayList<>(trackIds.size());
+        for (int start = 0; start < trackIds.size(); start += IN_BATCH_SIZE) {
+            int end = Math.min(start + IN_BATCH_SIZE, trackIds.size());
+            result.addAll(trackRepository.findTracksVisibleToUserByIds(
+                    ownerUserId, sharedType, trackIds.subList(start, end)));
+        }
+        return result;
+    }
+
+    private <T> List<T> limitList(List<T> items, int limit, String context) {
+        if (items.size() <= limit) {
+            return items;
+        }
+        log.warn("{} 结果集超过安全上限 {}: actual={}", context, limit, items.size());
+        return items.subList(0, limit);
     }
 
     /**

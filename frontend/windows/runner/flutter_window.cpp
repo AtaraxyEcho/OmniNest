@@ -4,6 +4,7 @@
 #include <dwmapi.h>
 #include <optional>
 #include <string>
+#include <thread>
 #include <variant>
 
 #include "flutter/generated_plugin_registrant.h"
@@ -20,6 +21,7 @@ constexpr const char kVerifyWindowFrameMethod[] = "verifyWindowFrame";
 constexpr const char kShowWindowMethod[] = "showWindow";
 constexpr const char kIsWindowFullscreenMethod[] = "isWindowFullscreen";
 constexpr const char kFinishTrayMenuPopupMethod[] = "finishTrayMenuPopup";
+constexpr const char kRequestAppExitMethod[] = "requestAppExit";
 constexpr const char kHiddenArgument[] = "hidden";
 constexpr const char kFullscreenArgument[] = "fullscreen";
 constexpr const char kActionArgument[] = "action";
@@ -138,6 +140,27 @@ bool FlutterWindow::OnCreate() {
             // must receive a WM_NULL, otherwise the next tray click can
             // dismiss the freshly opened menu immediately.
             ::PostMessage(GetHandle(), WM_NULL, 0, 0);
+            result->Success(flutter::EncodableValue(true));
+            return;
+          }
+          if (call.method_name() == kRequestAppExitMethod) {
+            HWND hwnd = GetHandle();
+            if (hwnd != nullptr) {
+              // 立即隐藏窗口消除关窗等待期的“未响应”视觉残留。
+              ::ShowWindow(hwnd, SW_HIDE);
+            }
+            // 分离看门狗线程：若 Flutter 引擎/插件析构在 1.5s 内仍未退出主循环，
+            // 直接强制结束进程，避免后台僵尸进程锁死单实例互斥体。
+            std::thread([] {
+              ::Sleep(1500);
+              ::TerminateProcess(::GetCurrentProcess(), 0);
+            }).detach();
+            if (hwnd != nullptr) {
+              // 投递 WM_CLOSE 走正常 DestroyWindow -> WM_DESTROY -> PostQuitMessage(0) 路径。
+              ::PostMessage(hwnd, WM_CLOSE, 0, 0);
+            } else {
+              ::PostQuitMessage(0);
+            }
             result->Success(flutter::EncodableValue(true));
             return;
           }

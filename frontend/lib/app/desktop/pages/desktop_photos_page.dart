@@ -117,6 +117,14 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
   bool _selectionBusy = false;
   bool _purgingTrash = false;
   String? _selectedAlbumId;
+  DateTime? _lastLoadMoreAttemptAt;
+  final Map<String, _PhotoDayHoverState> _dayHoverStates =
+      <String, _PhotoDayHoverState>{};
+
+  static const Duration _loadMoreThrottle = Duration(milliseconds: 300);
+
+  _PhotoDayHoverState _hoverStateForDay(String contextKey) =>
+      _dayHoverStates.putIfAbsent(contextKey, _PhotoDayHoverState.new);
 
   bool _isAsyncSettled(AsyncValue<Object?> state) =>
       !(state.isLoading && !state.hasValue);
@@ -145,6 +153,10 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
   @override
   void dispose() {
     _gateTimer?.cancel();
+    for (final state in _dayHoverStates.values) {
+      state.dispose();
+    }
+    _dayHoverStates.clear();
     HardwareKeyboard.instance.removeHandler(_handlePageKey);
     _photosScrollController
       ..removeListener(_maybeLoadMorePhotos)
@@ -221,8 +233,6 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
             _tab != DesktopPhotosTab.favorites)) {
       return;
     }
-    if (_photosScrollController.position.extentAfter > 600) return;
-
     final favorites = _tab == DesktopPhotosTab.favorites;
     final page =
         ref
@@ -231,6 +241,15 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
             ?.value;
     if (page == null || !page.hasMore) return;
 
+    final now = DateTime.now();
+    final lastAttempt = _lastLoadMoreAttemptAt;
+    if (lastAttempt != null &&
+        now.difference(lastAttempt) < _loadMoreThrottle) {
+      return;
+    }
+    if (_photosScrollController.position.extentAfter > 600) return;
+
+    _lastLoadMoreAttemptAt = now;
     setState(() => _loadingMorePhotos = true);
     unawaited(_loadMorePhotoPage(favorites: favorites));
   }
@@ -478,6 +497,7 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
                         }),
                     onOrderChanged: _savePhotoOrder,
                     onResetOrder: _resetPhotoOrder,
+                    hoverStateOf: _hoverStateForDay,
                   )
                 else
                   SliverToBoxAdapter(

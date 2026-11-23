@@ -353,6 +353,7 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
                                             height: 26,
                                             child: Opacity(
                                               opacity: 0.85,
+                                              alwaysIncludeSemantics: true,
                                               child: DesktopVisualizer(
                                                 playing: playing,
                                                 color: skin.accent,
