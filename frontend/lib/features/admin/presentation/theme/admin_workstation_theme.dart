@@ -4,7 +4,7 @@ import 'package:omninest/core/theme/workstation_skin.dart';
 
 /// Admin 模块“建筑极简主义工位”皮肤。
 ///
-/// 遵循 architectural-minimalism-ui 规范：Zinc 中性冷灰阶、0px 纯直角、
+/// 视觉特征：Zinc 中性冷灰阶、0px 纯直角、
 /// 1px 细线边框、零阴影零渐变、语义状态色仅用于状态点/状态线/小徽章。
 /// 公共色板与组件主题由 core/theme/workstation_skin.dart 提供，
 /// 此处将 WorkstationPalette 映射为 AdminColors 扩展的 Zinc 取值。

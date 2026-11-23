@@ -4,7 +4,7 @@ import 'package:omninest/app/theme/control_tokens.dart';
 
 /// 建筑极简主义工位皮肤公共核心。
 ///
-/// 遵循 architectural-minimalism-ui 规范：Zinc 中性冷灰阶、0px 纯直角、
+/// 视觉特征：Zinc 中性冷灰阶、0px 纯直角、
 /// 1px 细线边框、零阴影零渐变、语义状态色仅用于状态点/状态线/小徽章。
 /// Files 与 Admin 模块共用本核心，各自通过模块级 Scope 注入专属
 /// ThemeExtension 后生效，不影响其他模块的全局主题。
