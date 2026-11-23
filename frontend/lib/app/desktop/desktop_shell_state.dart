@@ -1,8 +1,15 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/theme/desktop/desktop_palette.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/preferences/preference_sync_service.dart';
+
+const desktopAppearancePreferenceScope = 'desktop_appearance';
 
 /// 桌面壳层的外观偏好（样例 Settings → Appearance / Atmosphere）。
 @immutable
@@ -40,6 +47,50 @@ class DesktopAppearance {
       dynamicBg: dynamicBg ?? this.dynamicBg,
     );
   }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'schemaVersion': 1,
+    'accent': accent.name,
+    'ambient': ambient,
+    'reduceMotion': reduceMotion,
+    'compact': compact,
+    'dynamicBg': dynamicBg,
+  };
+
+  factory DesktopAppearance.fromPreferences(
+    Map<String, dynamic> json, {
+    DesktopAppearance fallback = const DesktopAppearance(),
+  }) {
+    final accentRaw = json['accent']?.toString();
+    final ambientRaw = (json['ambient'] as num?)?.toDouble();
+    final reduceRaw = json['reduceMotion'];
+    final compactRaw = json['compact'];
+    final dynamicBgRaw = json['dynamicBg'];
+    return DesktopAppearance(
+      accent:
+          (accentRaw != null && accentRaw.isNotEmpty)
+              ? DesktopAccent.fromName(accentRaw)
+              : fallback.accent,
+      ambient: (ambientRaw ?? fallback.ambient).clamp(0, 100),
+      reduceMotion: reduceRaw is bool ? reduceRaw : fallback.reduceMotion,
+      compact: compactRaw is bool ? compactRaw : fallback.compact,
+      dynamicBg: dynamicBgRaw is bool ? dynamicBgRaw : fallback.dynamicBg,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DesktopAppearance &&
+          accent == other.accent &&
+          ambient == other.ambient &&
+          reduceMotion == other.reduceMotion &&
+          compact == other.compact &&
+          dynamicBg == other.dynamicBg;
+
+  @override
+  int get hashCode =>
+      Object.hash(accent, ambient, reduceMotion, compact, dynamicBg);
 }
 
 final desktopAppearanceProvider =
@@ -47,19 +98,40 @@ final desktopAppearanceProvider =
       DesktopAppearanceController.new,
     );
 
-/// 设备本地偏好：强调色与环境光是「这台机器的观感」，不随账号漫游，
-/// 因此只落 SharedPreferences，不进偏好同步服务。
+/// 桌面外观偏好控制器：本地 SharedPreferences 快速加载，已认证时异步拉取
+/// 服务端 `desktop_appearance` 偏好合并，变更时防抖异步推送服务端。
 class DesktopAppearanceController extends Notifier<DesktopAppearance> {
   static const _accentKey = 'omninest.desktop.accent';
   static const _ambientKey = 'omninest.desktop.ambient';
   static const _reduceKey = 'omninest.desktop.reduceMotion';
   static const _compactKey = 'omninest.desktop.compact';
   static const _dynamicBgKey = 'omninest.desktop.dynamicBg';
+  static const _syncDebounce = Duration(milliseconds: 250);
 
   bool _loaded = false;
+  String? _activeUserId;
+  String? _lastBoundUserId;
+  int _loadGeneration = 0;
+  Timer? _syncDebounceTimer;
+  final Map<String, dynamic> _pendingRemoteChanges = <String, dynamic>{};
 
   @override
-  DesktopAppearance build() => const DesktopAppearance();
+  DesktopAppearance build() {
+    ref.onDispose(() {
+      _syncDebounceTimer?.cancel();
+      _syncDebounceTimer = null;
+      _pendingRemoteChanges.clear();
+    });
+    try {
+      ref.listen(authSessionProvider, (_, next) {
+        final userId = next.value?.user?.id;
+        unawaited(_bindUser(userId));
+      }, fireImmediately: true);
+    } on Object {
+      // 测试或离线环境未注入认证会话时静默回退本地偏好。
+    }
+    return const DesktopAppearance();
+  }
 
   Future<void> load() async {
     if (_loaded) {
@@ -80,30 +152,160 @@ class DesktopAppearanceController extends Notifier<DesktopAppearance> {
     state = state.copyWith(accent: accent);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_accentKey, accent.name);
+    _scheduleRemotePatch(<String, dynamic>{'accent': accent.name});
   }
 
   Future<void> setAmbient(double value) async {
-    state = state.copyWith(ambient: value.clamp(0, 100));
+    final clamped = value.clamp(0, 100).toDouble();
+    state = state.copyWith(ambient: clamped);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_ambientKey, state.ambient);
+    await prefs.setDouble(_ambientKey, clamped);
+    _scheduleRemotePatch(<String, dynamic>{'ambient': clamped});
   }
 
   Future<void> setReduceMotion(bool value) async {
     state = state.copyWith(reduceMotion: value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_reduceKey, value);
+    _scheduleRemotePatch(<String, dynamic>{'reduceMotion': value});
   }
 
   Future<void> setCompact(bool value) async {
     state = state.copyWith(compact: value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_compactKey, value);
+    _scheduleRemotePatch(<String, dynamic>{'compact': value});
   }
 
   Future<void> setDynamicBg(bool value) async {
     state = state.copyWith(dynamicBg: value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_dynamicBgKey, value);
+    _scheduleRemotePatch(<String, dynamic>{'dynamicBg': value});
+  }
+
+  /// 从远端重新同步桌面外观偏好，并保留本地待提交变更。
+  Future<void> refreshFromRemote() async {
+    final userId = _activeUserId;
+    final service = _tryReadSyncService();
+    if (userId == null || service == null) return;
+    final snapshot = await service.synchronize(
+      userId: userId,
+      scope: desktopAppearancePreferenceScope,
+    );
+    if (_activeUserId != userId || snapshot.preferences.isEmpty) return;
+    final resolved = DesktopAppearance.fromPreferences(
+      snapshot.preferences,
+      fallback: state,
+    );
+    state = resolved;
+    await _writeLocal(resolved);
+  }
+
+  Future<void> _bindUser(String? userId) async {
+    final previousUserId = _lastBoundUserId;
+    _activeUserId = userId;
+    final generation = ++_loadGeneration;
+    await load();
+    if (generation != _loadGeneration || _activeUserId != userId) {
+      return;
+    }
+    if (userId == null) {
+      _syncDebounceTimer?.cancel();
+      _pendingRemoteChanges.clear();
+      return;
+    }
+
+    final service = _tryReadSyncService();
+    if (service == null) {
+      return;
+    }
+    try {
+      final snapshot = await service.load(
+        userId: userId,
+        scope: desktopAppearancePreferenceScope,
+      );
+      if (generation != _loadGeneration || _activeUserId != userId) {
+        return;
+      }
+      if (snapshot.preferences.isEmpty) {
+        final switchedAccount =
+            previousUserId != null && previousUserId != userId;
+        _lastBoundUserId = userId;
+        if (switchedAccount) {
+          return;
+        }
+        await service.patch(
+          userId: userId,
+          scope: desktopAppearancePreferenceScope,
+          changes: state.toJson(),
+        );
+        return;
+      }
+      _lastBoundUserId = userId;
+      final resolved = DesktopAppearance.fromPreferences(
+        snapshot.preferences,
+        fallback: state,
+      );
+      state = resolved;
+      await _writeLocal(resolved);
+    } on Object {
+      // 离线或无同步依赖注入时静默保留本地偏好。
+    }
+  }
+
+  void _scheduleRemotePatch(Map<String, dynamic> changes) {
+    final userId = _activeUserId;
+    if (userId == null) {
+      return;
+    }
+    _pendingRemoteChanges.addAll(changes);
+    _syncDebounceTimer?.cancel();
+    _syncDebounceTimer = Timer(_syncDebounce, () {
+      unawaited(_flushRemotePatch(userId));
+    });
+  }
+
+  Future<void> _flushRemotePatch(String userId) async {
+    if (_activeUserId != userId || _pendingRemoteChanges.isEmpty) {
+      return;
+    }
+    final service = _tryReadSyncService();
+    if (service == null) {
+      _pendingRemoteChanges.clear();
+      return;
+    }
+    final payload = <String, dynamic>{
+      'schemaVersion': 1,
+      ..._pendingRemoteChanges,
+    };
+    _pendingRemoteChanges.clear();
+    try {
+      await service.patch(
+        userId: userId,
+        scope: desktopAppearancePreferenceScope,
+        changes: payload,
+      );
+    } on Object {
+      // 离线或远端失败时静默保留本地配置，由 pending 与下次同步收敛。
+    }
+  }
+
+  PreferenceSyncService? _tryReadSyncService() {
+    try {
+      return ref.read(preferenceSyncServiceProvider);
+    } on Object {
+      return null;
+    }
+  }
+
+  Future<void> _writeLocal(DesktopAppearance appearance) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_accentKey, appearance.accent.name);
+    await prefs.setDouble(_ambientKey, appearance.ambient);
+    await prefs.setBool(_reduceKey, appearance.reduceMotion);
+    await prefs.setBool(_compactKey, appearance.compact);
+    await prefs.setBool(_dynamicBgKey, appearance.dynamicBg);
   }
 }
 

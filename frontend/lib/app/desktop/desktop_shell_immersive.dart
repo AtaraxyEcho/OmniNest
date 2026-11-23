@@ -1,5 +1,47 @@
 part of 'desktop_shell.dart';
 
+/// 桌面端根 `Navigator` 沉浸式全窗路由覆盖壳层。
+///
+/// 用于 `parentNavigatorKey: rootNavigatorKey` 的沉浸路由页面：补齐无边框窗口
+/// 顶部拖拽条、`DesktopToasts()` 与 `DesktopShellScope(hosted: false)`；
+/// 无桌面壳宿主（移动端或未登录过渡态）时直接透传 `child`。
+class DesktopImmersiveOverlay extends ConsumerWidget {
+  const DesktopImmersiveOverlay({
+    required this.path,
+    required this.child,
+    super.key,
+  });
+
+  final String path;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hasDesktopHost =
+        context.dependOnInheritedWidgetOfExactType<DesktopRouterScope>() !=
+            null &&
+        Theme.of(context).extension<DesktopSkin>() != null;
+    if (!hasDesktopHost) {
+      return child;
+    }
+    final routePath = Uri.tryParse(path)?.path ?? path.split('?').first;
+    final backdropConfigured = ref.watch(
+      appBackdropControllerProvider.select(
+        (async) => async.asData?.value.hasActiveBackdrop ?? false,
+      ),
+    );
+    final backdropScope = ref.watch(desktopBackdropScopeProvider);
+    final backdropActive =
+        backdropConfigured &&
+        desktopBackdropAppliesToRoute(backdropScope, routePath);
+    return DesktopShellScope(
+      hosted: false,
+      backdropActive: backdropActive,
+      child: _DesktopImmersiveCanvas(path: path, child: child),
+    );
+  }
+}
+
 /// 沉浸路由前景覆盖层（与常规工作区共享底层 `_AmbientLayer` 与 `DesktopBackdropLayer`，
 /// 避免进出沉浸页时销毁重建环境光双缓冲）。
 class _DesktopImmersiveCanvas extends ConsumerWidget {

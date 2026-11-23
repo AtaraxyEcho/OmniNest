@@ -231,7 +231,11 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
           child: DesktopThemeScope(child: content),
         );
       } else if (authenticated) {
-        content = DesktopShellHost(router: router, child: content);
+        content = DesktopShellHost(
+          router: router,
+          workspaceManagedByRouter: true,
+          child: content,
+        );
       } else {
         content = DesktopThemeScope(child: content);
       }

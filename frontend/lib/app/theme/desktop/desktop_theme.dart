@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 
 import 'package:omninest/app/theme/app_theme.dart';
@@ -10,6 +12,7 @@ import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
+import 'package:omninest/core/window/window_chrome_controller.dart';
 
 /// 桌面/Web 端主题装配。
 ///
@@ -24,11 +27,18 @@ abstract final class DesktopTheme {
   /// 切换时零重复构图、不触发全应用 `Theme.of` 依赖者重建。
   static final Map<(bool, DesktopAccent, double), ThemeData> _cache = {};
 
+  /// 已向 Windows 原生窗口同步过的亮暗状态，用于跨重建去重。
+  static bool? _lastSyncedIsDark;
+
   static ThemeData resolve({
     required bool isDark,
     DesktopAccent accent = DesktopAccent.sage,
     double fontScale = 1,
   }) {
+    if (_lastSyncedIsDark != isDark) {
+      _lastSyncedIsDark = isDark;
+      unawaited(setThemeBrightness(isDark: isDark));
+    }
     final cacheKey = (isDark, accent, fontScale);
     final cached = _cache[cacheKey];
     if (cached != null) {

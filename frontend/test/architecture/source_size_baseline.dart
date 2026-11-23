@@ -4,7 +4,7 @@
 /// 新增超过 800 行的生产源码必须在此登记，登记即锁定当前行数。
 const sourceLineCaps = <String, int>{
   'lib/app/desktop/desktop_ambient.dart': 863,
-  'lib/app/desktop/desktop_shell.dart': 849,
+  'lib/app/desktop/desktop_np_style.dart': 804,
   'lib/app/desktop/pages/desktop_files_actions.dart': 886,
   'lib/app/desktop/pages/desktop_files_dialogs.dart': 860,
   'lib/app/desktop/pages/desktop_files_table.dart': 923,
@@ -19,12 +19,11 @@ const sourceLineCaps = <String, int>{
   'lib/app/desktop/pages/desktop_photos_page.dart': 850,
   'lib/app/desktop/pages/desktop_reader_page.dart': 855,
   'lib/app/desktop/pages/desktop_series_detail_sections.dart': 809,
-  'lib/app/desktop/pages/desktop_settings_more.dart': 837,
   'lib/app/desktop/pages/desktop_setup_page.dart': 997,
   'lib/app/desktop/widgets/desktop_media_import_dialog.dart': 838,
   'lib/app/desktop/widgets/desktop_places_globe.dart': 990,
   'lib/app/desktop/widgets/desktop_surfaces.dart': 950,
-  'lib/app/router.dart': 1037,
+  'lib/app/router.dart': 944,
   'lib/app/theme/mobile_env_palette.dart': 811,
   'lib/core/widgets/mobile_sample_kit.dart': 847,
   'lib/features/admin/presentation/pages/admin_operations_logs_center.dart':

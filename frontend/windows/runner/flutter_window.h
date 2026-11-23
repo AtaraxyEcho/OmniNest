@@ -7,6 +7,7 @@
 #include <flutter/method_channel.h>
 
 #include <memory>
+#include <optional>
 
 #include "win32_window.h"
 
@@ -30,6 +31,7 @@ class FlutterWindow : public Win32Window {
   /// Atomic border/fullscreen switch: one style write and one SetWindowPos
   /// to avoid repeated FRAMECHANGED/WM_SIZE causing long black frames.
   void ApplyWindowChrome(bool hidden, bool fullscreen);
+  void SetThemeBrightness(bool is_dark);
   void CaptureNormalStylesIfNecessary();
   void SaveWindowPlacement();
   void RestoreWindowPlacement();
@@ -41,6 +43,8 @@ class FlutterWindow : public Win32Window {
   // Fill the client area the Flutter child has not covered yet while the
   // native modal sizing loop runs, so live resize never exposes white.
   void PaintSizingGap(HWND hwnd);
+  COLORREF ResolveSizingGapColor() const;
+  HBRUSH EnsureSizingGapBrush();
   void ResetSizingBrush();
 
   // The project to run.
@@ -63,6 +67,9 @@ class FlutterWindow : public Win32Window {
   // gap fill is confined to the modal sizing loop so maximize/fullscreen
   // paths keep their existing no-erase behaviour.
   bool sizing_move_active_ = false;
+  // App-driven theme brightness (true = light, false = dark). Before Dart
+  // pushes a theme, PaintSizingGap falls back to Windows AppsUseLightTheme.
+  std::optional<bool> app_light_theme_;
   HBRUSH sizing_gap_brush_ = nullptr;
 };
 

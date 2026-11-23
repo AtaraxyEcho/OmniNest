@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/preferences/preference_sync_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const readerPreferenceScope = 'reader';
@@ -14,8 +16,11 @@ final readerPreferencesProvider =
 
 class ReaderPreferencesController extends AsyncNotifier<Map<String, dynamic>> {
   static const _legacyLocalKey = 'reader_view_settings';
+  static const _syncDebounce = Duration(milliseconds: 250);
 
   String? _userId;
+  Timer? _syncDebounceTimer;
+  final Map<String, dynamic> _pendingRemoteChanges = <String, dynamic>{};
 
   /// 远端写入返回后的回写基准。
   ///
@@ -27,59 +32,131 @@ class ReaderPreferencesController extends AsyncNotifier<Map<String, dynamic>> {
 
   @override
   Future<Map<String, dynamic>> build() async {
-    final sessionFuture = ref.watch(authSessionProvider.future);
-    final legacy = await _readLegacyLocal();
-    final session = await sessionFuture;
+    ref.onDispose(() {
+      _syncDebounceTimer?.cancel();
+      _syncDebounceTimer = null;
+      _pendingRemoteChanges.clear();
+    });
+    Future<AuthSessionState>? sessionFuture;
+    try {
+      sessionFuture = ref.watch(authSessionProvider.future);
+    } on Object {
+      sessionFuture = null;
+    }
+    final local = await _readLocal();
+    if (sessionFuture == null) {
+      _userId = null;
+      return local;
+    }
+    AuthSessionState session;
+    try {
+      session = await sessionFuture;
+    } on Object {
+      _userId = null;
+      return local;
+    }
     _userId = session.user?.id;
     final userId = _userId;
     if (userId == null) {
-      return legacy;
+      return local;
     }
-    final service = ref.read(preferenceSyncServiceProvider);
-    var snapshot = await service.load(
-      userId: userId,
-      scope: readerPreferenceScope,
-    );
-    if (snapshot.preferences.isEmpty && legacy.isNotEmpty) {
-      snapshot = await service.patch(
+    final service = _tryReadSyncService();
+    if (service == null) {
+      return local;
+    }
+    try {
+      var snapshot = await service.load(
         userId: userId,
         scope: readerPreferenceScope,
-        changes: legacy,
       );
+      if (snapshot.preferences.isEmpty && local.isNotEmpty) {
+        snapshot = await service.patch(
+          userId: userId,
+          scope: readerPreferenceScope,
+          changes: local,
+        );
+      }
+      final resolved =
+          snapshot.preferences.isEmpty ? local : snapshot.preferences;
+      if (resolved.isNotEmpty) {
+        await _writeLocal(resolved);
+      }
+      return resolved;
+    } on Object {
+      return local;
     }
-    await _clearLegacyLocal();
-    return snapshot.preferences;
   }
 
   Future<void> save(Map<String, dynamic> preferences) async {
     final merged = <String, dynamic>{...?state.asData?.value, ...preferences};
     state = AsyncData(merged);
+    await _writeLocal(merged);
     final userId = _userId;
     if (userId == null) {
       return;
     }
-    final snapshot = await ref
-        .read(preferenceSyncServiceProvider)
-        .patch(
-          userId: userId,
-          scope: readerPreferenceScope,
-          changes: preferences,
-        );
-    state = AsyncData({..._liveOr(merged), ...snapshot.preferences});
+    _pendingRemoteChanges.addAll(preferences);
+    _syncDebounceTimer?.cancel();
+    _syncDebounceTimer = Timer(_syncDebounce, () {
+      unawaited(_flushRemotePatch(userId, merged));
+    });
   }
 
   /// 从远端重新同步阅读偏好，并保留本地待提交变更。
   Future<void> refreshFromRemote() async {
     final userId = _userId;
-    if (userId == null) return;
-    final snapshot = await ref
-        .read(preferenceSyncServiceProvider)
-        .synchronize(userId: userId, scope: readerPreferenceScope);
+    final service = _tryReadSyncService();
+    if (userId == null || service == null) return;
+    final snapshot = await service.synchronize(
+      userId: userId,
+      scope: readerPreferenceScope,
+    );
     if (_userId != userId) return;
     state = AsyncData(snapshot.preferences);
+    await _writeLocal(snapshot.preferences);
   }
 
-  Future<Map<String, dynamic>> _readLegacyLocal() async {
+  Future<void> _flushRemotePatch(
+    String userId,
+    Map<String, dynamic> fallbackMerged,
+  ) async {
+    if (_userId != userId || _pendingRemoteChanges.isEmpty) {
+      return;
+    }
+    final service = _tryReadSyncService();
+    if (service == null) {
+      _pendingRemoteChanges.clear();
+      return;
+    }
+    final payload = Map<String, dynamic>.from(_pendingRemoteChanges);
+    _pendingRemoteChanges.clear();
+    try {
+      final snapshot = await service.patch(
+        userId: userId,
+        scope: readerPreferenceScope,
+        changes: payload,
+      );
+      if (_userId != userId) return;
+      final merged = <String, dynamic>{
+        ..._liveOr(fallbackMerged),
+        ...snapshot.preferences,
+      };
+      state = AsyncData(merged);
+      await _writeLocal(merged);
+    } on Object {
+      // 离线或远端不可用时静默保留本地偏好，由 pending 与下次同步收敛。
+    }
+  }
+
+  PreferenceSyncService? _tryReadSyncService() {
+    try {
+      return ref.read(preferenceSyncServiceProvider);
+    } on Object {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>> _readLocal() async {
     final preferences = await SharedPreferences.getInstance();
     final raw = preferences.getString(_legacyLocalKey);
     if (raw == null || raw.isEmpty) {
@@ -93,8 +170,8 @@ class ReaderPreferencesController extends AsyncNotifier<Map<String, dynamic>> {
     }
   }
 
-  Future<void> _clearLegacyLocal() async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.remove(_legacyLocalKey);
+  Future<void> _writeLocal(Map<String, dynamic> preferences) async {
+    final store = await SharedPreferences.getInstance();
+    await store.setString(_legacyLocalKey, jsonEncode(preferences));
   }
 }

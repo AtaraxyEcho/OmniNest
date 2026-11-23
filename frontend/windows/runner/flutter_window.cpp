@@ -23,9 +23,11 @@ constexpr const char kShowWindowMethod[] = "showWindow";
 constexpr const char kIsWindowFullscreenMethod[] = "isWindowFullscreen";
 constexpr const char kFinishTrayMenuPopupMethod[] = "finishTrayMenuPopup";
 constexpr const char kRequestAppExitMethod[] = "requestAppExit";
+constexpr const char kSetThemeBrightnessMethod[] = "setThemeBrightness";
 constexpr const char kHiddenArgument[] = "hidden";
 constexpr const char kFullscreenArgument[] = "fullscreen";
 constexpr const char kActionArgument[] = "action";
+constexpr const char kIsDarkArgument[] = "isDark";
 }  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -57,6 +59,28 @@ bool FlutterWindow::OnCreate() {
       [this](const flutter::MethodCall<flutter::EncodableValue>& call,
              std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
                  result) {
+        if (call.method_name() == kSetThemeBrightnessMethod) {
+          std::optional<bool> is_dark;
+          if (const auto* raw_bool = std::get_if<bool>(call.arguments())) {
+            is_dark = *raw_bool;
+          } else if (const auto* arguments =
+                         std::get_if<flutter::EncodableMap>(call.arguments())) {
+            const auto entry =
+                arguments->find(flutter::EncodableValue(kIsDarkArgument));
+            if (entry != arguments->end()) {
+              if (const auto* value = std::get_if<bool>(&entry->second)) {
+                is_dark = *value;
+              }
+            }
+          }
+          if (!is_dark.has_value()) {
+            result->Error("bad_args", "isDark bool argument is required");
+            return;
+          }
+          SetThemeBrightness(*is_dark);
+          result->Success(flutter::EncodableValue(true));
+          return;
+        }
         if (call.method_name() == kApplyWindowChromeMethod) {
           const auto* arguments =
               std::get_if<flutter::EncodableMap>(call.arguments());
@@ -307,8 +331,58 @@ void FlutterWindow::SyncFlutterViewChild() {
   }
 }
 
+void FlutterWindow::SetThemeBrightness(bool is_dark) {
+  const bool next_light = !is_dark;
+  if (app_light_theme_.has_value() && *app_light_theme_ == next_light &&
+      sizing_gap_brush_ != nullptr) {
+    return;
+  }
+  app_light_theme_ = next_light;
+  ResetSizingBrush();
+  EnsureSizingGapBrush();
+}
+
+COLORREF FlutterWindow::ResolveSizingGapColor() const {
+  bool light_theme = true;
+  if (app_light_theme_.has_value()) {
+    light_theme = *app_light_theme_;
+  } else {
+    DWORD light_mode = 1;
+    DWORD size = sizeof(light_mode);
+    RegGetValue(HKEY_CURRENT_USER,
+                L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\"
+                L"Personalize",
+                L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr, &light_mode,
+                &size);
+    light_theme = light_mode != 0;
+  }
+  // 与桌面皮肤 --bg 同源（DesktopPalette.bgDark #0B0E11 / bgLight #F5F4EF）。
+  return light_theme ? RGB(245, 244, 239) : RGB(11, 14, 17);
+}
+
+HBRUSH FlutterWindow::EnsureSizingGapBrush() {
+  if (sizing_gap_brush_ == nullptr) {
+    sizing_gap_brush_ = CreateSolidBrush(ResolveSizingGapColor());
+    HWND hwnd = GetHandle();
+    if (hwnd != nullptr && sizing_gap_brush_ != nullptr) {
+      ::SetClassLongPtr(hwnd, GCLP_HBRBACKGROUND,
+                        reinterpret_cast<LONG_PTR>(sizing_gap_brush_));
+    }
+  }
+  return sizing_gap_brush_;
+}
+
 void FlutterWindow::ResetSizingBrush() {
   if (sizing_gap_brush_ != nullptr) {
+    HWND hwnd = GetHandle();
+    if (hwnd != nullptr &&
+        static_cast<ULONG_PTR>(
+            ::GetClassLongPtr(hwnd, GCLP_HBRBACKGROUND)) ==
+            reinterpret_cast<ULONG_PTR>(sizing_gap_brush_)) {
+      ::SetClassLongPtr(
+          hwnd, GCLP_HBRBACKGROUND,
+          reinterpret_cast<LONG_PTR>(::GetStockObject(BLACK_BRUSH)));
+    }
     DeleteObject(sizing_gap_brush_);
     sizing_gap_brush_ = nullptr;
   }
@@ -335,19 +409,9 @@ void FlutterWindow::PaintSizingGap(HWND hwnd) {
   if (covered_right >= client.right && covered_bottom >= client.bottom) {
     return;
   }
-  if (sizing_gap_brush_ == nullptr) {
-    // 与桌面皮肤 --bg 同源（palette bgDark/bgLight）；按系统主题取色，
-    // 浅色档露出浅底而不是黑带。读一次缓存到循环结束。
-    DWORD light_mode = 1;
-    DWORD size = sizeof(light_mode);
-    RegGetValue(HKEY_CURRENT_USER,
-                L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\"
-                L"Personalize",
-                L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr, &light_mode,
-                &size);
-    const COLORREF color =
-        light_mode == 0 ? RGB(11, 14, 17) : RGB(238, 240, 236);
-    sizing_gap_brush_ = CreateSolidBrush(color);
+  HBRUSH brush = EnsureSizingGapBrush();
+  if (brush == nullptr) {
+    return;
   }
   HDC dc = GetDC(hwnd);
   if (dc == nullptr) {
@@ -356,11 +420,11 @@ void FlutterWindow::PaintSizingGap(HWND hwnd) {
   // 只填子窗口没盖住的右/下两条，避免整幅客户区重绘与子窗口内容打架。
   if (covered_right < client.right) {
     RECT strip = {covered_right, 0, client.right, client.bottom};
-    FillRect(dc, &strip, sizing_gap_brush_);
+    FillRect(dc, &strip, brush);
   }
   if (covered_bottom < client.bottom) {
     RECT strip = {0, covered_bottom, covered_right, client.bottom};
-    FillRect(dc, &strip, sizing_gap_brush_);
+    FillRect(dc, &strip, brush);
   }
   ReleaseDC(hwnd, dc);
 }
@@ -676,7 +740,11 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       break;
     case WM_EXITSIZEMOVE:
       sizing_move_active_ = false;
-      ResetSizingBrush();
+      // 未收到应用内主题下发时退出缩放后释放缓存画刷，下次缩放重新读系统注册表；
+      // 已由应用显式指定主题时保留画刷以维持窗口类背景刷同步。
+      if (!app_light_theme_.has_value()) {
+        ResetSizingBrush();
+      }
       if (window_frame_hidden_) {
         ReassertFramelessBorder(hwnd, window_fullscreen_);
       }
@@ -696,6 +764,11 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       // 点击窗口、切换 DPI/主题都会让 DWM 重绘非客户区并重置边框色，
       // 这正是「点一下冒出一圈白边」的时机。break 后仍交给基类处理
       // SetFocus / 几何更新 / 沉浸式深色模式。
+      if ((message == WM_THEMECHANGED ||
+           message == WM_DWMCOLORIZATIONCOLORCHANGED) &&
+          !app_light_theme_.has_value()) {
+        ResetSizingBrush();
+      }
       if (window_frame_hidden_) {
         ReassertFramelessBorder(hwnd, window_fullscreen_);
       }

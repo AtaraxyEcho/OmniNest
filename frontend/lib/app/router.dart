@@ -27,10 +27,10 @@ import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/phone_form_factor.dart';
 import 'package:omninest/app/route/app_route_surface.dart';
 import 'package:omninest/app/route/route_surface.dart';
+import 'package:omninest/app/route/auth_gate.dart';
 import 'package:omninest/app/web_initial_location.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/login_page.dart';
-import 'package:omninest/core/auth/redirect_target.dart';
 import 'package:omninest/core/server/presentation/server_setup_page.dart';
 import 'package:omninest/core/server/server_config_controller.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
@@ -84,6 +84,16 @@ import 'package:omninest/features/video/presentation/pages/movie_player_page.dar
 import 'package:omninest/features/video/presentation/pages/series_detail_page.dart';
 import 'package:omninest/core/window/desktop_close_action.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
+export 'package:omninest/app/route/auth_gate.dart';
+
+/// 根 Navigator 键：复用 `desktopCloseNavigatorKey`，确保窗口关闭确认弹窗与
+/// 沉浸式全窗路由均挂载在桌面工作区壳层之上的同一根导航器中。
+final GlobalKey<NavigatorState> rootNavigatorKey = desktopCloseNavigatorKey;
+
+/// 桌面工作区内容 Navigator 键：挂载在 `ShellRoute`（`DesktopWorkspaceShell`）内，
+/// 与根 Navigator 分层隔离，使沉浸页推入根层时底层工作区零卸载、零重排。
+final GlobalKey<NavigatorState> _desktopWorkspaceNavigatorKey =
+    GlobalKey<NavigatorState>(debugLabel: 'desktop-workspace');
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authRefreshListenable = installBootGate(ref);
@@ -108,7 +118,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   // 读取恢复初始路由；原生端无地址栏，固定从门户进入。
   final webInitialLocation = kIsWeb ? readWebInitialLocation() : null;
   final router = GoRouter(
-    navigatorKey: desktopCloseNavigatorKey,
+    navigatorKey: rootNavigatorKey,
     initialLocation: webInitialLocation ?? '/',
     refreshListenable: authRefreshListenable,
     redirect: (context, state) => _redirect(ref, state),
@@ -124,12 +134,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
       _animatedRoute('/server-setup', (state) => const ServerSetupPage()),
-      // 通知中心为根级路由：移动壳层启用时经 MobileHostedRoute 补挂
-      // scope，页面分叉移动形态且页内弹窗走底部面板。极性随外观设置。
-      _animatedRoute(
-        '/notifications',
-        (state) => const MobileHostedRoute(child: NotificationPage()),
-      ),
       GoRoute(
         path: '/profile/notifications',
         // 通知偏好并入新个人中心的移动形态二级视图；桌面壳层经
@@ -150,274 +154,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         redirect: (context, state) => '/profile?section=appearance',
-      ),
-      _animatedRoute(
-        '/tools',
-        (_) => const MobileHostedRoute(child: WorkspaceToolsPage()),
-      ),
-      _animatedRoute(
-        '/profile',
-        (state) => DesktopFormSwitch(
-          desktop: DesktopSettingsPage(
-            initialSection: state.uri.queryParameters['section'],
-          ),
-          mobile: MobileHostedRoute(
-            child: ProfilePage(
-              initialSection: state.uri.queryParameters['section'],
-            ),
-          ),
-        ),
-      ),
-      StatefulShellRoute(
-        pageBuilder: (context, state, navigationShell) {
-          final shell = MobileAppShell(navigationShell: navigationShell);
-          if (_isDesktopRouteContext(context)) {
-            return NoTransitionPage<void>(key: state.pageKey, child: shell);
-          }
-          return buildAppRoutePage(key: state.pageKey, child: shell);
-        },
-        navigatorContainerBuilder: _buildSemanticsSafeBranchContainer,
-        branches: [
-          StatefulShellBranch(
-            routes: [
-              _animatedRoute(
-                '/portal',
-                (state) => const DesktopFormSwitch(
-                  desktop: DesktopHomePage(),
-                  mobile: PortalPage(),
-                ),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              _animatedRoute('/library', (state) => const LibrarySpacePage()),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              _readerRoute(
-                '/reader',
-                (state) => const DesktopFormSwitch(
-                  desktop: DesktopReaderPage(),
-                  mobile: ReaderCenterPage(),
-                ),
-              ),
-              _readerRoute(
-                '/reader/bookshelf',
-                (state) => const DesktopFormSwitch(
-                  desktop: DesktopReaderPage(initialLibrary: true),
-                  mobile: ReaderBookshelfPage(),
-                ),
-              ),
-              _readerRoute('/reader/stats', (state) => const ReaderStatsPage()),
-              _readerRoute('/reader/admin', (state) => const ReaderAdminPage()),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              _animatedRoute(
-                '/files',
-                (state) => DesktopFormSwitch(
-                  // 工具总入口按分区直达；非枚举名一律回默认分区。
-                  desktop: DesktopFilesPage(
-                    initialSection: fileManagerSectionFromRouteName(
-                      state.uri.queryParameters['section'],
-                    ),
-                  ),
-                  mobile: FileBrowserPage(
-                    initialSection: fileManagerSectionFromRouteName(
-                      state.uri.queryParameters['section'],
-                    ),
-                    initialOAuthStatus: state.uri.queryParameters['oauth'],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-      // 搜索结果直接打开文件预览：命中项只有文件 ID，先回源节点再渲染。
-      _desktopDetailRoute(
-        '/files/preview/:fileId',
-        (state) => MobileHostedRoute(
-          child: FilePreviewRoutePage(fileId: state.pathParameters['fileId']!),
-        ),
-      ),
-      // 全局搜索：跨内容类型的统一查找覆盖层，不属于一级导航。
-      // 覆盖层自带近乎实底的深色底，因此包 hosted 作用域并列入壳层自有路径，
-      // 不接路由级环境档；`scope` 查询参数决定预选的内容档。
-      _animatedRoute(
-        '/search',
-        (state) => MobileHostedRoute(
-          child: MobileSearchPage(
-            initialScope: _searchScopeFromQuery(
-              state.uri.queryParameters['scope'],
-            ),
-          ),
-        ),
-      ),
-      // 音乐/照片/影视不再占据一级导航，作为全屏模块页从 Library 或
-      // 深链进入；移动壳层启用时经 MobileHostedRoute 补挂 scope，模块
-      // 页分叉移动形态（样例 module-overlay）且页内弹窗走底部面板。
-      _animatedRoute(
-        '/music',
-        (state) => const DesktopFormSwitch(
-          desktop: DesktopMusicPage(),
-          mobile: MobileHostedRoute(child: MusicCenterPage()),
-        ),
-      ),
-      _animatedRoute(
-        '/photos',
-        (state) => const DesktopFormSwitch(
-          desktop: DesktopPhotosPage(),
-          mobile: MobileHostedRoute(child: PhotosPage()),
-        ),
-      ),
-      _animatedRoute(
-        '/video',
-        (state) => DesktopFormSwitch(
-          desktop: DesktopMoviesPage(
-            initialTab: desktopMoviesTabFromSection(
-              state.uri.queryParameters['section'],
-            ),
-          ),
-          mobile: MobileHostedRoute(
-            child: MovieCenterPage(
-              initialSection: movieSectionFromRouteName(
-                state.uri.queryParameters['section'],
-              ),
-            ),
-          ),
-        ),
-      ),
-      _desktopDetailRoute(
-        '/video/:videoId',
-        (state) => DesktopFormSwitch(
-          desktop: DesktopMovieDetailPage(
-            videoItemId: state.pathParameters['videoId'] ?? '',
-          ),
-          mobile: MobileHostedRoute(
-            child: MovieDetailPage(
-              videoItemId: state.pathParameters['videoId'] ?? '',
-            ),
-          ),
-        ),
-      ),
-      _desktopDetailRoute('/video/series/:seriesId', (state) {
-        final seriesId = state.pathParameters['seriesId'] ?? '';
-        return DesktopFormSwitch(
-          desktop: DesktopSeriesDetailPage(seriesId: seriesId),
-          mobile: MobileHostedRoute(
-            child: SeriesDetailPage(seriesId: seriesId),
-          ),
-        );
-      }),
-      _desktopViewerRoute(
-        '/video/:videoId/play',
-        (state) => MoviePlayerPage(
-          videoItemId: state.pathParameters['videoId'] ?? '',
-          fromStart: state.uri.queryParameters['fromStart'] == '1',
-        ),
-        duration: DesktopMotion.immersiveViewerEnter,
-      ),
-      _desktopNowPlayingRoute(
-        '/music/now-playing',
-        (state) => DesktopFormSwitch(
-          desktop: const DesktopNowPlayingPage(),
-          mobile: Builder(
-            builder:
-                (context) => MusicImmersiveOverlay(
-                  onClose: () {
-                    if (context.canPop()) {
-                      context.pop();
-                    } else {
-                      context.go('/music');
-                    }
-                  },
-                ),
-          ),
-        ),
-      ),
-      _desktopDetailRoute(
-        '/music/history',
-        (_) => const MobileHostedRoute(child: MusicHistoryPage()),
-      ),
-      _desktopDetailRoute(
-        '/music/scan',
-        (_) => const MobileHostedRoute(child: MusicScanPage()),
-      ),
-      _desktopDetailRoute(
-        '/photos/albums/:albumId',
-        (state) =>
-            PhotoAlbumDetailPage(albumId: state.pathParameters['albumId']!),
-      ),
-      _desktopDetailRoute(
-        '/photos/albums/:albumId/add',
-        (state) => PhotoAlbumPhotoPickerPage(
-          albumId: state.pathParameters['albumId']!,
-        ),
-      ),
-      GoRoute(
-        path: '/photos/slideshow',
-        pageBuilder: (context, state) {
-          final extra = state.extra as Map<String, dynamic>? ?? {};
-          final photos = (extra['photos'] as List<PhotoItem>?) ?? [];
-          final initialIndex = extra['initialIndex'] as int? ?? 0;
-          final initialPhotoId = extra['initialPhotoId'] as String?;
-          final source =
-              extra['source'] as PhotoBrowseSource? ??
-              PhotoBrowseSource.library;
-          final sourceKey = extra['sourceKey'] as String?;
-          return _immersiveTransitionPage(
-            context,
-            state,
-            AppRouteSurface.environmental(
-              owner: 'route:photos-slideshow',
-              routePath: '/photos/slideshow',
-              child: PhotoSlideshowPage(
-                photos: photos,
-                source: source,
-                sourceKey: sourceKey,
-                initialIndex: initialIndex,
-                initialPhotoId: initialPhotoId,
-              ),
-            ),
-            duration: DesktopMotion.photoViewerEnter,
-          );
-        },
-      ),
-      _desktopDetailRoute(
-        '/photos/groups',
-        (_) => const MobileHostedRoute(child: PhotoGroupsPage()),
-      ),
-      _desktopDetailRoute(
-        '/photos/period/:year/:month',
-        (state) => PhotoPeriodPage(
-          year: int.tryParse(state.pathParameters['year'] ?? '') ?? 0,
-          month: int.tryParse(state.pathParameters['month'] ?? '') ?? 0,
-        ),
-      ),
-      _desktopViewerRoute('/photos/:photoId', (state) {
-        final photoId = state.pathParameters['photoId']!;
-        // GoRouter 对同模式的 path 参数变化可能复用同一个 StatefulWidget。
-        // 没有 id key 时查看器 `_currentId` 仍停在第一次长按/打开的照片，
-        // 表现为「取消长按后点另一张，却打开前一张」。
-        return DesktopFormSwitch(
-          desktop: DesktopPhotoViewerPage(
-            key: ValueKey<String>('desktop-photo-viewer-$photoId'),
-            photoId: photoId,
-          ),
-          mobile: PhotoDetailPage(
-            key: ValueKey<String>('mobile-photo-detail-$photoId'),
-            photoId: photoId,
-          ),
-        );
-      }, duration: DesktopMotion.photoViewerEnter),
-      _desktopViewerRoute(
-        '/photos/:photoId/edit',
-        (state) => PhotoEditorPage(photoId: state.pathParameters['photoId']!),
-        duration: DesktopMotion.immersiveViewerEnter,
       ),
       _animatedRoute(
         '/shared/photos/:token',
@@ -447,8 +183,374 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-      // 书本详情桌面端统一走 `_desktopRoutePage()`，移动端保留既有详情页。
-      _desktopDetailRoute('/reader/items/:itemId', buildReaderItemRoute),
+      // 桌面工作区壳层（双层 Navigator 的内层工作区栈）：
+      // 桌面端渲染完整工作区 chrome（顶栏 + 侧栏 + _RouteEnter + 详情坞 + 播放条）；
+      // 移动端直接透传 child，保持 MobileAppShell 与既有移动导航栈零改动。
+      // 沉浸式全窗路由声明 `parentNavigatorKey: rootNavigatorKey` 推入根 Navigator
+      // 覆盖在本层之上，进出沉浸页时本层零卸载、零尺寸跳变、零重排。
+      ShellRoute(
+        navigatorKey: _desktopWorkspaceNavigatorKey,
+        pageBuilder: (context, state, child) {
+          final content =
+              _isDesktopRouteContext(context)
+                  ? DesktopWorkspaceShell(
+                    path: state.uri.toString(),
+                    child: child,
+                  )
+                  : child;
+          return NoTransitionPage<void>(key: state.pageKey, child: content);
+        },
+        routes: [
+          // 通知中心：移动壳层启用时经 MobileHostedRoute 补挂
+          // scope，页面分叉移动形态且页内弹窗走底部面板。极性随外观设置。
+          _animatedRoute(
+            '/notifications',
+            (state) => const MobileHostedRoute(child: NotificationPage()),
+          ),
+          _animatedRoute(
+            '/tools',
+            (_) => const MobileHostedRoute(child: WorkspaceToolsPage()),
+          ),
+          _animatedRoute(
+            '/profile',
+            (state) => DesktopFormSwitch(
+              desktop: DesktopSettingsPage(
+                initialSection: state.uri.queryParameters['section'],
+              ),
+              mobile: MobileHostedRoute(
+                child: ProfilePage(
+                  initialSection: state.uri.queryParameters['section'],
+                ),
+              ),
+            ),
+          ),
+          StatefulShellRoute(
+            pageBuilder: (context, state, navigationShell) {
+              final shell = MobileAppShell(navigationShell: navigationShell);
+              if (_isDesktopRouteContext(context)) {
+                return NoTransitionPage<void>(key: state.pageKey, child: shell);
+              }
+              return buildAppRoutePage(key: state.pageKey, child: shell);
+            },
+            navigatorContainerBuilder: _buildSemanticsSafeBranchContainer,
+            branches: [
+              StatefulShellBranch(
+                routes: [
+                  _animatedRoute(
+                    '/portal',
+                    (state) => const DesktopFormSwitch(
+                      desktop: DesktopHomePage(),
+                      mobile: PortalPage(),
+                    ),
+                  ),
+                ],
+              ),
+              StatefulShellBranch(
+                routes: [
+                  _animatedRoute(
+                    '/library',
+                    (state) => const LibrarySpacePage(),
+                  ),
+                ],
+              ),
+              StatefulShellBranch(
+                routes: [
+                  _readerRoute(
+                    '/reader',
+                    (state) => const DesktopFormSwitch(
+                      desktop: DesktopReaderPage(),
+                      mobile: ReaderCenterPage(),
+                    ),
+                  ),
+                  _readerRoute(
+                    '/reader/bookshelf',
+                    (state) => const DesktopFormSwitch(
+                      desktop: DesktopReaderPage(initialLibrary: true),
+                      mobile: ReaderBookshelfPage(),
+                    ),
+                  ),
+                  _readerRoute(
+                    '/reader/stats',
+                    (state) => const ReaderStatsPage(),
+                  ),
+                  _readerRoute(
+                    '/reader/admin',
+                    (state) => const ReaderAdminPage(),
+                  ),
+                ],
+              ),
+              StatefulShellBranch(
+                routes: [
+                  _animatedRoute(
+                    '/files',
+                    (state) => DesktopFormSwitch(
+                      // 工具总入口按分区直达；非枚举名一律回默认分区。
+                      desktop: DesktopFilesPage(
+                        initialSection: fileManagerSectionFromRouteName(
+                          state.uri.queryParameters['section'],
+                        ),
+                      ),
+                      mobile: FileBrowserPage(
+                        initialSection: fileManagerSectionFromRouteName(
+                          state.uri.queryParameters['section'],
+                        ),
+                        initialOAuthStatus: state.uri.queryParameters['oauth'],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          // 搜索结果直接打开文件预览：命中项只有文件 ID，先回源节点再渲染。
+          _desktopDetailRoute(
+            '/files/preview/:fileId',
+            (state) => MobileHostedRoute(
+              child: FilePreviewRoutePage(
+                fileId: state.pathParameters['fileId']!,
+              ),
+            ),
+          ),
+          // 全局搜索：跨内容类型的统一查找覆盖层，不属于一级导航。
+          // 覆盖层自带近乎实底的深色底，因此包 hosted 作用域并列入壳层自有路径，
+          // 不接路由级环境档；`scope` 查询参数决定预选的内容档。
+          _animatedRoute(
+            '/search',
+            (state) => MobileHostedRoute(
+              child: MobileSearchPage(
+                initialScope: _searchScopeFromQuery(
+                  state.uri.queryParameters['scope'],
+                ),
+              ),
+            ),
+          ),
+          // 音乐/照片/影视不再占据一级导航，作为全屏模块页从 Library 或
+          // 深链进入；移动壳层启用时经 MobileHostedRoute 补挂 scope，模块
+          // 页分叉移动形态（样例 module-overlay）且页内弹窗走底部面板。
+          _animatedRoute(
+            '/music',
+            (state) => const DesktopFormSwitch(
+              desktop: DesktopMusicPage(),
+              mobile: MobileHostedRoute(child: MusicCenterPage()),
+            ),
+          ),
+          _animatedRoute(
+            '/photos',
+            (state) => const DesktopFormSwitch(
+              desktop: DesktopPhotosPage(),
+              mobile: MobileHostedRoute(child: PhotosPage()),
+            ),
+          ),
+          _animatedRoute(
+            '/video',
+            (state) => DesktopFormSwitch(
+              desktop: DesktopMoviesPage(
+                initialTab: desktopMoviesTabFromSection(
+                  state.uri.queryParameters['section'],
+                ),
+              ),
+              mobile: MobileHostedRoute(
+                child: MovieCenterPage(
+                  initialSection: movieSectionFromRouteName(
+                    state.uri.queryParameters['section'],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          _desktopDetailRoute(
+            '/video/:videoId',
+            (state) => DesktopFormSwitch(
+              desktop: DesktopMovieDetailPage(
+                videoItemId: state.pathParameters['videoId'] ?? '',
+              ),
+              mobile: MobileHostedRoute(
+                child: MovieDetailPage(
+                  videoItemId: state.pathParameters['videoId'] ?? '',
+                ),
+              ),
+            ),
+          ),
+          _desktopDetailRoute('/video/series/:seriesId', (state) {
+            final seriesId = state.pathParameters['seriesId'] ?? '';
+            return DesktopFormSwitch(
+              desktop: DesktopSeriesDetailPage(seriesId: seriesId),
+              mobile: MobileHostedRoute(
+                child: SeriesDetailPage(seriesId: seriesId),
+              ),
+            );
+          }),
+          _desktopDetailRoute(
+            '/music/history',
+            (_) => const MobileHostedRoute(child: MusicHistoryPage()),
+          ),
+          _desktopDetailRoute(
+            '/music/scan',
+            (_) => const MobileHostedRoute(child: MusicScanPage()),
+          ),
+          _desktopDetailRoute(
+            '/photos/albums/:albumId',
+            (state) =>
+                PhotoAlbumDetailPage(albumId: state.pathParameters['albumId']!),
+          ),
+          _desktopDetailRoute(
+            '/photos/albums/:albumId/add',
+            (state) => PhotoAlbumPhotoPickerPage(
+              albumId: state.pathParameters['albumId']!,
+            ),
+          ),
+          _desktopDetailRoute(
+            '/photos/groups',
+            (_) => const MobileHostedRoute(child: PhotoGroupsPage()),
+          ),
+          _desktopDetailRoute(
+            '/photos/period/:year/:month',
+            (state) => PhotoPeriodPage(
+              year: int.tryParse(state.pathParameters['year'] ?? '') ?? 0,
+              month: int.tryParse(state.pathParameters['month'] ?? '') ?? 0,
+            ),
+          ),
+          // 书本详情桌面端统一走 `_desktopRoutePage()`，移动端保留既有详情页。
+          _desktopDetailRoute('/reader/items/:itemId', buildReaderItemRoute),
+          _desktopDetailRoute(
+            '/reader/items/:itemId/metadata',
+            (state) =>
+                ReaderMetadataEditPage(itemId: state.pathParameters['itemId']!),
+          ),
+          _desktopDetailRoute('/reader/items/:itemId/import-status', (state) {
+            final args = state.extra as ComicImportConfirmArgs?;
+            final itemId = state.pathParameters['itemId']!;
+            return ComicImportConfirmPage(
+              itemId: itemId,
+              manifest:
+                  args?.manifest ??
+                  ComicManifest(
+                    itemId: itemId,
+                    sources: const [],
+                    catalog: const [],
+                    pages: const [],
+                    importStatus: 'PARSING',
+                  ),
+              fileName: args?.fileName ?? '',
+            );
+          }),
+          // Admin 作为 Portal 之上的独立路由节点（push 进入、pop 返回）。
+          // 两条路由共用固定 pageKey 保证跨分区跳转原地更新；桌面端统一走
+          // `_desktopRoutePage()`，消除移动端 MaterialPage 侧滑过渡。
+          GoRoute(
+            path: '/admin',
+            pageBuilder:
+                (context, state) => _desktopRoutePage(
+                  context,
+                  state,
+                  routeSurface('/admin', const AdminDashboardPage()),
+                  pageKey: _adminPageKey,
+                ),
+          ),
+          GoRoute(
+            path: '/admin/:section',
+            pageBuilder:
+                (context, state) => _desktopRoutePage(
+                  context,
+                  state,
+                  routeSurface(
+                    '/admin/:section',
+                    AdminDashboardPage(
+                      initialSectionSegment: state.pathParameters['section'],
+                    ),
+                  ),
+                  pageKey: _adminPageKey,
+                ),
+          ),
+        ],
+      ),
+      // 沉浸式全窗路由：统一挂载在 `rootNavigatorKey`，直接覆盖完整工作区，
+      // 置于工作区 `ShellRoute` 之后以确保 `/photos/groups` 等静态路径优先匹配。
+      _desktopViewerRoute(
+        '/video/:videoId/play',
+        (state) => MoviePlayerPage(
+          videoItemId: state.pathParameters['videoId'] ?? '',
+          fromStart: state.uri.queryParameters['fromStart'] == '1',
+        ),
+        duration: DesktopMotion.immersiveViewerEnter,
+        parentNavigatorKey: rootNavigatorKey,
+      ),
+      _desktopNowPlayingRoute(
+        '/music/now-playing',
+        (state) => DesktopFormSwitch(
+          desktop: const DesktopNowPlayingPage(),
+          mobile: Builder(
+            builder:
+                (context) => MusicImmersiveOverlay(
+                  onClose: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go('/music');
+                    }
+                  },
+                ),
+          ),
+        ),
+        parentNavigatorKey: rootNavigatorKey,
+      ),
+      GoRoute(
+        path: '/photos/slideshow',
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          final photos = (extra['photos'] as List<PhotoItem>?) ?? [];
+          final initialIndex = extra['initialIndex'] as int? ?? 0;
+          final initialPhotoId = extra['initialPhotoId'] as String?;
+          final source =
+              extra['source'] as PhotoBrowseSource? ??
+              PhotoBrowseSource.library;
+          final sourceKey = extra['sourceKey'] as String?;
+          return _immersiveTransitionPage(
+            context,
+            state,
+            AppRouteSurface.environmental(
+              owner: 'route:photos-slideshow',
+              routePath: '/photos/slideshow',
+              child: PhotoSlideshowPage(
+                photos: photos,
+                source: source,
+                sourceKey: sourceKey,
+                initialIndex: initialIndex,
+                initialPhotoId: initialPhotoId,
+              ),
+            ),
+            duration: DesktopMotion.photoViewerEnter,
+          );
+        },
+      ),
+      _desktopViewerRoute(
+        '/photos/:photoId',
+        (state) {
+          final photoId = state.pathParameters['photoId']!;
+          // GoRouter 对同模式的 path 参数变化可能复用同一个 StatefulWidget。
+          // 没有 id key 时查看器 `_currentId` 仍停在第一次长按/打开的照片，
+          // 表现为「取消长按后点另一张，却打开前一张」。
+          return DesktopFormSwitch(
+            desktop: DesktopPhotoViewerPage(
+              key: ValueKey<String>('desktop-photo-viewer-$photoId'),
+              photoId: photoId,
+            ),
+            mobile: PhotoDetailPage(
+              key: ValueKey<String>('mobile-photo-detail-$photoId'),
+              photoId: photoId,
+            ),
+          );
+        },
+        duration: DesktopMotion.photoViewerEnter,
+        parentNavigatorKey: rootNavigatorKey,
+      ),
+      _desktopViewerRoute(
+        '/photos/:photoId/edit',
+        (state) => PhotoEditorPage(photoId: state.pathParameters['photoId']!),
+        duration: DesktopMotion.immersiveViewerEnter,
+        parentNavigatorKey: rootNavigatorKey,
+      ),
       _desktopViewerRoute(
         '/reader/items/:itemId/chapters/:chapterId',
         (state) => ReaderViewPage(
@@ -460,29 +562,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ),
         duration: DesktopMotion.immersiveViewerEnter,
+        parentNavigatorKey: rootNavigatorKey,
       ),
-      _desktopDetailRoute(
-        '/reader/items/:itemId/metadata',
-        (state) =>
-            ReaderMetadataEditPage(itemId: state.pathParameters['itemId']!),
-      ),
-      _desktopDetailRoute('/reader/items/:itemId/import-status', (state) {
-        final args = state.extra as ComicImportConfirmArgs?;
-        final itemId = state.pathParameters['itemId']!;
-        return ComicImportConfirmPage(
-          itemId: itemId,
-          manifest:
-              args?.manifest ??
-              ComicManifest(
-                itemId: itemId,
-                sources: const [],
-                catalog: const [],
-                pages: const [],
-                importStatus: 'PARSING',
-              ),
-          fileName: args?.fileName ?? '',
-        );
-      }),
       _desktopViewerRoute(
         '/reader/comics/:itemId/read',
         (state) => ComicReaderPage(
@@ -490,39 +571,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           initialCatalogNodeId: state.uri.queryParameters['catalogNodeId'],
         ),
         duration: DesktopMotion.immersiveViewerEnter,
+        parentNavigatorKey: rootNavigatorKey,
       ),
       _desktopViewerRoute(
         '/reader/pdfs/:itemId/read',
         (state) => PdfReaderPage(itemId: state.pathParameters['itemId']!),
         duration: DesktopMotion.immersiveViewerEnter,
-      ),
-      // Admin 作为 Portal 之上的独立路由节点（push 进入、pop 返回）。
-      // 两条路由共用固定 pageKey 保证跨分区跳转原地更新；桌面端统一走
-      // `_desktopRoutePage()`，消除移动端 MaterialPage 侧滑过渡。
-      GoRoute(
-        path: '/admin',
-        pageBuilder:
-            (context, state) => _desktopRoutePage(
-              context,
-              state,
-              routeSurface('/admin', const AdminDashboardPage()),
-              pageKey: _adminPageKey,
-            ),
-      ),
-      GoRoute(
-        path: '/admin/:section',
-        pageBuilder:
-            (context, state) => _desktopRoutePage(
-              context,
-              state,
-              routeSurface(
-                '/admin/:section',
-                AdminDashboardPage(
-                  initialSectionSegment: state.pathParameters['section'],
-                ),
-              ),
-              pageKey: _adminPageKey,
-            ),
+        parentNavigatorKey: rootNavigatorKey,
       ),
     ],
   );
@@ -702,10 +757,12 @@ Widget buildReaderItemRoute(GoRouterState state) {
 /// 音乐沉浸播放页专属上滑淡入（500ms）与下滑淡出（320ms）。
 GoRoute _desktopNowPlayingRoute(
   String path,
-  Widget Function(GoRouterState state) builder,
-) {
+  Widget Function(GoRouterState state) builder, {
+  GlobalKey<NavigatorState>? parentNavigatorKey,
+}) {
   return GoRoute(
     path: path,
+    parentNavigatorKey: parentNavigatorKey,
     pageBuilder: (context, state) {
       final child = routeSurface(path, builder(state));
       if (!_isDesktopRouteContext(context)) {
@@ -715,7 +772,10 @@ GoRoute _desktopNowPlayingRoute(
         key: state.pageKey,
         transitionDuration: DesktopMotion.nowPlayingIn,
         reverseTransitionDuration: DesktopMotion.nowPlayingOut,
-        child: child,
+        child: DesktopImmersiveOverlay(
+          path: state.uri.toString(),
+          child: child,
+        ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
             return child;
@@ -751,11 +811,15 @@ Page<void> _immersiveTransitionPage(
   Widget child, {
   required Duration duration,
 }) {
+  final wrapped =
+      _isDesktopRouteContext(context)
+          ? DesktopImmersiveOverlay(path: state.uri.toString(), child: child)
+          : child;
   return CustomTransitionPage<void>(
     key: state.pageKey,
     transitionDuration: duration,
     reverseTransitionDuration: duration,
-    child: child,
+    child: wrapped,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
         return child;
@@ -782,9 +846,11 @@ GoRoute _desktopViewerRoute(
   String path,
   Widget Function(GoRouterState state) builder, {
   required Duration duration,
+  GlobalKey<NavigatorState>? parentNavigatorKey,
 }) {
   return GoRoute(
     path: path,
+    parentNavigatorKey: parentNavigatorKey,
     pageBuilder:
         (context, state) => _immersiveTransitionPage(
           context,
@@ -875,163 +941,3 @@ String? _redirect(Ref ref, GoRouterState state) {
     canAccessAdminConsole: ref.read(canAccessAdminConsoleProvider),
   );
 }
-
-/// 服务器配置门控决策；返回 null 表示放行进入后续安装/登录门控链。
-///
-/// 非 Web 端在服务器配置加载期间停泊在引导页（避免空环境下业务页面
-/// 瞬时构建，也避免安装向导在已配置实例上闪现数秒）；加载完成且未
-/// 配置才进入 /server-setup 并保留 redirect 目标（配置完成后经登录页
-/// 续跳）；已配置后访问引导页则按认证状态回到登录或目标页；携带
-/// switch=1 的显式切换请求放行（设置页更换服务器入口使用，覆盖预置
-/// 存在时 clear 后回落预置导致引导页不可达的死角）。
-/// Web 恒有同源推导，不经过服务器门控。
-@visibleForTesting
-String? serverGateRedirectPath({
-  required bool isWeb,
-  required bool isConfigLoading,
-  required bool isConfigured,
-  required bool isAuthenticated,
-  required String location,
-}) {
-  final uri = Uri.parse(location);
-  final path = uri.path;
-  if (!isWeb) {
-    // 配置在途：停泊引导页（带 redirect 目标），已配置实例不再闪现
-    // 安装向导；判定完成且未配置才落 /server-setup。
-    if (isConfigLoading) {
-      // /login 必须一并放行：否则 server gate 把它送进 /boot，auth gate
-      // 又从 /boot 送回 /login，形成永不落地的重定向环（仅原生端）。
-      if (const ['/boot', '/login', '/server-setup'].contains(path)) {
-        return null;
-      }
-      final target = location == '/' ? '/portal' : location;
-      return Uri(
-        path: '/boot',
-        queryParameters: {'redirect': target},
-      ).toString();
-    }
-    if (!isConfigured) {
-      return path == '/server-setup' ? null : _serverSetupLocation(uri);
-    }
-  }
-  if (path == '/server-setup') {
-    if (uri.queryParameters['switch'] == '1') {
-      return null;
-    }
-    final target = _safeRedirectTarget(uri.queryParameters['redirect']);
-    if (isAuthenticated) {
-      return target ?? '/portal';
-    }
-    return target == null
-        ? '/login'
-        : Uri(path: '/login', queryParameters: {'redirect': target}).toString();
-  }
-  return null;
-}
-
-String _serverSetupLocation(Uri uri) {
-  // 配置加载期间深链先停在 /boot?redirect=...；配置完成后必须解包内层目标，
-  // 否则会把 /boot 自身再次编码进 redirect，最终被 _safeRedirectTarget 拒绝。
-  if (uri.path == '/boot') {
-    final inner = _safeRedirectTarget(uri.queryParameters['redirect']);
-    if (inner == null || inner == '/' || inner == '/portal') {
-      return '/server-setup';
-    }
-    return Uri(
-      path: '/server-setup',
-      queryParameters: {'redirect': inner},
-    ).toString();
-  }
-  final target = uri.toString();
-  if (target == '/' || uri.path == '/server-setup' || uri.path == '/login') {
-    return '/server-setup';
-  }
-  return Uri(
-    path: '/server-setup',
-    queryParameters: {'redirect': target},
-  ).toString();
-}
-
-/// 认证与安装门控决策；返回 null 表示放行。
-///
-/// [canAccessAdminConsole] 由调用方经 `canAccessAdminConsoleProvider` 求得
-/// （权限与手机形态的统一事实源），本函数只做路由侧决策。
-String? authRedirectPath({
-  required bool isChecking,
-  required bool isAuthenticated,
-  required String location,
-  required bool canAccessAdminConsole,
-  bool isSetupChecking = false,
-  bool setupRequired = false,
-}) {
-  if (isChecking || isSetupChecking) {
-    // 认证/安装检查在途：仅放行公开路径，受保护路径停泊到引导页。
-    // 避免页面在无凭据状态下构建并发起必然 401 的首批请求——这是
-    // Web 刷新后被强制登出的直接诱因。
-    final uri = Uri.parse(location);
-    final path = uri.path;
-    if (path == '/boot' || _isPublicPath(path) || path == '/server-setup') {
-      return null;
-    }
-    final target = location == '/' ? '/portal' : location;
-    return Uri(path: '/boot', queryParameters: {'redirect': target}).toString();
-  }
-
-  final uri = Uri.parse(location);
-  final path = uri.path;
-  final isLogin = path == '/login';
-
-  if (setupRequired) {
-    return path == '/setup' ? null : '/setup';
-  }
-  if (path == '/boot') {
-    // 检查已结束：按认证结果落位到原目标或登录页。
-    final target = _safeRedirectTarget(uri.queryParameters['redirect']);
-    if (!isAuthenticated) {
-      return Uri(
-        path: '/login',
-        queryParameters: {'redirect': target ?? '/portal'},
-      ).toString();
-    }
-    return target ?? '/portal';
-  }
-  if (path == '/setup') {
-    return isAuthenticated ? '/portal' : '/login';
-  }
-
-  if (isAuthenticated && isLogin) {
-    return _safeRedirectTarget(uri.queryParameters['redirect']) ?? '/portal';
-  }
-
-  // 公开路径不做任何重定向
-  if (_isPublicPath(path)) {
-    return null;
-  }
-
-  if (!isAuthenticated && !_isPublicPath(path)) {
-    final target = location == '/' ? '/portal' : location;
-    return Uri(
-      path: '/login',
-      queryParameters: {'redirect': target},
-    ).toString();
-  }
-
-  // 管理页面：入口判定统一走 canAccessAdminConsoleProvider（权限 +
-  // 手机形态）；分区细粒度由页面权限校验
-  if (isAuthenticated && path.startsWith('/admin')) {
-    if (!canAccessAdminConsole) {
-      return '/portal';
-    }
-  }
-
-  return null;
-}
-
-bool _isPublicPath(String path) {
-  return path == '/login' ||
-      path == '/setup' ||
-      path.startsWith('/shared/photos/') ||
-      path.startsWith('/s/');
-}
-
-String? _safeRedirectTarget(String? redirect) => safeRedirectTarget(redirect);

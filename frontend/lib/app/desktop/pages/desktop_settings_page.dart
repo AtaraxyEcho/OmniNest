@@ -54,6 +54,7 @@ import 'package:omninest/platform/file_pick.dart';
 part 'desktop_settings_backdrop.dart';
 part 'desktop_settings_backdrop_library.dart';
 part 'desktop_settings_more.dart';
+part 'desktop_settings_notifications.dart';
 part 'desktop_settings_weather.dart';
 part 'desktop_settings_storage.dart';
 part 'desktop_settings_controls.dart';

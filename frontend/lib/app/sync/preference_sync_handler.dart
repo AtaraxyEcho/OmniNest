@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/appearance/application/appearance_controller.dart';
 import 'package:omninest/app/appearance/application/font_scale_controller.dart';
+import 'package:omninest/app/desktop/desktop_np_style.dart';
+import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/realtime/realtime_models.dart';
@@ -19,6 +21,8 @@ class PreferenceSyncHandler implements RealtimeScopeHandler {
 
   static const _targets = <String>{
     appearancePreferenceScope,
+    desktopAppearancePreferenceScope,
+    desktopNpStylePreferenceScope,
     localePreferenceScope,
     weatherPreferenceScope,
     readerPreferenceScope,
@@ -81,12 +85,20 @@ class PreferenceSyncHandler implements RealtimeScopeHandler {
             .read(fontScaleControllerProvider.notifier)
             .refreshFromRemote();
         return true;
+      case desktopAppearancePreferenceScope:
+        if (!ref.exists(desktopAppearanceProvider)) return true;
+        await ref.read(desktopAppearanceProvider.notifier).refreshFromRemote();
+        return true;
+      case desktopNpStylePreferenceScope:
+        if (!ref.exists(desktopNpStyleProvider)) return true;
+        await ref.read(desktopNpStyleProvider.notifier).refreshFromRemote();
+        return true;
       case localePreferenceScope:
         await ref.read(localeControllerProvider.notifier).refreshFromRemote();
         return true;
       // 目标 Provider 未挂载时没有本地状态可刷，按已消费确认：页面首次打开
       // 会自取最新偏好，不能因为那一页从未打开就永久重试（全作用域事件要求
-      // 七个目标全部完成，否则一个未打开页面就能卡住整条失效记录）。
+      // 全部目标完成，否则一个未打开页面就能卡住整条失效记录）。
       case weatherPreferenceScope:
         if (!ref.exists(weatherLocationProvider)) return true;
         await ref.read(weatherLocationProvider.future);

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -50,6 +51,7 @@ import 'package:omninest/features/reader/reader_dashboard.dart';
 import 'package:omninest/features/video/video_dashboard.dart';
 
 part 'desktop_shell_immersive.dart';
+part 'desktop_shell_body.dart';
 
 /// 壳层对当前路由的三种姿态。
 enum DesktopShellMode {
@@ -123,11 +125,18 @@ class DesktopShellHost extends ConsumerStatefulWidget {
   const DesktopShellHost({
     required this.router,
     required this.child,
+    this.workspaceManagedByRouter = false,
     super.key,
   });
 
   final GoRouter router;
   final Widget child;
+
+  /// 当 `GoRouter` 已通过桌面工作区 `ShellRoute` 托管 [DesktopWorkspaceShell] 时为 true：
+  /// 宿主层只负责外层窗口框、壁纸/环境光、全局快捷键与作用域，不再在
+  /// `chrome` ↔ `immersive` 切换时卸载 `_Workspace` 或 reparent `Router`。
+  /// 独立单测直接传入简易 `GoRouter` 时默认为 false，保持既有测试兼容。
+  final bool workspaceManagedByRouter;
 
   @override
   ConsumerState<DesktopShellHost> createState() => _DesktopShellHostState();
@@ -150,6 +159,19 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
   /// 用独立 ValueNotifier 向下游分发路由变化，避免每次切页在顶层
   /// `_DesktopShellHostState` 调用 `setState` 重建整棵 `Theme` / Scope 树。
   late final ValueNotifier<String> _pathNotifier = ValueNotifier<String>(_path);
+
+  /// 仅记录常规工作区（`DesktopShellMode.chrome`）的路由位置。
+  /// 当沉浸页推入根 `Navigator` 覆盖在工作区之上时本值保持冻结，
+  /// 确保底层 [DesktopWorkspaceShell] 与 `_RouteEnter` 零重建、零反向淡入。
+  late final ValueNotifier<String> _workspacePathNotifier =
+      ValueNotifier<String>(_initialWorkspacePath(_path));
+
+  static String _initialWorkspacePath(String path) {
+    final routePath = Uri.tryParse(path)?.path ?? path.split('?').first;
+    return desktopShellModeForPath(routePath) == DesktopShellMode.chrome
+        ? path
+        : DesktopRoutes.home;
+  }
 
   /// 音乐中心状态变化后，同一帧只排一次播放会话同步。
   ///
@@ -174,6 +196,7 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
     _lastSyncedPath = _path;
     _lastModule = _desktopTopLevelModule(_lastSyncedPath);
     _pathNotifier.value = _lastSyncedPath;
+    _workspacePathNotifier.value = _initialWorkspacePath(_lastSyncedPath);
     widget.router.routerDelegate.addListener(_onRouteChanged);
     HardwareKeyboard.instance.addHandler(_handleKey);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -199,6 +222,7 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
       _lastSyncedPath = _path;
       _lastModule = _desktopTopLevelModule(_lastSyncedPath);
       _pathNotifier.value = _lastSyncedPath;
+      _workspacePathNotifier.value = _initialWorkspacePath(_lastSyncedPath);
     }
   }
 
@@ -207,6 +231,7 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
     widget.router.routerDelegate.removeListener(_onRouteChanged);
     HardwareKeyboard.instance.removeHandler(_handleKey);
     _pathNotifier.dispose();
+    _workspacePathNotifier.dispose();
     super.dispose();
   }
 
@@ -266,12 +291,26 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
       if (nextModule != null) {
         _lastModule = nextModule;
       }
+      final nextRoutePath =
+          Uri.tryParse(nextPath)?.path ?? nextPath.split('?').first;
+      final isChromeRoute =
+          desktopShellModeForPath(nextRoutePath) == DesktopShellMode.chrome;
       if (phase != SchedulerPhase.persistentCallbacks) {
         _pathNotifier.value = nextPath;
+        if (isChromeRoute) {
+          _workspacePathNotifier.value = nextPath;
+        }
       } else {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             _pathNotifier.value = _lastSyncedPath;
+            final syncedRoutePath =
+                Uri.tryParse(_lastSyncedPath)?.path ??
+                _lastSyncedPath.split('?').first;
+            if (desktopShellModeForPath(syncedRoutePath) ==
+                DesktopShellMode.chrome) {
+              _workspacePathNotifier.value = _lastSyncedPath;
+            }
           }
         });
       }
@@ -499,17 +538,21 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
           child: DesktopToastScope(
             child: DesktopRouterScope(
               router: widget.router,
-              child: ValueListenableBuilder<String>(
-                valueListenable: _pathNotifier,
-                child: widget.child,
-                builder: (context, path, child) {
-                  return _DesktopShellBody(
-                    path: path,
-                    scaffoldBackgroundColor: theme.scaffoldBackgroundColor,
-                    bodyTextStyle: bodyTextStyle,
-                    child: child!,
-                  );
-                },
+              child: _DesktopWorkspacePathScope(
+                notifier: _workspacePathNotifier,
+                child: ValueListenableBuilder<String>(
+                  valueListenable: _pathNotifier,
+                  child: widget.child,
+                  builder: (context, path, child) {
+                    return _DesktopShellBody(
+                      path: path,
+                      scaffoldBackgroundColor: theme.scaffoldBackgroundColor,
+                      bodyTextStyle: bodyTextStyle,
+                      workspaceManagedByRouter: widget.workspaceManagedByRouter,
+                      child: child!,
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -519,254 +562,6 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
   }
 }
 
-class _DesktopShellBody extends ConsumerStatefulWidget {
-  const _DesktopShellBody({
-    required this.path,
-    required this.scaffoldBackgroundColor,
-    required this.bodyTextStyle,
-    required this.child,
-  });
-
-  final String path;
-  final Color scaffoldBackgroundColor;
-  final TextStyle bodyTextStyle;
-  final Widget child;
-
-  @override
-  ConsumerState<_DesktopShellBody> createState() => _DesktopShellBodyState();
-}
-
-class _DesktopShellBodyState extends ConsumerState<_DesktopShellBody> {
-  Timer? _immersiveExitTimer;
-  bool _holdingImmersiveExit = false;
-  bool _suppressNextRouteEnter = false;
-
-  static String _extractRoutePath(String location) =>
-      Uri.tryParse(location)?.path ?? location.split('?').first;
-
-  @override
-  void didUpdateWidget(covariant _DesktopShellBody oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.path == widget.path) {
-      return;
-    }
-    final prevMode = desktopShellModeForPath(_extractRoutePath(oldWidget.path));
-    final nextMode = desktopShellModeForPath(_extractRoutePath(widget.path));
-    if (prevMode == DesktopShellMode.immersive &&
-        nextMode == DesktopShellMode.chrome) {
-      // 从沉浸页返回工作区：抑制 `_RouteEnter` 180ms 淡入避免与退场动画对冲，
-      // 并在 320ms 退场过渡期间保持满屏画布，防止退场中的沉浸页被硬塞进缩窄工作区重排。
-      _immersiveExitTimer?.cancel();
-      _suppressNextRouteEnter = true;
-      final disableAnimations =
-          MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-      if (disableAnimations) {
-        _holdingImmersiveExit = false;
-      } else {
-        _holdingImmersiveExit = true;
-        _immersiveExitTimer = Timer(DesktopMotion.immersiveViewerEnter, () {
-          _immersiveExitTimer = null;
-          if (!mounted) {
-            return;
-          }
-          setState(() => _holdingImmersiveExit = false);
-        });
-      }
-    } else if (nextMode != DesktopShellMode.chrome) {
-      _immersiveExitTimer?.cancel();
-      _immersiveExitTimer = null;
-      _holdingImmersiveExit = false;
-      _suppressNextRouteEnter = false;
-    } else if (!_holdingImmersiveExit) {
-      _suppressNextRouteEnter = false;
-    }
-  }
-
-  @override
-  void dispose() {
-    _immersiveExitTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final routePath = _extractRoutePath(widget.path);
-    final rawMode = desktopShellModeForPath(routePath);
-    final mode =
-        rawMode == DesktopShellMode.chrome && _holdingImmersiveExit
-            ? DesktopShellMode.immersive
-            : rawMode;
-    final backdropConfigured = ref.watch(
-      appBackdropControllerProvider.select(
-        (async) => async.asData?.value.hasActiveBackdrop ?? false,
-      ),
-    );
-    final backdropScope = ref.watch(desktopBackdropScopeProvider);
-    final backdropActive =
-        backdropConfigured &&
-        desktopBackdropAppliesToRoute(backdropScope, routePath);
-
-    final skin = DesktopSkin.of(context);
-    final hostedOrImmersive =
-        mode == DesktopShellMode.chrome || mode == DesktopShellMode.immersive;
-
-    return DesktopShellScope(
-      hosted: mode == DesktopShellMode.chrome,
-      backdropActive: backdropActive,
-      // 壳层与沉浸页都是自绘表面，没有 Scaffold/Card：Material 控件
-      // （TextField、Chip、Checkbox…）要求最近的 Material 祖先，缺了
-      // 会抛 “No Material widget found.”。这里补一层透明 Material，
-      // 并显式透传 DefaultTextStyle，避免 Material 自带 bodyMedium
-      // 改掉未指定 style 的文字尺寸。
-      child: Material(
-        type: MaterialType.transparency,
-        textStyle: widget.bodyTextStyle,
-        child: Overlay.wrap(
-          child:
-              hostedOrImmersive
-                  // 将 BackdropGroup / DesktopWindowFrame / _AmbientLayer 稳定挂载在
-                  // chrome 与 immersive 共享底层，避免进出沉浸页时环境光双缓冲销毁重建。
-                  ? BackdropGroup(
-                    child: DesktopWindowFrame(
-                      child: ColoredBox(
-                        color:
-                            mode == DesktopShellMode.chrome &&
-                                    backdropActive &&
-                                    routePath == DesktopRoutes.home
-                                ? Colors.transparent
-                                : skin.bg,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Offstage(
-                              offstage: backdropActive,
-                              child: TickerMode(
-                                enabled: !backdropActive,
-                                child: _AmbientLayer(
-                                  key: const ValueKey('desktop-shared-ambient'),
-                                  path: widget.path,
-                                ),
-                              ),
-                            ),
-                            if (backdropActive ||
-                                mode == DesktopShellMode.chrome)
-                              DesktopBackdropLayer(path: widget.path),
-                            if (mode == DesktopShellMode.chrome)
-                              _Workspace(
-                                path: widget.path,
-                                suppressRouteEnter: _suppressNextRouteEnter,
-                                child: widget.child,
-                              )
-                            else
-                              _DesktopImmersiveCanvas(
-                                path: widget.path,
-                                child: widget.child,
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  )
-                  : DesktopWindowChrome(
-                    child: ColoredBox(
-                      color: widget.scaffoldBackgroundColor,
-                      child: widget.child,
-                    ),
-                  ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Workspace extends ConsumerWidget {
-  const _Workspace({
-    required this.path,
-    required this.child,
-    this.suppressRouteEnter = false,
-  });
-
-  final String path;
-  final Widget child;
-  final bool suppressRouteEnter;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final skin = DesktopSkin.of(context);
-    final l10n = AppLocalizations.of(context);
-    // 细粒度订阅：仅关注工作区自身渲染的命令面板与快捷键表开关，
-    // 侧栏折叠、详情坞开关、右键菜单与顶栏浮层变化均不再触发工作区整树重建。
-    final commandPaletteOpen = ref.watch(
-      desktopShellProvider.select((s) => s.commandPaletteOpen),
-    );
-    final shortcutsOpen = ref.watch(
-      desktopShellProvider.select((s) => s.shortcutsOpen),
-    );
-    final offline = ref.watch(
-      appOnlineStatusProvider.select((async) => async.asData?.value == false),
-    );
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Column(
-          children: [
-            DesktopTitleBar(path: path),
-            if (offline)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 6,
-                ),
-                color: Color.lerp(skin.bg, skin.warm, 0.22),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(DesktopIcons.wifiOff, size: 14, color: skin.text),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        l10n.desktopOfflineBar,
-                        style: DesktopType.caption(skin.text),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  DesktopSidebar(path: path),
-                  Expanded(
-                    child: _RouteEnter(
-                      path: path,
-                      suppressEnter: suppressRouteEnter,
-                      child: child,
-                    ),
-                  ),
-                  const DesktopDock(),
-                ],
-              ),
-            ),
-          ],
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: DesktopMetrics.playerBarBottom,
-          child: const DesktopPlayerBar(),
-        ),
-        const DesktopPanelLayer(),
-        const DesktopToasts(),
-        const DesktopContextMenu(),
-        if (commandPaletteOpen) const DesktopCommandPalette(),
-        if (shortcutsOpen) const DesktopShortcutsSheet(),
-      ],
-    );
-  }
-}
-
-/// 沉浸路由仍属于桌面窗口画布；壁纸层放在页面内容下方，范围切换与常规工作区一致。
 class DesktopThemeScope extends ConsumerStatefulWidget {
   const DesktopThemeScope({required this.child, super.key});
 

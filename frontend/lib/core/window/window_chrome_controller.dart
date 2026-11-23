@@ -83,6 +83,35 @@ final windowChromeControllerProvider =
 
 const _windowFrameChannel = MethodChannel('omninest/window_frame');
 
+bool? _lastSyncedWindowThemeDark;
+
+/// 同步应用内亮暗主题到 Windows 原生窗口，使缩放补缝画刷与当前主题一致。
+///
+/// 仅在 Windows 桌面端调用 `omninest/window_frame` 通道；测试环境或非 Windows
+/// 宿主未注册原生实现时静默吞掉 [MissingPluginException]。
+Future<void> setThemeBrightness({required bool isDark}) async {
+  if (!isDesktopPlatform || defaultTargetPlatform != TargetPlatform.windows) {
+    return;
+  }
+  if (_lastSyncedWindowThemeDark == isDark) {
+    return;
+  }
+  _lastSyncedWindowThemeDark = isDark;
+  try {
+    await _windowFrameChannel.invokeMethod<void>(
+      'setThemeBrightness',
+      <String, dynamic>{'isDark': isDark},
+    );
+  } on MissingPluginException {
+    // 测试环境或非 Windows 平台未注册原生通道时静默忽略。
+  } on Object catch (error) {
+    _lastSyncedWindowThemeDark = null;
+    if (kDebugMode) {
+      devLog('窗口主题亮暗同步失败: ${error.runtimeType}');
+    }
+  }
+}
+
 /// 启动阶段直接下发无边框样式，返回是否确认生效。
 ///
 /// 此时还没有 Provider 容器（[WindowChromeController] 建不起来），而首帧
@@ -367,6 +396,10 @@ class WindowChromeController extends Notifier<WindowChromeState>
     }
     await windowManager.close();
   }
+
+  /// 同步当前应用亮暗主题到 Windows 原生窗口补缝画刷。
+  Future<void> syncThemeBrightness({required bool isDark}) =>
+      setThemeBrightness(isDark: isDark);
 
   void _setState(WindowChromeState next) {
     // 微任务延迟释放可能在 Provider 容器销毁后触发，禁止已释放回写。
