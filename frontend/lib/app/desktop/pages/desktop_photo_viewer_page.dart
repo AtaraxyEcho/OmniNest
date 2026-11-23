@@ -112,9 +112,9 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
   void _rememberCurrentPhotoAmbient() {
     final photo = _currentPhoto();
     if (photo == null) return;
-    ref
-        .read(desktopAmbientHintProvider.notifier)
-        .rememberPhotoViewed(photo.coverUrl);
+    final notifier = ref.read(desktopAmbientHintProvider.notifier);
+    notifier.rememberPhotoId(photo.id);
+    notifier.rememberPhotoViewed(photo.coverUrl ?? photo.sourceUrl);
   }
 
   void _onPhotoImageError(String url) {

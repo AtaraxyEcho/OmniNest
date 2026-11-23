@@ -413,6 +413,23 @@ class DesktopDrawerFrame extends StatelessWidget {
   }
 }
 
+OverlayState _resolveDesktopOverlay(BuildContext context) {
+  final ancestor = Overlay.maybeOf(context, rootOverlay: true);
+  if (ancestor != null) {
+    return ancestor;
+  }
+  if (context is StatefulElement) {
+    final state = context.state;
+    if (state is OverlayState) {
+      return state;
+    }
+    if (state is NavigatorState && state.overlay != null) {
+      return state.overlay!;
+    }
+  }
+  return Overlay.of(context, rootOverlay: true);
+}
+
 Future<T?> _insertDesktopModal<T>(
   BuildContext context, {
   required Alignment align,
@@ -421,7 +438,7 @@ Future<T?> _insertDesktopModal<T>(
   double risePixels = 0,
   double slideWidth = 0,
 }) {
-  final overlay = Overlay.of(context, rootOverlay: true);
+  final overlay = _resolveDesktopOverlay(context);
   final completer = Completer<T?>();
   final surfaceKey = GlobalKey<_DesktopModalSurfaceState>();
   late final OverlayEntry entry;

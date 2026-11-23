@@ -15,6 +15,7 @@ import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/desktop/widgets/desktop_error_view.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
@@ -33,11 +34,13 @@ import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/widgets/desktop_shell_scope.dart';
 import 'package:omninest/features/files/file_dashboard.dart';
+import 'package:omninest/features/files/application/file_download_url_provider.dart';
 import 'package:omninest/features/files/presentation/widgets/file_thumbnail.dart';
 import 'package:omninest/platform/file_pick.dart';
 import 'package:omninest/platform/platform_capabilities.dart';
 
 part 'desktop_files_actions.dart';
+part 'desktop_files_inspector.dart';
 part 'desktop_files_dialogs.dart';
 part 'desktop_files_rail.dart';
 part 'desktop_files_rail_tree.dart';
@@ -322,7 +325,10 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
             _SelectionBar(
               section: section,
               state: state,
-              onClear: controller.clearSelection,
+              onClear: () {
+                controller.clearSelection();
+                ref.read(desktopShellProvider.notifier).clearDetail();
+              },
               onDownload: () => _downloadSelected(state, controller),
               onDelete: () => _deleteSelected(controller, state),
               onRestore: () => _restoreSelected(controller),
@@ -616,7 +622,7 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
                     child: _FilesRail(
                       state: state,
                       section: section,
-                      stats: stats,
+                      stats: state?.storageStats ?? stats,
                       onSection: (value) => _goSection(controller, value),
                       onSharedRoot:
                           () => unawaited(controller.goToSharedSpaceRoot()),

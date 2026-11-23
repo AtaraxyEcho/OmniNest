@@ -30,15 +30,47 @@ abstract final class DesktopTheme {
   /// 已向 Windows 原生窗口同步过的亮暗状态，用于跨重建去重。
   static bool? _lastSyncedIsDark;
 
+  /// 待在当前帧提交后同步到原生窗口的目标亮暗状态。
+  static bool? _pendingSyncIsDark;
+
+  /// 是否已登记本帧的 post-frame 同步回调，避免同帧重复挂载。
+  static bool _postFrameSyncScheduled = false;
+
+  /// 将亮暗同步移出 `build()` 同步路径，延迟到帧末执行并跨帧去重，
+  /// 避免窗口销毁期在构建阶段直接发起原生 MethodChannel 调用。
+  static void scheduleNativeBrightnessSync({required bool isDark}) {
+    if (_lastSyncedIsDark == isDark && _pendingSyncIsDark == null) {
+      return;
+    }
+    _pendingSyncIsDark = isDark;
+    if (_postFrameSyncScheduled) {
+      return;
+    }
+    _postFrameSyncScheduled = true;
+    try {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _postFrameSyncScheduled = false;
+        final target = _pendingSyncIsDark;
+        _pendingSyncIsDark = null;
+        if (target == null || _lastSyncedIsDark == target) {
+          return;
+        }
+        _lastSyncedIsDark = target;
+        unawaited(setThemeBrightness(isDark: target));
+      });
+    } on Object {
+      // 纯单元测试未初始化 WidgetsBinding 时跳过原生窗口亮度同步。
+      _postFrameSyncScheduled = false;
+      _pendingSyncIsDark = null;
+    }
+  }
+
   static ThemeData resolve({
     required bool isDark,
     DesktopAccent accent = DesktopAccent.sage,
     double fontScale = 1,
   }) {
-    if (_lastSyncedIsDark != isDark) {
-      _lastSyncedIsDark = isDark;
-      unawaited(setThemeBrightness(isDark: isDark));
-    }
+    scheduleNativeBrightnessSync(isDark: isDark);
     final cacheKey = (isDark, accent, fontScale);
     final cached = _cache[cacheKey];
     if (cached != null) {

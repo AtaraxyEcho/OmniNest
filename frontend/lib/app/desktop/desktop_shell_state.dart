@@ -109,6 +109,8 @@ class DesktopAppearanceController extends Notifier<DesktopAppearance> {
   static const _syncDebounce = Duration(milliseconds: 250);
 
   bool _loaded = false;
+  bool _localModified = false;
+  Future<void>? _loadFuture;
   String? _activeUserId;
   String? _lastBoundUserId;
   int _loadGeneration = 0;
@@ -133,73 +135,108 @@ class DesktopAppearanceController extends Notifier<DesktopAppearance> {
     return const DesktopAppearance();
   }
 
-  Future<void> load() async {
+  Future<void> load() {
     if (_loaded) {
-      return;
+      return Future<void>.value();
     }
-    _loaded = true;
-    final prefs = await SharedPreferences.getInstance();
-    state = DesktopAppearance(
-      accent: DesktopAccent.fromName(prefs.getString(_accentKey)),
-      ambient: (prefs.getDouble(_ambientKey) ?? 70).clamp(0, 100),
-      reduceMotion: prefs.getBool(_reduceKey) ?? false,
-      compact: prefs.getBool(_compactKey) ?? false,
-      dynamicBg: prefs.getBool(_dynamicBgKey) ?? true,
-    );
+    return _loadFuture ??= _loadInternal();
+  }
+
+  Future<void> _loadInternal() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!ref.mounted) {
+        return;
+      }
+      _loaded = true;
+      if (_localModified) {
+        return;
+      }
+      state = DesktopAppearance(
+        accent: DesktopAccent.fromName(prefs.getString(_accentKey)),
+        ambient: (prefs.getDouble(_ambientKey) ?? 70).clamp(0, 100),
+        reduceMotion: prefs.getBool(_reduceKey) ?? false,
+        compact: prefs.getBool(_compactKey) ?? false,
+        dynamicBg: prefs.getBool(_dynamicBgKey) ?? true,
+      );
+    } on Object {
+      // 离线或无本地存储环境静默保留默认外观。
+    } finally {
+      _loadFuture = null;
+    }
   }
 
   Future<void> setAccent(DesktopAccent accent) async {
+    _localModified = true;
     state = state.copyWith(accent: accent);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_accentKey, accent.name);
+    if (!ref.mounted) return;
     _scheduleRemotePatch(<String, dynamic>{'accent': accent.name});
   }
 
   Future<void> setAmbient(double value) async {
     final clamped = value.clamp(0, 100).toDouble();
+    _localModified = true;
     state = state.copyWith(ambient: clamped);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_ambientKey, clamped);
+    if (!ref.mounted) return;
     _scheduleRemotePatch(<String, dynamic>{'ambient': clamped});
   }
 
   Future<void> setReduceMotion(bool value) async {
+    _localModified = true;
     state = state.copyWith(reduceMotion: value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_reduceKey, value);
+    if (!ref.mounted) return;
     _scheduleRemotePatch(<String, dynamic>{'reduceMotion': value});
   }
 
   Future<void> setCompact(bool value) async {
+    _localModified = true;
     state = state.copyWith(compact: value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_compactKey, value);
+    if (!ref.mounted) return;
     _scheduleRemotePatch(<String, dynamic>{'compact': value});
   }
 
   Future<void> setDynamicBg(bool value) async {
+    _localModified = true;
     state = state.copyWith(dynamicBg: value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_dynamicBgKey, value);
+    if (!ref.mounted) return;
     _scheduleRemotePatch(<String, dynamic>{'dynamicBg': value});
   }
 
   /// 从远端重新同步桌面外观偏好，并保留本地待提交变更。
   Future<void> refreshFromRemote() async {
+    if (!ref.mounted) return;
     final userId = _activeUserId;
     final service = _tryReadSyncService();
     if (userId == null || service == null) return;
-    final snapshot = await service.synchronize(
-      userId: userId,
-      scope: desktopAppearancePreferenceScope,
-    );
-    if (_activeUserId != userId || snapshot.preferences.isEmpty) return;
-    final resolved = DesktopAppearance.fromPreferences(
-      snapshot.preferences,
-      fallback: state,
-    );
-    state = resolved;
-    await _writeLocal(resolved);
+    try {
+      final snapshot = await service.synchronize(
+        userId: userId,
+        scope: desktopAppearancePreferenceScope,
+      );
+      if (!ref.mounted ||
+          _activeUserId != userId ||
+          snapshot.preferences.isEmpty) {
+        return;
+      }
+      final resolved = DesktopAppearance.fromPreferences(
+        snapshot.preferences,
+        fallback: state,
+      );
+      state = resolved;
+      await _writeLocal(resolved);
+    } on Object {
+      // 网络断开或远端同步异常时静默保留本地偏好。
+    }
   }
 
   Future<void> _bindUser(String? userId) async {
@@ -207,7 +244,9 @@ class DesktopAppearanceController extends Notifier<DesktopAppearance> {
     _activeUserId = userId;
     final generation = ++_loadGeneration;
     await load();
-    if (generation != _loadGeneration || _activeUserId != userId) {
+    if (!ref.mounted ||
+        generation != _loadGeneration ||
+        _activeUserId != userId) {
       return;
     }
     if (userId == null) {
@@ -225,7 +264,9 @@ class DesktopAppearanceController extends Notifier<DesktopAppearance> {
         userId: userId,
         scope: desktopAppearancePreferenceScope,
       );
-      if (generation != _loadGeneration || _activeUserId != userId) {
+      if (!ref.mounted ||
+          generation != _loadGeneration ||
+          _activeUserId != userId) {
         return;
       }
       if (snapshot.preferences.isEmpty) {
@@ -255,6 +296,7 @@ class DesktopAppearanceController extends Notifier<DesktopAppearance> {
   }
 
   void _scheduleRemotePatch(Map<String, dynamic> changes) {
+    if (!ref.mounted) return;
     final userId = _activeUserId;
     if (userId == null) {
       return;
@@ -262,12 +304,15 @@ class DesktopAppearanceController extends Notifier<DesktopAppearance> {
     _pendingRemoteChanges.addAll(changes);
     _syncDebounceTimer?.cancel();
     _syncDebounceTimer = Timer(_syncDebounce, () {
+      if (!ref.mounted) return;
       unawaited(_flushRemotePatch(userId));
     });
   }
 
   Future<void> _flushRemotePatch(String userId) async {
-    if (_activeUserId != userId || _pendingRemoteChanges.isEmpty) {
+    if (!ref.mounted ||
+        _activeUserId != userId ||
+        _pendingRemoteChanges.isEmpty) {
       return;
     }
     final service = _tryReadSyncService();
@@ -292,6 +337,9 @@ class DesktopAppearanceController extends Notifier<DesktopAppearance> {
   }
 
   PreferenceSyncService? _tryReadSyncService() {
+    if (!ref.mounted) {
+      return null;
+    }
     try {
       return ref.read(preferenceSyncServiceProvider);
     } on Object {
@@ -377,11 +425,13 @@ class DesktopDetailAction {
     required this.label,
     required this.icon,
     required this.onPressed,
+    this.danger = false,
   });
 
   final String label;
   final IconData icon;
   final void Function(BuildContext context, WidgetRef ref) onPressed;
+  final bool danger;
 }
 
 /// 详情坞的内容契约。
@@ -396,6 +446,10 @@ class DesktopDetailData {
     this.id,
     this.subtitle,
     this.imageUrl,
+    this.thumbnailUrl,
+    this.thumbnailHeaders,
+    this.isFolder = false,
+    this.fallbackIcon,
     this.badge,
     this.about,
     this.facts = const <MapEntry<String, String>>[],
@@ -405,8 +459,11 @@ class DesktopDetailData {
     this.progress,
     this.primary,
     this.secondary,
+    this.extraActions = const <DesktopDetailAction>[],
     this.squareArt = false,
     this.paperCover,
+    this.customPreview,
+    this.extraSection,
   });
 
   final String kind;
@@ -414,6 +471,10 @@ class DesktopDetailData {
   final String? id;
   final String? subtitle;
   final String? imageUrl;
+  final String? thumbnailUrl;
+  final Map<String, String>? thumbnailHeaders;
+  final bool isFolder;
+  final IconData? fallbackIcon;
   final String? badge;
   final String? about;
   final List<MapEntry<String, String>> facts;
@@ -423,6 +484,7 @@ class DesktopDetailData {
   final double? progress;
   final DesktopDetailAction? primary;
   final DesktopDetailAction? secondary;
+  final List<DesktopDetailAction> extraActions;
 
   /// 方形封面（音轨/图书）与 16:10 横图（影视）的分叉。
   final bool squareArt;
@@ -430,7 +492,25 @@ class DesktopDetailData {
   /// 无封面图书的纸封底色与文字色。
   final ({Color tone, Color ink})? paperCover;
 
+  /// 可选的自定义预览组件（例如带鉴权或本地类型图标的文件缩略图）。
+  final Widget? customPreview;
+
+  /// 可选的扩展区块（例如文件共享状态与历史版本、照片标签等）。
+  final Widget? extraSection;
+
   String get effectiveId => id ?? '$kind:$title';
+
+  String? get effectivePreviewUrl {
+    final thumb = thumbnailUrl?.trim();
+    if (thumb != null && thumb.isNotEmpty) {
+      return thumb;
+    }
+    final image = imageUrl?.trim();
+    if (image != null && image.isNotEmpty) {
+      return image;
+    }
+    return null;
+  }
 }
 
 /// 右键菜单项。

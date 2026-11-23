@@ -55,6 +55,7 @@ List<Widget> _buildPhotoGroupSlivers({
   required ValueChanged<PhotoItem> onToggleSelect,
   void Function(PhotoItem photo, List<PhotoItem> photos, Offset globalPosition)?
   onSecondaryTap,
+  void Function(PhotoItem photo, List<PhotoItem> photos)? onInspect,
   required ValueChanged<List<PhotoItem>> onSelectMany,
   required _PhotoOrderChanged onOrderChanged,
   required Future<void> Function(String contextKey) onResetOrder,
@@ -142,6 +143,10 @@ List<Widget> _buildPhotoGroupSlivers({
                 ? null
                 : (photo, _, globalPos) =>
                     onSecondaryTap(photo, browsePhotos, globalPos),
+        onInspect:
+            onInspect == null
+                ? null
+                : (photo, _) => onInspect(photo, browsePhotos),
         orderContext: contextKey,
         onOrderChanged: onOrderChanged,
         onRowHoverEnter: hoverState.enter,

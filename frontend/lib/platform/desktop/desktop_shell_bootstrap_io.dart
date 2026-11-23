@@ -58,6 +58,7 @@ Future<void> bootstrapDesktopShell() async {
       cancelDeferredDesktopShellInit();
       return trayService.quit();
     },
+    isTrayReady: () => trayService.isInitialized,
   );
   // 先挂载 WindowListener 再开启 preventClose，消除首帧 500ms 内早关窗空窗。
   trayService.attachWindowListener();

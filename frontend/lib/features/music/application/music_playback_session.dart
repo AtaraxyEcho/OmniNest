@@ -20,28 +20,7 @@ import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/core/log/dev_log.dart';
 
-/// 音乐播放会话。
-class MusicPlaybackSession {
-  const MusicPlaybackSession({required this.player, required this.lastError});
-
-  final MusicAudioPlayback player;
-  final String? lastError;
-
-  MusicPlaybackSession copyWith({
-    MusicAudioPlayback? player,
-    Object? lastError = _noChange,
-  }) {
-    return MusicPlaybackSession(
-      player: player ?? this.player,
-      lastError:
-          identical(lastError, _noChange)
-              ? this.lastError
-              : lastError as String?,
-    );
-  }
-}
-
-const Object _noChange = Object();
+part 'music_playback_session_model.dart';
 
 /// 当前平台使用的音乐播放适配器。
 final musicAudioPlaybackProvider = Provider.autoDispose<MusicAudioPlayback>((
@@ -356,8 +335,17 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
 
   Future<AppExitResponse> _flushPlaybackQueueBeforeExit() async {
     _resetListeningBaseline(null, playing: false);
-    await _reportListeningDuration();
-    await ref.read(musicCenterControllerProvider.notifier).flushPlaybackQueue();
+    try {
+      await Future.wait<void>([
+        _reportListeningDuration(),
+        ref.read(musicCenterControllerProvider.notifier).flushPlaybackQueue(),
+      ]).timeout(
+        const Duration(milliseconds: 300),
+        onTimeout: () => const <void>[],
+      );
+    } on Object catch (error) {
+      devLog('退出前刷新播放队列失败（忽略继续退出）: $error');
+    }
     return AppExitResponse.exit;
   }
 

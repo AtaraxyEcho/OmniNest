@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
+import 'package:omninest/core/media/active_media_players.dart';
 import 'package:omninest/core/media/media_kit_ready.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
@@ -176,6 +177,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
     }
     ensureMediaKitReady();
     _player = Player();
+    registerActiveMediaPlayer(_player);
     _controller = VideoController(_player);
     _playbackService = ref.read(moviePlaybackServiceProvider);
     _progressSyncService = ref.read(movieProgressSyncServiceProvider);
@@ -245,7 +247,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
     }
     unawaited(PipService.instance().setVideoPlaybackActive(active: false));
     _pipListenerDisposer?.call();
-    _player.dispose();
+    unawaited(stopAndDisposeMediaPlayer(_player));
     _windowChromeLease?.release();
     _releaseOrientationLockOnExit();
     if (!isWebPlatform && isMobilePlatform) {
@@ -753,70 +755,5 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage>
         ),
       ),
     );
-  }
-
-  void _seekRelative(int seconds) {
-    final current = _player.state.position;
-    final target = current + Duration(seconds: seconds);
-    _seekToPosition(target);
-  }
-
-  /// Seek 策略：
-  /// - 非 Web 端（Desktop/Android）：libmpv 原生 seek，直接调用
-  /// - Web 端 fMP4 流：尝试原生 seek，若失败则重新打开流从目标位置开始
-  Future<void> _seekToPosition(Duration target) async {
-    // 用户主动改播放位置说明还想留在这集：片尾倒计时不能被自动换集盖掉这个意图。
-    _cancelEpisodeAutoplay();
-    final generation = ++_seekGeneration;
-    if (!mounted || generation != _seekGeneration) return;
-    if (!isWebPlatform) {
-      await _player.seek(target);
-      if (!mounted || generation != _seekGeneration) return;
-      setState(() => _isSeeking = false);
-      return;
-    }
-    final asyncValue = _readPlaybackPlan();
-    PlaybackPlan? plan;
-    if (asyncValue is AsyncData<PlaybackPlan>) {
-      plan = asyncValue.value;
-    }
-    if (plan?.streamUrl == null || plan!.streamUrl!.isEmpty) {
-      await _player.seek(target);
-      if (!mounted || generation != _seekGeneration) return;
-      setState(() => _isSeeking = false);
-      return;
-    }
-    // Web 端 fMP4 流模式：尝试原生 seek，失败则重新打开流
-    final targetSeconds = clampMovieSeekSeconds(target, plan.durationSeconds);
-    final positionBeforeSeek = _player.state.position;
-    await _player.seek(Duration(seconds: targetSeconds));
-    // 用「首个位置事件」代替固定 800ms 盲等：拖条的迟滞几乎全花在这段死等上，
-    // 流恢复推进通常在几十毫秒内；探测上限仍是 800ms，判定口径不变。
-    await _awaitSeekProgress(positionBeforeSeek);
-    if (!mounted || generation != _seekGeneration) return;
-    final posAfter = _player.state.position;
-    final driftMs = (posAfter.inMilliseconds - targetSeconds * 1000).abs();
-    if (driftMs < 5000) {
-      _polledPosition.value = posAfter;
-      setState(() {
-        _isSeeking = false;
-      });
-      return;
-    }
-    // 原生 seek 未生效，重新打开流从目标位置开始
-    devLog(
-      '[_seekToPosition] 原生 seek 未生效，回退到流重开: targetSeconds=$targetSeconds',
-    );
-    _polledPosition.value = Duration(seconds: targetSeconds);
-    setState(() {
-      _seekStart = targetSeconds;
-      _loadedUrl = null;
-    });
-    final currentPlan = _readPlaybackPlan();
-    if (currentPlan is AsyncData<PlaybackPlan>) {
-      _openIfNeeded(currentPlan.value);
-    } else {
-      setState(() => _isSeeking = false);
-    }
   }
 }

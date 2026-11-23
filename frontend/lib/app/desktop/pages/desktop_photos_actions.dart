@@ -65,6 +65,7 @@ extension _DesktopPhotosActions on _DesktopPhotosPageState {
   }
 
   void _openAlbumPhoto(PhotoItem photo, List<PhotoItem> photos) {
+    ref.read(desktopAmbientHintProvider.notifier).rememberPhotoId(photo.id);
     ref
         .read(photoBrowseScopeProvider.notifier)
         .set(photos, PhotoBrowseSource.album, sourceKey: _selectedAlbumId);
@@ -249,6 +250,7 @@ extension _DesktopPhotosActions on _DesktopPhotosPageState {
           }
           _lastSelectedPhotoId = photo.id;
         });
+        _syncPhotoSelectionDetail();
         return;
       }
     }
@@ -271,6 +273,7 @@ extension _DesktopPhotosActions on _DesktopPhotosPageState {
       }
       _lastSelectedPhotoId = photo.id;
     });
+    _syncPhotoSelectionDetail();
   }
 
   Future<void> _favoriteSelected() async {
@@ -524,5 +527,217 @@ extension _DesktopPhotosActions on _DesktopPhotosPageState {
     } finally {
       if (mounted) _update(() => _purgingTrash = false);
     }
+  }
+
+  static String? _photoLocationLabel(PhotoItem photo) {
+    final loc = photo.gpsLocation;
+    if (loc != null && loc.isNotEmpty) {
+      final parts = <String>[];
+      for (final key in const [
+        'displayName',
+        'name',
+        'city',
+        'state',
+        'province',
+        'country',
+      ]) {
+        final raw = loc[key]?.toString().trim();
+        if (raw != null && raw.isNotEmpty && !parts.contains(raw)) {
+          parts.add(raw);
+          if (key == 'displayName') break;
+        }
+      }
+      if (parts.isNotEmpty) {
+        return parts.join(', ');
+      }
+    }
+    if (photo.gpsLatitude != null && photo.gpsLongitude != null) {
+      return '${photo.gpsLatitude!.toStringAsFixed(4)}, ${photo.gpsLongitude!.toStringAsFixed(4)}';
+    }
+    return null;
+  }
+
+  DesktopDetailData _buildPhotoDetailData(
+    PhotoItem photo,
+    List<PhotoItem> photos, {
+    required PhotoBrowseSource source,
+  }) {
+    final l10n = AppLocalizations.of(context);
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
+    final locale = Localizations.localeOf(context).toString();
+    final taken = photo.dateTaken ?? photo.createdAt;
+    final takenText =
+        taken == null ? '—' : DateFormat.yMMMd(locale).add_Hm().format(taken);
+    final camera = [
+      photo.cameraMake?.trim(),
+      photo.cameraModel?.trim(),
+    ].whereType<String>().where((s) => s.isNotEmpty).join(' ');
+    final exposureParts = <String>[
+      if (photo.aperture != null && photo.aperture!.trim().isNotEmpty)
+        photo.aperture!.trim(),
+      if (photo.shutterSpeed != null && photo.shutterSpeed!.trim().isNotEmpty)
+        photo.shutterSpeed!.trim(),
+      if (photo.iso != null) 'ISO ${photo.iso}',
+      if (photo.focalLength != null && photo.focalLength!.trim().isNotEmpty)
+        photo.focalLength!.trim(),
+    ];
+    final resolution =
+        photo.width != null && photo.height != null
+            ? '${photo.width} × ${photo.height}'
+            : null;
+    final location = _photoLocationLabel(photo);
+
+    return DesktopDetailData(
+      id: 'photo:${photo.id}',
+      kind: 'photo',
+      title: photo.title,
+      subtitle: takenText,
+      imageUrl: photo.coverUrl ?? photo.sourceUrl,
+      fallbackIcon: DesktopIcons.image,
+      badge: photo.isVideo ? 'VIDEO' : photo.format.toUpperCase(),
+      squareArt: false,
+      chips: photo.tags,
+      chipsLabel: isZh ? '标签' : 'Tags',
+      factsLabel: isZh ? 'EXIF 拍摄信息' : 'EXIF METADATA',
+      facts: [
+        if (camera.isNotEmpty) MapEntry(isZh ? '相机型号' : 'Camera', camera),
+        if (photo.lensModel != null && photo.lensModel!.trim().isNotEmpty)
+          MapEntry(isZh ? '镜头' : 'Lens', photo.lensModel!.trim()),
+        if (exposureParts.isNotEmpty)
+          MapEntry(
+            isZh ? '光圈 / 快门 / ISO' : 'Exposure',
+            exposureParts.join(' · '),
+          ),
+        if (location != null) MapEntry(isZh ? '拍摄地点' : 'Location', location),
+        if (resolution != null)
+          MapEntry(isZh ? '分辨率' : 'Resolution', resolution),
+        MapEntry(isZh ? '拍摄时间' : 'Date taken', takenText),
+        MapEntry(
+          l10n.desktopFilesSize,
+          '${formatFileSize(photo.fileSize)} · ${photo.format.toUpperCase()}',
+        ),
+      ],
+      primary: DesktopDetailAction(
+        label: l10n.filesOpen,
+        icon: DesktopIcons.image,
+        onPressed: (_, _) => _openPhoto(photo, photos, source),
+      ),
+      secondary: DesktopDetailAction(
+        label: photo.favorite ? l10n.photosUnfavorite : l10n.photosFavorite,
+        icon: photo.favorite ? DesktopIcons.heartFilled : DesktopIcons.heart,
+        onPressed: (_, _) => unawaited(_toggleSingleFavorite(photo)),
+      ),
+      extraActions: [
+        DesktopDetailAction(
+          label: l10n.photosAddToAlbum,
+          icon: DesktopIcons.album,
+          onPressed: (_, _) {
+            if (!_selection.contains(photo.id)) {
+              _update(() {
+                _selection
+                  ..clear()
+                  ..add(photo.id);
+              });
+            }
+            unawaited(_addSelectedToAlbum(_update));
+          },
+        ),
+        DesktopDetailAction(
+          label: l10n.photosDownload,
+          icon: DesktopIcons.download,
+          onPressed: (_, _) => unawaited(_downloadSinglePhoto(photo)),
+        ),
+      ],
+    );
+  }
+
+  void _inspectPhoto(
+    PhotoItem photo,
+    List<PhotoItem> photos, {
+    required PhotoBrowseSource source,
+  }) {
+    if (!mounted) return;
+    ref
+        .read(desktopShellProvider.notifier)
+        .showDetail(_buildPhotoDetailData(photo, photos, source: source));
+  }
+
+  void _syncPhotoSelectionDetail() {
+    if (!mounted) return;
+    final shell = ref.read(desktopShellProvider.notifier);
+    if (_selection.isEmpty) {
+      shell.clearDetail();
+      return;
+    }
+    final photos = _visibleSelectablePhotos();
+    final source =
+        _tab == DesktopPhotosTab.favorites
+            ? PhotoBrowseSource.favorites
+            : PhotoBrowseSource.library;
+    final selectedItems = photos
+        .where((item) => _selection.contains(item.id))
+        .toList(growable: false);
+    if (selectedItems.isEmpty) {
+      shell.clearDetail();
+      return;
+    }
+    if (selectedItems.length == 1) {
+      shell.selectDetail(
+        _buildPhotoDetailData(selectedItems.first, photos, source: source),
+      );
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
+    final totalBytes = selectedItems.fold<int>(
+      0,
+      (sum, item) => sum + item.fileSize,
+    );
+    final videoCount = selectedItems.where((item) => item.isVideo).length;
+    final photoCount = selectedItems.length - videoCount;
+    shell.selectDetail(
+      DesktopDetailData(
+        id: 'photos-multi:${selectedItems.map((e) => e.id).join(",")}',
+        kind: 'photo',
+        title:
+            isZh
+                ? '已选 ${selectedItems.length} 项'
+                : '${selectedItems.length} items selected',
+        subtitle: formatFileSize(totalBytes),
+        imageUrl: selectedItems.first.coverUrl ?? selectedItems.first.sourceUrl,
+        fallbackIcon: DesktopIcons.image,
+        badge: '${selectedItems.length}',
+        squareArt: false,
+        factsLabel: isZh ? '批量汇总' : 'SELECTION SUMMARY',
+        facts: [
+          MapEntry(isZh ? '照片' : 'Photos', '$photoCount'),
+          MapEntry(isZh ? '视频' : 'Videos', '$videoCount'),
+          MapEntry(l10n.desktopFilesSize, formatFileSize(totalBytes)),
+        ],
+        primary: DesktopDetailAction(
+          label: l10n.photosFavorite,
+          icon: DesktopIcons.heart,
+          onPressed: (_, _) => unawaited(_favoriteSelected()),
+        ),
+        secondary: DesktopDetailAction(
+          label: l10n.photosAddToAlbum,
+          icon: DesktopIcons.album,
+          onPressed: (_, _) => unawaited(_addSelectedToAlbum(_update)),
+        ),
+        extraActions: [
+          DesktopDetailAction(
+            label: l10n.photosDownload,
+            icon: DesktopIcons.download,
+            onPressed: (_, _) => unawaited(_downloadSelected(_update)),
+          ),
+          DesktopDetailAction(
+            label: l10n.photosDelete,
+            icon: DesktopIcons.trash,
+            danger: true,
+            onPressed: (_, _) => unawaited(_deleteSelected()),
+          ),
+        ],
+      ),
+    );
   }
 }

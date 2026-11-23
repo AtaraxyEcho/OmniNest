@@ -175,6 +175,7 @@ bool FlutterWindow::OnCreate() {
             return;
           }
           if (call.method_name() == kRequestAppExitMethod) {
+            exiting_ = true;
             HWND hwnd = GetHandle();
             if (hwnd != nullptr) {
               // 立即隐藏窗口消除关窗等待期的“未响应”视觉残留。
@@ -187,7 +188,7 @@ bool FlutterWindow::OnCreate() {
               ::TerminateProcess(::GetCurrentProcess(), 0);
             }).detach();
             if (hwnd != nullptr) {
-              // 投递 WM_CLOSE 走正常 DestroyWindow -> WM_DESTROY -> PostQuitMessage(0) 路径。
+              // 投递 WM_CLOSE 并由 exiting_ 短路直通 DestroyWindow -> WM_DESTROY -> PostQuitMessage(0)。
               ::PostMessage(hwnd, WM_CLOSE, 0, 0);
             } else {
               ::PostQuitMessage(0);
@@ -262,13 +263,17 @@ bool FlutterWindow::OnCreate() {
   // next-frame auto-show must be removed here, otherwise it re-hides the
   // window with SW_HIDE right after Dart shows it. ForceRedraw keeps a frame
   // pending so the first paint is ready when the window is revealed.
+  RefreshTaskbarAutoHideState();
   flutter_controller_->ForceRedraw();
 
   return true;
 }
 
 void FlutterWindow::OnDestroy() {
-  window_frame_channel_.reset();
+  if (window_frame_channel_) {
+    window_frame_channel_->SetMethodCallHandler(nullptr);
+    window_frame_channel_.reset();
+  }
   ResetSizingBrush();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
@@ -363,28 +368,32 @@ COLORREF FlutterWindow::ResolveSizingGapColor() const {
 HBRUSH FlutterWindow::EnsureSizingGapBrush() {
   if (sizing_gap_brush_ == nullptr) {
     sizing_gap_brush_ = CreateSolidBrush(ResolveSizingGapColor());
-    HWND hwnd = GetHandle();
-    if (hwnd != nullptr && sizing_gap_brush_ != nullptr) {
-      ::SetClassLongPtr(hwnd, GCLP_HBRBACKGROUND,
-                        reinterpret_cast<LONG_PTR>(sizing_gap_brush_));
-    }
   }
   return sizing_gap_brush_;
 }
 
 void FlutterWindow::ResetSizingBrush() {
   if (sizing_gap_brush_ != nullptr) {
-    HWND hwnd = GetHandle();
-    if (hwnd != nullptr &&
-        static_cast<ULONG_PTR>(
-            ::GetClassLongPtr(hwnd, GCLP_HBRBACKGROUND)) ==
-            reinterpret_cast<ULONG_PTR>(sizing_gap_brush_)) {
-      ::SetClassLongPtr(
-          hwnd, GCLP_HBRBACKGROUND,
-          reinterpret_cast<LONG_PTR>(::GetStockObject(BLACK_BRUSH)));
-    }
     DeleteObject(sizing_gap_brush_);
     sizing_gap_brush_ = nullptr;
+  }
+}
+
+void FlutterWindow::RefreshTaskbarAutoHideState() {
+  APPBARDATA abd = {};
+  abd.cbSize = sizeof(APPBARDATA);
+  taskbar_auto_hide_ =
+      (::SHAppBarMessage(ABM_GETSTATE, &abd) & ABS_AUTOHIDE) != 0;
+  if (taskbar_auto_hide_) {
+    APPBARDATA pos = {};
+    pos.cbSize = sizeof(APPBARDATA);
+    if (::SHAppBarMessage(ABM_GETTASKBARPOS, &pos) != 0) {
+      taskbar_edge_ = pos.uEdge;
+    } else {
+      taskbar_edge_ = ABE_BOTTOM;
+    }
+  } else {
+    taskbar_edge_ = ABE_BOTTOM;
   }
 }
 
@@ -707,6 +716,11 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  if (message == WM_CLOSE && exiting_) {
+    ::DestroyWindow(hwnd);
+    return 0;
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =
@@ -752,11 +766,16 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       break;
     case WM_WINDOWPOSCHANGED: {
       const auto* pos = reinterpret_cast<const WINDOWPOS*>(lparam);
-      if (window_frame_hidden_ && (pos->flags & SWP_FRAMECHANGED) != 0) {
+      if (pos != nullptr && window_frame_hidden_ &&
+          (pos->flags & SWP_FRAMECHANGED) != 0) {
         ReassertFramelessBorder(hwnd, window_fullscreen_);
       }
       break;
     }
+    case WM_SETTINGCHANGE:
+    case WM_DISPLAYCHANGE:
+      RefreshTaskbarAutoHideState();
+      break;
     case WM_ACTIVATE:
     case WM_DPICHANGED:
     case WM_THEMECHANGED:
@@ -859,28 +878,22 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
           params->rgrc[0].right -= frame_x;
           params->rgrc[0].bottom -= frame_y;
 
-          APPBARDATA abd = {};
-          abd.cbSize = sizeof(APPBARDATA);
-          if ((::SHAppBarMessage(ABM_GETSTATE, &abd) & ABS_AUTOHIDE) != 0) {
+          if (taskbar_auto_hide_) {
             constexpr LONG kAutoHideInset = 2;
-            if (::SHAppBarMessage(ABM_GETTASKBARPOS, &abd) != 0) {
-              switch (abd.uEdge) {
-                case ABE_LEFT:
-                  params->rgrc[0].left += kAutoHideInset;
-                  break;
-                case ABE_TOP:
-                  params->rgrc[0].top += kAutoHideInset;
-                  break;
-                case ABE_RIGHT:
-                  params->rgrc[0].right -= kAutoHideInset;
-                  break;
-                case ABE_BOTTOM:
-                default:
-                  params->rgrc[0].bottom -= kAutoHideInset;
-                  break;
-              }
-            } else {
-              params->rgrc[0].bottom -= kAutoHideInset;
+            switch (taskbar_edge_) {
+              case ABE_LEFT:
+                params->rgrc[0].left += kAutoHideInset;
+                break;
+              case ABE_TOP:
+                params->rgrc[0].top += kAutoHideInset;
+                break;
+              case ABE_RIGHT:
+                params->rgrc[0].right -= kAutoHideInset;
+                break;
+              case ABE_BOTTOM:
+              default:
+                params->rgrc[0].bottom -= kAutoHideInset;
+                break;
             }
           }
         }

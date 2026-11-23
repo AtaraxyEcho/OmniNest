@@ -40,6 +40,7 @@ class _PhotoTile extends StatelessWidget {
     this.onTap,
     this.onToggleSelect,
     this.onSecondaryTap,
+    this.onInspect,
     this.selected = false,
     this.pressing = false,
     this.dragging = false,
@@ -56,6 +57,7 @@ class _PhotoTile extends StatelessWidget {
   final ValueChanged<PhotoItem>? onTap;
   final ValueChanged<PhotoItem>? onToggleSelect;
   final void Function(PhotoItem photo, Offset globalPosition)? onSecondaryTap;
+  final ValueChanged<PhotoItem>? onInspect;
   final bool selected;
   final bool pressing;
   final bool dragging;
@@ -292,6 +294,52 @@ class _PhotoTile extends StatelessWidget {
                                 onToggleSelect == null
                                     ? null
                                     : () => onToggleSelect!(photo),
+                          ),
+                        ),
+                      if (onInspect != null && !dragging)
+                        Positioned(
+                          top: 10,
+                          right: 10,
+                          child: AnimatedOpacity(
+                            opacity: hovered ? 1 : 0,
+                            duration: DesktopMotion.of(
+                              context,
+                              DesktopMotion.fast,
+                            ),
+                            alwaysIncludeSemantics: true,
+                            child: IgnorePointer(
+                              ignoring: !hovered,
+                              child: Tooltip(
+                                message:
+                                    AppLocalizations.of(
+                                      context,
+                                    ).desktopOpenDetails,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () => onInspect!(photo),
+                                  child: Container(
+                                    width: 24,
+                                    height: 24,
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.48,
+                                      ),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.35,
+                                        ),
+                                      ),
+                                    ),
+                                    child: const Icon(
+                                      DesktopIcons.info,
+                                      size: 13,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                     ],

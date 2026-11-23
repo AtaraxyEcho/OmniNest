@@ -21,15 +21,20 @@ class DesktopCloseFlow {
   bool _handling = false;
   Future<void> Function()? _hideWindow;
   Future<void> Function()? _quitApp;
+  bool Function()? _isTrayReady;
 
-  /// 注入隐藏窗口与退出应用的回调，须在窗口可交互前完成。
+  /// 注入隐藏窗口、退出应用与托盘就绪判定回调，须在窗口可交互前完成。
   void bind({
     required Future<void> Function() hideWindow,
     required Future<void> Function() quitApp,
+    bool Function()? isTrayReady,
   }) {
     _hideWindow = hideWindow;
     _quitApp = quitApp;
+    _isTrayReady = isTrayReady;
   }
+
+  bool get _trayReady => _isTrayReady?.call() ?? true;
 
   /// 读取记住的关闭动作；null 表示每次询问。
   Future<DesktopCloseAction?> readRememberedAction() async {
@@ -56,14 +61,18 @@ class DesktopCloseFlow {
 
   /// 处理一次主窗口关闭请求。
   ///
-  /// 已记住偏好时直接执行对应动作；否则弹出确认窗。导航未就绪或流程
-  /// 异常时回退为隐藏到托盘，保持升级前的行为兜底，避免窗口无法关闭。
+  /// 托盘尚未初始化、导航未就绪或确认流程异常时直接退出应用，绝不把窗口
+  /// 隐藏进尚未存在的托盘造成“无窗无托盘”幽灵进程。
   Future<void> handleWindowCloseRequest() async {
     if (_handling) {
       return;
     }
     _handling = true;
     try {
+      if (!_trayReady) {
+        await _apply(DesktopCloseAction.exitApp);
+        return;
+      }
       final remembered = await readRememberedAction();
       if (remembered != null) {
         await _apply(remembered);
@@ -71,7 +80,7 @@ class DesktopCloseFlow {
       }
       final navigatorContext = desktopCloseNavigatorKey.currentContext;
       if (navigatorContext == null || !navigatorContext.mounted) {
-        await _apply(DesktopCloseAction.minimizeToTray);
+        await _apply(DesktopCloseAction.exitApp);
         return;
       }
       final decision = await showDesktopCloseConfirmDialog(navigatorContext);
@@ -83,15 +92,19 @@ class DesktopCloseFlow {
       }
       await _apply(decision.action);
     } on Object catch (error) {
-      devLog('关闭确认流程失败，回退为隐藏到托盘: $error');
-      await _apply(DesktopCloseAction.minimizeToTray);
+      devLog('关闭确认流程失败，回退为直接退出: $error');
+      await _apply(DesktopCloseAction.exitApp);
     } finally {
       _handling = false;
     }
   }
 
   Future<void> _apply(DesktopCloseAction action) async {
-    switch (action) {
+    final effectiveAction =
+        action == DesktopCloseAction.minimizeToTray && !_trayReady
+            ? DesktopCloseAction.exitApp
+            : action;
+    switch (effectiveAction) {
       case DesktopCloseAction.minimizeToTray:
         final hide = _hideWindow;
         if (hide != null) {
@@ -110,5 +123,6 @@ class DesktopCloseFlow {
     _handling = false;
     _hideWindow = null;
     _quitApp = null;
+    _isTrayReady = null;
   }
 }

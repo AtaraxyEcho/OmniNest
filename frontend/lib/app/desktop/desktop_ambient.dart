@@ -9,6 +9,8 @@ import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 
+part 'desktop_ambient_plain.dart';
+
 /// 原子环境光场景帧：将 4×3 色网与可选全出血艺术层打包为一个双缓冲单元。
 @immutable
 class _AmbientSceneFrame {
@@ -20,6 +22,7 @@ class _AmbientSceneFrame {
     required this.fallbackTone,
     required this.isReaderRoute,
     required this.meshGrid,
+    this.imageProvider,
   });
 
   final int id;
@@ -29,6 +32,7 @@ class _AmbientSceneFrame {
   final Color? fallbackTone;
   final bool isReaderRoute;
   final AmbientMeshGrid? meshGrid;
+  final ImageProvider<Object>? imageProvider;
 
   bool get hasCover => imageUrl != null && imageUrl!.isNotEmpty;
   bool get hasMesh => hasCover || meshGrid != null || fallbackTone != null;
@@ -40,12 +44,14 @@ class _AmbientSceneFrame {
     required EditorialArtPreset artPreset,
     required Color? fallbackTone,
     required bool isReaderRoute,
+    required ImageProvider<Object>? imageProvider,
   }) {
     return this.imageUrl == imageUrl &&
         this.showArt == showArt &&
         this.artPreset == artPreset &&
         this.fallbackTone == fallbackTone &&
-        this.isReaderRoute == isReaderRoute;
+        this.isReaderRoute == isReaderRoute &&
+        this.imageProvider == imageProvider;
   }
 
   _AmbientSceneFrame copyWith({AmbientMeshGrid? meshGrid}) {
@@ -57,6 +63,7 @@ class _AmbientSceneFrame {
       fallbackTone: fallbackTone,
       isReaderRoute: isReaderRoute,
       meshGrid: meshGrid ?? this.meshGrid,
+      imageProvider: imageProvider,
     );
   }
 }
@@ -76,6 +83,8 @@ class DesktopAmbient extends StatefulWidget {
     this.artPreset = EditorialArtPreset.landscape,
     this.fallbackTone,
     this.isReaderRoute = false,
+    this.imageProvider,
+    this.onImageError,
     super.key,
   });
 
@@ -85,7 +94,7 @@ class DesktopAmbient extends StatefulWidget {
   final double intensity;
   final bool reduceMotion;
 
-  /// 是否启用全出血艺术图（Reader 路由下强制隐藏）。
+  /// 是否启用艺术图（Reader 路由下强制隐藏）。
   final bool showArt;
 
   /// 媒体艺术图预设。
@@ -96,6 +105,12 @@ class DesktopAmbient extends StatefulWidget {
 
   /// 是否处于 Reader 路由：隐藏艺术图，仅渲染柔焦 4×3 色网与中心光池。
   final bool isReaderRoute;
+
+  /// 可选自定义图片提供器（如音乐本地封面鉴权通道）。
+  final ImageProvider<Object>? imageProvider;
+
+  /// 艺术图加载失败回调（用于通知上层清理失效 hint 并回落）。
+  final VoidCallback? onImageError;
 
   @override
   State<DesktopAmbient> createState() => _DesktopAmbientState();
@@ -175,7 +190,8 @@ class _DesktopAmbientState extends State<DesktopAmbient>
         oldWidget.showArt != widget.showArt ||
         oldWidget.artPreset != widget.artPreset ||
         oldWidget.fallbackTone != widget.fallbackTone ||
-        oldWidget.isReaderRoute != widget.isReaderRoute;
+        oldWidget.isReaderRoute != widget.isReaderRoute ||
+        oldWidget.imageProvider != widget.imageProvider;
 
     if (!_canAnimate && (_outgoingFrame != null || _crossfade.isAnimating)) {
       _crossfade
@@ -225,6 +241,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
       fallbackTone: widget.fallbackTone,
       isReaderRoute: widget.isReaderRoute,
       meshGrid: grid,
+      imageProvider: hasCover ? widget.imageProvider : null,
     );
   }
 
@@ -249,6 +266,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     final showArt = widget.showArt && !isReaderRoute;
     final artPreset = widget.artPreset;
     final fallbackTone = widget.fallbackTone;
+    final imageProvider = widget.imageProvider;
     // 浅色非 Reader 路由完全跳过 4×3 色网采样。
     final skipMeshSampling = !_isDark && !isReaderRoute;
 
@@ -291,6 +309,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
           source: source,
           showArt: showArt,
           artPreset: artPreset,
+          imageProvider: imageProvider,
           cachedGrid: cachedGrid,
           skipMeshSampling: skipMeshSampling,
           isCancelled: () => !mounted || token != _prepareToken,
@@ -304,6 +323,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
                 artPreset: artPreset,
                 fallbackTone: fallbackTone,
                 isReaderRoute: isReaderRoute,
+                imageProvider: imageProvider,
               )) {
             return;
           }
@@ -323,6 +343,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
         source: source,
         showArt: showArt,
         artPreset: artPreset,
+        imageProvider: imageProvider,
         cachedGrid: cachedGrid,
         skipMeshSampling: skipMeshSampling,
         isCancelled: () => !mounted || token != _prepareToken,
@@ -345,6 +366,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
             fallbackTone: fallbackTone,
             isReaderRoute: isReaderRoute,
             meshGrid: effectiveGrid,
+            imageProvider: imageProvider,
           ),
         );
       }),
@@ -361,6 +383,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
           artPreset: nextFrame.artPreset,
           fallbackTone: nextFrame.fallbackTone,
           isReaderRoute: nextFrame.isReaderRoute,
+          imageProvider: nextFrame.imageProvider,
         ) &&
         previous.meshGrid == nextFrame.meshGrid) {
       return;
@@ -629,6 +652,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     final saturation = (skin.isDark && isReaderRoute) ? 1.35 : profile.meshSat;
     return DesktopAmbientMeshSurface(
       source: frame.imageUrl ?? '',
+      imageProvider: frame.imageProvider,
       preloadedGrid: frame.meshGrid,
       opacity: meshAlpha,
       saturation: saturation,
@@ -661,6 +685,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
             intensityFactor: intensityFactor,
             preset: outgoing.artPreset,
             profile: profile,
+            imageProvider: outgoing.imageProvider,
           ),
         ),
       );
@@ -672,6 +697,8 @@ class _DesktopAmbientState extends State<DesktopAmbient>
         intensityFactor: intensityFactor,
         preset: active.artPreset,
         profile: profile,
+        imageProvider: active.imageProvider,
+        onImageError: widget.onImageError,
       );
       layers.add(
         outgoing != null
@@ -692,172 +719,4 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     }
     return Stack(fit: StackFit.expand, children: layers);
   }
-}
-
-/// 纯净模式（Plain）背景：用于非五大媒体路由或用户关闭「随封面变色的背景」时。
-///
-/// 由 `skin.bg` 底色 + 右上角强调色径向光晕（深色 9% / 浅色 7%）+ 顶部纵向微渐变 +
-/// 极轻静态噪点组成，整体外包 `RepaintBoundary`，稳态 0fps、零动画回调。
-class DesktopAmbientPlain extends StatelessWidget {
-  const DesktopAmbientPlain({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
-    return ExcludeSemantics(
-      child: IgnorePointer(
-        child: RepaintBoundary(
-          key: const ValueKey('ambient-plain'),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              ColoredBox(color: skin.bg),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: const Alignment(0.92, -0.88),
-                    radius: 1.05,
-                    colors: <Color>[
-                      skin.accent.withValues(alpha: skin.isDark ? 0.09 : 0.07),
-                      skin.accent.withValues(alpha: 0.0),
-                    ],
-                    stops: const <double>[0.0, 0.72],
-                  ),
-                ),
-              ),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: <Color>[
-                      (skin.isDark ? Colors.white : Colors.black).withValues(
-                        alpha: skin.isDark ? 0.03 : 0.025,
-                      ),
-                      Colors.transparent,
-                    ],
-                    stops: const <double>[0.0, 0.36],
-                  ),
-                ),
-              ),
-              CustomPaint(
-                painter: _PlainGrainPainter(isDark: skin.isDark),
-                child: const SizedBox.expand(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 深色非 Reader 5% overlay 细噪点绘制器（轻量无外部资源依赖）。
-class _DarkAmbientGrainPainter extends CustomPainter {
-  const _DarkAmbientGrainPainter();
-
-  static const double _tileSize = 96.0;
-  static const List<Offset> _dots = <Offset>[
-    Offset(7, 11),
-    Offset(23, 5),
-    Offset(41, 19),
-    Offset(63, 9),
-    Offset(82, 17),
-    Offset(14, 34),
-    Offset(35, 29),
-    Offset(57, 42),
-    Offset(76, 36),
-    Offset(91, 48),
-    Offset(9, 59),
-    Offset(28, 66),
-    Offset(49, 58),
-    Offset(71, 69),
-    Offset(88, 63),
-    Offset(19, 82),
-    Offset(44, 78),
-    Offset(65, 89),
-    Offset(84, 85),
-    Offset(5, 91),
-  ];
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) return;
-    final paint =
-        Paint()
-          ..color = Colors.white.withValues(alpha: 0.05)
-          ..blendMode = BlendMode.overlay;
-    final cols = math.min((size.width / _tileSize).ceil(), 36);
-    final rows = math.min((size.height / _tileSize).ceil(), 24);
-    for (var r = 0; r < rows; r++) {
-      final baseY = r * _tileSize;
-      for (var c = 0; c < cols; c++) {
-        final baseX = c * _tileSize;
-        for (final dot in _dots) {
-          final x = baseX + dot.dx;
-          final y = baseY + dot.dy;
-          if (x < size.width && y < size.height) {
-            canvas.drawRect(Rect.fromLTWH(x, y, 1, 1), paint);
-          }
-        }
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DarkAmbientGrainPainter oldDelegate) => false;
-}
-
-/// Plain 模式极轻静态噪点绘制器（仅在外层 `RepaintBoundary` 首次光栅化一次）。
-class _PlainGrainPainter extends CustomPainter {
-  const _PlainGrainPainter({required this.isDark});
-
-  final bool isDark;
-
-  static const double _tileSize = 128.0;
-  static const List<Offset> _dots = <Offset>[
-    Offset(12, 19),
-    Offset(47, 8),
-    Offset(89, 27),
-    Offset(115, 14),
-    Offset(26, 54),
-    Offset(68, 46),
-    Offset(103, 61),
-    Offset(18, 92),
-    Offset(55, 84),
-    Offset(94, 98),
-    Offset(38, 118),
-    Offset(79, 112),
-    Offset(121, 107),
-    Offset(7, 73),
-  ];
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) return;
-    final paint =
-        Paint()
-          ..color = (isDark ? Colors.white : Colors.black).withValues(
-            alpha: isDark ? 0.025 : 0.020,
-          );
-    final cols = math.min((size.width / _tileSize).ceil(), 32);
-    final rows = math.min((size.height / _tileSize).ceil(), 20);
-    for (var r = 0; r < rows; r++) {
-      final baseY = r * _tileSize;
-      for (var c = 0; c < cols; c++) {
-        final baseX = c * _tileSize;
-        for (final dot in _dots) {
-          final x = baseX + dot.dx;
-          final y = baseY + dot.dy;
-          if (x < size.width && y < size.height) {
-            canvas.drawRect(Rect.fromLTWH(x, y, 1, 1), paint);
-          }
-        }
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_PlainGrainPainter oldDelegate) =>
-      oldDelegate.isDark != isDark;
 }

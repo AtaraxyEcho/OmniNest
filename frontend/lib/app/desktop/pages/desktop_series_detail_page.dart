@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/desktop/desktop_ambient_hints.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
@@ -14,6 +15,7 @@ import 'package:omninest/app/desktop/widgets/desktop_cover_field.dart';
 import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/desktop/widgets/desktop_error_view.dart';
 import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
+import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_select.dart';
 import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
@@ -53,6 +55,29 @@ class _DesktopSeriesDetailPageState
   _SeriesTab _tab = _SeriesTab.overview;
   bool _playing = false;
   bool _savingFavorite = false;
+  String? _lastSyncedAmbientCover;
+
+  @override
+  void didUpdateWidget(covariant DesktopSeriesDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.seriesId != widget.seriesId) {
+      _lastSyncedAmbientCover = null;
+    }
+  }
+
+  void _syncAmbientCover(String? url) {
+    final normalized = url?.trim();
+    final effective =
+        (normalized != null && normalized.isNotEmpty) ? normalized : null;
+    if (effective == null || _lastSyncedAmbientCover == effective) {
+      return;
+    }
+    _lastSyncedAmbientCover = effective;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(desktopAmbientHintProvider.notifier).setMoviesCover(effective);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,13 +86,10 @@ class _DesktopSeriesDetailPageState
     final detailAsync = ref.watch(movieSeriesDetailProvider(widget.seriesId));
     return detailAsync.when(
       loading:
-          () => ColoredBox(
-            color: skin.bg,
-            child: const Center(
-              child: SizedBox(
-                width: 320,
-                child: DesktopSkeletonRows(count: 6, avatar: false),
-              ),
+          () => const Center(
+            child: SizedBox(
+              width: 320,
+              child: DesktopSkeletonRows(count: 6, avatar: false),
             ),
           ),
       error:
@@ -85,6 +107,7 @@ class _DesktopSeriesDetailPageState
         final favorite =
             favoriteAsync.asData?.value ?? detail.series.isFavorite;
         final series = detail.series;
+        _syncAmbientCover(series.backdropImageUrl ?? series.posterImageUrl);
         final related = <MovieSeries>[
           for (final candidate in dashboard?.series ?? const <MovieSeries>[])
             if (candidate.id != series.id &&
@@ -98,58 +121,54 @@ class _DesktopSeriesDetailPageState
           (_SeriesTab.files, l10n.desktopSeriesFiles),
           (_SeriesTab.subtitles, l10n.desktopSeriesSubtitles),
         ];
-        return ColoredBox(
-          color: skin.bg,
-          child: SingleChildScrollView(
-            child: DesktopPage(
-              topPadding: DesktopMetrics.pageTopPaddingCompact,
-              children: [
-                const SizedBox(height: 6),
-                _SeriesHero(
-                  series: series,
-                  seasons: detail.seasons.length,
-                  favorite: favorite,
-                  busy: _playing || _savingFavorite,
-                  onBack:
-                      () => exitDetailRoute(context, fallbackRoute: '/video'),
-                  onPlay: _play,
-                  onToggleFavorite: () => _toggleFavorite(favorite),
+        return SingleChildScrollView(
+          child: DesktopPage(
+            topPadding: DesktopMetrics.pageTopPaddingCompact,
+            children: [
+              const SizedBox(height: 6),
+              _SeriesHero(
+                series: series,
+                seasons: detail.seasons.length,
+                favorite: favorite,
+                busy: _playing || _savingFavorite,
+                onBack: () => exitDetailRoute(context, fallbackRoute: '/video'),
+                onPlay: _play,
+                onToggleFavorite: () => _toggleFavorite(favorite),
+              ),
+              const SizedBox(height: 22),
+              _SeriesMetaStrip(series: series, seasons: detail.seasons),
+              const SizedBox(height: 22),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: DesktopSeg<_SeriesTab>(
+                  options: tabs.map((entry) => entry.$1).toList(),
+                  value: _tab,
+                  labelOf:
+                      (tab) => tabs.firstWhere((entry) => entry.$1 == tab).$2,
+                  onChanged: (value) => setState(() => _tab = value),
+                  small: true,
                 ),
-                const SizedBox(height: 22),
-                _SeriesMetaStrip(series: series, seasons: detail.seasons),
-                const SizedBox(height: 22),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: DesktopSeg<_SeriesTab>(
-                    options: tabs.map((entry) => entry.$1).toList(),
-                    value: _tab,
-                    labelOf:
-                        (tab) => tabs.firstWhere((entry) => entry.$1 == tab).$2,
-                    onChanged: (value) => setState(() => _tab = value),
-                    small: true,
-                  ),
+              ),
+              const SizedBox(height: 20),
+              switch (_tab) {
+                _SeriesTab.overview => _OverviewTab(detail: detail),
+                _SeriesTab.episodes => _EpisodesTab(
+                  detail: detail,
+                  onPlay: (episode) => _playEpisode(episode.id),
                 ),
-                const SizedBox(height: 20),
-                switch (_tab) {
-                  _SeriesTab.overview => _OverviewTab(detail: detail),
-                  _SeriesTab.episodes => _EpisodesTab(
-                    detail: detail,
-                    onPlay: (episode) => _playEpisode(episode.id),
-                  ),
-                  _SeriesTab.files => _FilesTab(seriesId: series.id),
-                  _SeriesTab.subtitles => _SubtitlesTab(seriesId: series.id),
-                },
-                if (related.isNotEmpty) ...[
-                  const SizedBox(height: 40),
-                  Text(
-                    l10n.desktopMoviesMoreLikeThis,
-                    style: DesktopType.sectionTitle(skin.text),
-                  ),
-                  const SizedBox(height: 18),
-                  _RelatedSeriesRail(items: related),
-                ],
+                _SeriesTab.files => _FilesTab(seriesId: series.id),
+                _SeriesTab.subtitles => _SubtitlesTab(seriesId: series.id),
+              },
+              if (related.isNotEmpty) ...[
+                const SizedBox(height: 40),
+                Text(
+                  l10n.desktopMoviesMoreLikeThis,
+                  style: DesktopType.sectionTitle(skin.text),
+                ),
+                const SizedBox(height: 18),
+                _RelatedSeriesRail(items: related),
               ],
-            ),
+            ],
           ),
         );
       },
@@ -235,5 +254,109 @@ class _DesktopSeriesDetailPageState
     } finally {
       if (mounted) setState(() => _savingFavorite = false);
     }
+  }
+}
+
+class _SeriesMetaStrip extends StatelessWidget {
+  const _SeriesMetaStrip({required this.series, required this.seasons});
+
+  final MovieSeries series;
+  final List<MovieSeason> seasons;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final skin = DesktopSkin.of(context);
+    final episodeCount = seasons.fold<int>(
+      0,
+      (sum, season) => sum + (season.episodeCount ?? 0),
+    );
+    final hasEpisodeCount = seasons.any(
+      (season) => season.episodeCount != null,
+    );
+    final cells = <(String, String, String)>[
+      (l10n.videoRating, series.rating?.toStringAsFixed(1) ?? '—', 'TMDB'),
+      (
+        l10n.videoYear,
+        series.firstAirDate?.year.toString() ?? '—',
+        series.seriesType,
+      ),
+      (
+        l10n.desktopSeriesEpisodes,
+        hasEpisodeCount ? '$episodeCount' : '—',
+        l10n.desktopSeriesSeasonCount(seasons.length),
+      ),
+      (
+        l10n.videoGenre,
+        series.genres.isEmpty ? '—' : series.genres.take(2).join(' · '),
+        '',
+      ),
+      (
+        l10n.videoContentRating,
+        series.contentRating?.isNotEmpty == true ? series.contentRating! : '—',
+        '',
+      ),
+    ];
+    final radius = BorderRadius.circular(16);
+    return DesktopGlassSurface(
+      borderRadius: radius,
+      child: Container(
+        decoration: BoxDecoration(
+          color: skin.panel,
+          borderRadius: radius,
+          border: Border.all(color: skin.line),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Row(
+          children: [
+            for (var index = 0; index < cells.length; index++)
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    border:
+                        index == 0
+                            ? null
+                            : Border(left: BorderSide(color: skin.line)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        cells[index].$1.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.eyebrow(skin.text3),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        cells[index].$2,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.sectionTitle(
+                          skin.text,
+                        ).copyWith(letterSpacing: -24 * 0.01),
+                      ),
+                      if (cells[index].$3.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          cells[index].$3,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: DesktopType.caption(skin.text3),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }

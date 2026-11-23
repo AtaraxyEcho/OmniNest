@@ -235,7 +235,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 320));
 
-    expect(find.text('Studio archive'), findsOneWidget);
+    // 左侧目录树同步种子化后，文件夹名同时出现在左侧树与过滤后的主列表中。
+    expect(find.text('Studio archive'), findsNWidgets(2));
     expect(find.text('Budget review.pdf'), findsNothing);
     expect(find.text('Studio reel.mov'), findsNothing);
   });
@@ -473,7 +474,7 @@ void main() {
       kind: PointerDeviceKind.mouse,
     );
     await tester.pump();
-    await gesture.moveTo(tester.getCenter(find.text('Studio archive')));
+    await gesture.moveTo(tester.getCenter(find.text('Studio archive').last));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
@@ -481,7 +482,7 @@ void main() {
       final row =
           find
               .ancestor(
-                of: find.text('Studio archive'),
+                of: find.text('Studio archive').last,
                 matching: find.byType(AnimatedContainer),
               )
               .first;

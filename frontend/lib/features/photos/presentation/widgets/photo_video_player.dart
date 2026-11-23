@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:omninest/core/media/active_media_players.dart';
 import 'package:omninest/core/media/media_kit_ready.dart';
 
 /// Photos 时间线视频播放器，页面离开时释放解码与网络资源。
@@ -26,6 +27,7 @@ class _PhotoVideoPlayerState extends State<PhotoVideoPlayer> {
     super.initState();
     ensureMediaKitReady();
     _player = Player();
+    registerActiveMediaPlayer(_player);
     _controller = VideoController(_player);
     _errorSubscription = _player.stream.error.listen((_) {
       widget.onError?.call();
@@ -44,7 +46,7 @@ class _PhotoVideoPlayerState extends State<PhotoVideoPlayer> {
   @override
   void dispose() {
     _errorSubscription?.cancel();
-    _player.dispose();
+    unawaited(stopAndDisposeMediaPlayer(_player));
     super.dispose();
   }
 

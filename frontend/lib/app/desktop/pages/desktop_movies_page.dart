@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -41,6 +42,7 @@ import 'package:omninest/features/video/video_dashboard.dart';
 // 单文件 800 行的源码闸门，按职责拆成 part 而不是压行数。
 part 'desktop_movies_cinema.dart';
 part 'desktop_movies_cards.dart';
+part 'desktop_movies_history.dart';
 part 'desktop_movies_quick_look.dart';
 part 'desktop_movies_slivers.dart';
 

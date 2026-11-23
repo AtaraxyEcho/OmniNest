@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
+import 'package:omninest/app/desktop/desktop_player_bar.dart'
+    show formatDesktopClock;
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
@@ -15,8 +19,14 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
+import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
+import 'package:omninest/features/files/file_dashboard.dart';
 import 'package:omninest/features/music/music_portal.dart';
+import 'package:omninest/features/photos/photo_dashboard.dart';
+import 'package:omninest/platform/file_pick.dart';
+
+part 'desktop_dock_overview.dart';
 
 /// 右侧详情坞（样例 `.dock`）：348px，两个页签「详情 / 队列」。
 ///
@@ -173,17 +183,26 @@ class _DetailsBody extends ConsumerWidget {
 
     final Widget content;
     if (data == null) {
-      content = KeyedSubtree(
-        key: const ValueKey('dock-detail-empty'),
-        child: DesktopEmpty(
-          message: l10n.desktopDockEmpty,
-          icon: DesktopIcons.info,
-        ),
+      content = const _ContextualOverviewBody(
+        key: ValueKey('dock-detail-overview'),
       );
     } else {
       final radius = BorderRadius.circular(14);
+      final previewUrl = data.effectivePreviewUrl;
+      final defaultFallbackIcon =
+          data.fallbackIcon ??
+          switch (data.kind) {
+            'track' => DesktopIcons.music,
+            'book' => DesktopIcons.book,
+            'photo' => DesktopIcons.image,
+            'file' => data.isFolder ? DesktopIcons.folder : DesktopIcons.file,
+            _ => DesktopIcons.film,
+          };
+
       Widget art;
-      if (data.paperCover != null) {
+      if (data.customPreview != null) {
+        art = data.customPreview!;
+      } else if (data.paperCover != null) {
         art = DesktopPaperCover(
           title: data.title,
           author: data.subtitle ?? '',
@@ -191,29 +210,48 @@ class _DetailsBody extends ConsumerWidget {
           ink: data.paperCover!.ink,
           compact: true,
         );
-      } else if (data.imageUrl == null && data.kind == 'file') {
+      } else if (previewUrl != null &&
+          data.thumbnailHeaders != null &&
+          data.thumbnailHeaders!.isNotEmpty) {
+        art = Image.network(
+          previewUrl,
+          headers: data.thumbnailHeaders,
+          fit: BoxFit.cover,
+          errorBuilder:
+              (_, _, _) => ColoredBox(
+                color: skin.raise2,
+                child: Center(
+                  child: Icon(
+                    defaultFallbackIcon,
+                    size: 40,
+                    color: skin.accent,
+                  ),
+                ),
+              ),
+        );
+      } else if (previewUrl == null && data.kind == 'file') {
         art = ColoredBox(
           color: skin.raise2,
           child: Center(
-            child: Icon(DesktopIcons.folder, size: 44, color: skin.accent),
+            child: Icon(defaultFallbackIcon, size: 44, color: skin.accent),
           ),
         );
       } else {
         art = DesktopCover(
-          url: data.imageUrl,
+          url: previewUrl,
           kind:
               data.kind == 'track'
                   ? DesktopCoverKind.music
                   : DesktopCoverKind.network,
-          fallbackIcon: switch (data.kind) {
-            'track' => DesktopIcons.music,
-            'book' => DesktopIcons.book,
-            'file' => DesktopIcons.folder,
-            _ => DesktopIcons.film,
-          },
+          fallbackIcon: defaultFallbackIcon,
           iconSize: 40,
         );
       }
+
+      final hasActions =
+          data.primary != null ||
+          data.secondary != null ||
+          data.extraActions.isNotEmpty;
 
       content = KeyedSubtree(
         key: ValueKey(data.effectiveId),
@@ -266,7 +304,7 @@ class _DetailsBody extends ConsumerWidget {
                   style: DesktopType.dense(skin.text2),
                 ),
               ),
-            if (data.primary != null || data.secondary != null)
+            if (hasActions)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 child: Wrap(
@@ -277,16 +315,32 @@ class _DetailsBody extends ConsumerWidget {
                       DesktopButton(
                         label: data.primary!.label,
                         icon: data.primary!.icon,
-                        variant: DesktopButtonVariant.primary,
+                        variant:
+                            data.primary!.danger
+                                ? DesktopButtonVariant.danger
+                                : DesktopButtonVariant.primary,
                         onPressed: () => data.primary!.onPressed(context, ref),
                       ),
                     if (data.secondary != null)
                       DesktopButton(
                         label: data.secondary!.label,
                         icon: data.secondary!.icon,
-                        variant: DesktopButtonVariant.soft,
+                        variant:
+                            data.secondary!.danger
+                                ? DesktopButtonVariant.danger
+                                : DesktopButtonVariant.soft,
                         onPressed:
                             () => data.secondary!.onPressed(context, ref),
+                      ),
+                    for (final action in data.extraActions)
+                      DesktopButton(
+                        label: action.label,
+                        icon: action.icon,
+                        variant:
+                            action.danger
+                                ? DesktopButtonVariant.danger
+                                : DesktopButtonVariant.ghost,
+                        onPressed: () => action.onPressed(context, ref),
                       ),
                   ],
                 ),
@@ -323,6 +377,10 @@ class _DetailsBody extends ConsumerWidget {
               DesktopEyebrow(data.factsLabel ?? l10n.desktopFileSection),
               DesktopKeyValues(entries: data.facts),
             ],
+            if (data.extraSection != null) ...[
+              const SizedBox(height: 16),
+              data.extraSection!,
+            ],
           ],
         ),
       );
@@ -339,6 +397,8 @@ class _DetailsBody extends ConsumerWidget {
   }
 }
 
+/// 方案 C 零空态上下文概览：当未选中具体条目时，根据当前路由实时渲染
+/// 对应模块的目录/图库/正在播放/快捷导航概览，彻底消灭空屏。
 class _QueueBody extends ConsumerWidget {
   const _QueueBody();
 
@@ -418,7 +478,7 @@ class _QueueBody extends ConsumerWidget {
             final track = item.track;
             final isCurrent = index == activeIndex;
             return ReorderableDragStartListener(
-              key: ValueKey('desktop-queue-${item.ref.playableKey}'),
+              key: ValueKey('desktop-queue-$index-${item.ref.playableKey}'),
               index: index,
               child: DesktopHover(
                 builder:

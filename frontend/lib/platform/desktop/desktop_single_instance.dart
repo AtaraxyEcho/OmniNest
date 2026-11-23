@@ -19,6 +19,12 @@ const int kOmniNestSingleInstancePort = 47683;
 /// 客户端等待对端 `OK` ACK 的超时上限。
 const Duration _kSingleInstanceAckTimeout = Duration(milliseconds: 300);
 
+/// 当前进程持有的单实例回环监听套接字，退出时立即释放。
+ServerSocket? _instanceServer;
+
+/// 当前进程写入的单实例令牌文件，退出时一并清理。
+File? _instanceTokenFile;
+
 /// 当前进程生成的 32 字节 hex 单实例会话令牌（监听成功后写入用户目录令牌文件）。
 String? _activeSessionToken;
 
@@ -43,7 +49,9 @@ Future<void> ensureSingleDesktopInstance({
   try {
     final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, port);
     final token = _generateSessionToken();
+    _instanceServer = server;
     _activeSessionToken = token;
+    _instanceTokenFile = _resolveInstanceTokenFile();
     await _writeInstanceToken(token);
     server.listen((socket) {
       _handleIncomingConnection(socket, expectedToken: token);
@@ -54,6 +62,31 @@ Future<void> ensureSingleDesktopInstance({
       exit(0);
     }
     devLog('单实例端口被其他进程占用或握手未通过，跳过单实例保护');
+  }
+}
+
+/// 退出前立即释放单实例回环端口并删除令牌文件，防止退出窗口期拦截二次启动。
+Future<void> closeSingleDesktopInstance() async {
+  final server = _instanceServer;
+  _instanceServer = null;
+  _activeSessionToken = null;
+  if (server != null) {
+    try {
+      await server.close();
+    } on Object catch (error) {
+      devLog('关闭单实例回环端口失败（忽略继续退出）: $error');
+    }
+  }
+  final tokenFile = _instanceTokenFile ?? _resolveInstanceTokenFile();
+  _instanceTokenFile = null;
+  if (tokenFile != null) {
+    try {
+      if (await tokenFile.exists()) {
+        await tokenFile.delete();
+      }
+    } on Object catch (error) {
+      devLog('删除单实例令牌文件失败（忽略继续退出）: $error');
+    }
   }
 }
 
@@ -177,10 +210,11 @@ File? _resolveInstanceTokenFile() {
 }
 
 Future<void> _writeInstanceToken(String token) async {
-  final file = _resolveInstanceTokenFile();
+  final file = _instanceTokenFile ?? _resolveInstanceTokenFile();
   if (file == null) {
     return;
   }
+  _instanceTokenFile = file;
   try {
     await file.parent.create(recursive: true);
     await file.writeAsString('$token\n', flush: true);

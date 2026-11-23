@@ -182,7 +182,9 @@ class _FilesRailState extends State<_FilesRail> {
             if (shared && widget.state?.sharedSpaceUsage != null)
               _RailSharedStorageCard(usage: widget.state!.sharedSpaceUsage!)
             else if (widget.stats != null)
-              _RailStorageCard(stats: widget.stats!),
+              _RailStorageCard(stats: widget.stats!)
+            else if (widget.state == null)
+              const _RailStorageSkeleton(),
           ],
         ),
       ),

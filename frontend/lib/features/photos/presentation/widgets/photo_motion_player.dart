@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:omninest/core/media/active_media_players.dart';
 import 'package:omninest/core/media/media_kit_ready.dart';
 
 /// 动态照片运动视频播放层：静音循环播放提取出的 MP4 派生资产。
@@ -28,6 +29,7 @@ class _PhotoMotionPlayerState extends State<PhotoMotionPlayer> {
     super.initState();
     ensureMediaKitReady();
     _player = Player(configuration: const PlayerConfiguration(muted: true));
+    registerActiveMediaPlayer(_player);
     _controller = VideoController(_player);
     _errorSubscription = _player.stream.error.listen(
       (_) => widget.onError?.call(),
@@ -47,7 +49,7 @@ class _PhotoMotionPlayerState extends State<PhotoMotionPlayer> {
   @override
   void dispose() {
     _errorSubscription?.cancel();
-    _player.dispose();
+    unawaited(stopAndDisposeMediaPlayer(_player));
     super.dispose();
   }
 

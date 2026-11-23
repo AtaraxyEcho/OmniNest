@@ -50,7 +50,7 @@ void main() {
     expect(await DesktopCloseFlow.instance.readRememberedAction(), isNull);
   });
 
-  test('导航未就绪时关闭回退为隐藏到托盘', () async {
+  test('导航未就绪时关闭回退为直接退出', () async {
     var hidden = false;
     var quit = false;
     DesktopCloseFlow.instance.bind(
@@ -60,8 +60,28 @@ void main() {
 
     await DesktopCloseFlow.instance.handleWindowCloseRequest();
 
-    expect(hidden, isTrue);
-    expect(quit, isFalse);
+    expect(hidden, isFalse);
+    expect(quit, isTrue);
+  });
+
+  testWidgets('托盘未就绪期间关闭直接退出', (tester) async {
+    var hidden = false;
+    var quit = false;
+    await DesktopCloseFlow.instance.rememberAction(
+      DesktopCloseAction.minimizeToTray,
+    );
+    DesktopCloseFlow.instance.bind(
+      hideWindow: () async => hidden = true,
+      quitApp: () async => quit = true,
+      isTrayReady: () => false,
+    );
+    await tester.pumpWidget(buildHostApp());
+
+    await DesktopCloseFlow.instance.handleWindowCloseRequest();
+
+    expect(hidden, isFalse);
+    expect(quit, isTrue);
+    expect(find.byType(DesktopCloseConfirmDialog), findsNothing);
   });
 
   testWidgets('未记住偏好时弹出确认窗，取消则保持窗口现状', (tester) async {
@@ -80,6 +100,7 @@ void main() {
     expect(find.text('关闭 OmniNest'), findsOneWidget);
 
     await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
     await flowFuture;
 
     expect(hidden, isFalse);
@@ -102,6 +123,7 @@ void main() {
     await tester.tap(find.text('记住我的选择，下次不再询问'));
     await tester.pump();
     await tester.tap(find.text('最小化到托盘'));
+    await tester.pumpAndSettle();
     await flowFuture;
 
     expect(hidden, isTrue);
@@ -125,6 +147,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('退出程序'));
+    await tester.pumpAndSettle();
     await flowFuture;
 
     expect(quit, isTrue);
@@ -147,6 +170,7 @@ void main() {
     expect(find.byType(DesktopCloseConfirmDialog), findsOneWidget);
 
     await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
     await flowFuture;
   });
 }

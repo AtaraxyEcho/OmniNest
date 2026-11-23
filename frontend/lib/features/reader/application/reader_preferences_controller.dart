@@ -44,6 +44,9 @@ class ReaderPreferencesController extends AsyncNotifier<Map<String, dynamic>> {
       sessionFuture = null;
     }
     final local = await _readLocal();
+    if (!ref.mounted) {
+      return local;
+    }
     if (sessionFuture == null) {
       _userId = null;
       return local;
@@ -53,6 +56,9 @@ class ReaderPreferencesController extends AsyncNotifier<Map<String, dynamic>> {
       session = await sessionFuture;
     } on Object {
       _userId = null;
+      return local;
+    }
+    if (!ref.mounted) {
       return local;
     }
     _userId = session.user?.id;
@@ -69,12 +75,18 @@ class ReaderPreferencesController extends AsyncNotifier<Map<String, dynamic>> {
         userId: userId,
         scope: readerPreferenceScope,
       );
+      if (!ref.mounted) {
+        return local;
+      }
       if (snapshot.preferences.isEmpty && local.isNotEmpty) {
         snapshot = await service.patch(
           userId: userId,
           scope: readerPreferenceScope,
           changes: local,
         );
+        if (!ref.mounted) {
+          return local;
+        }
       }
       final resolved =
           snapshot.preferences.isEmpty ? local : snapshot.preferences;
@@ -88,9 +100,15 @@ class ReaderPreferencesController extends AsyncNotifier<Map<String, dynamic>> {
   }
 
   Future<void> save(Map<String, dynamic> preferences) async {
+    if (!ref.mounted) {
+      return;
+    }
     final merged = <String, dynamic>{...?state.asData?.value, ...preferences};
     state = AsyncData(merged);
     await _writeLocal(merged);
+    if (!ref.mounted) {
+      return;
+    }
     final userId = _userId;
     if (userId == null) {
       return;
@@ -98,29 +116,39 @@ class ReaderPreferencesController extends AsyncNotifier<Map<String, dynamic>> {
     _pendingRemoteChanges.addAll(preferences);
     _syncDebounceTimer?.cancel();
     _syncDebounceTimer = Timer(_syncDebounce, () {
+      if (!ref.mounted) {
+        return;
+      }
       unawaited(_flushRemotePatch(userId, merged));
     });
   }
 
   /// 从远端重新同步阅读偏好，并保留本地待提交变更。
   Future<void> refreshFromRemote() async {
+    if (!ref.mounted) {
+      return;
+    }
     final userId = _userId;
     final service = _tryReadSyncService();
     if (userId == null || service == null) return;
-    final snapshot = await service.synchronize(
-      userId: userId,
-      scope: readerPreferenceScope,
-    );
-    if (_userId != userId) return;
-    state = AsyncData(snapshot.preferences);
-    await _writeLocal(snapshot.preferences);
+    try {
+      final snapshot = await service.synchronize(
+        userId: userId,
+        scope: readerPreferenceScope,
+      );
+      if (!ref.mounted || _userId != userId) return;
+      state = AsyncData(snapshot.preferences);
+      await _writeLocal(snapshot.preferences);
+    } on Object {
+      // 离线或远端不可用时静默保留本地偏好。
+    }
   }
 
   Future<void> _flushRemotePatch(
     String userId,
     Map<String, dynamic> fallbackMerged,
   ) async {
-    if (_userId != userId || _pendingRemoteChanges.isEmpty) {
+    if (!ref.mounted || _userId != userId || _pendingRemoteChanges.isEmpty) {
       return;
     }
     final service = _tryReadSyncService();
@@ -136,7 +164,7 @@ class ReaderPreferencesController extends AsyncNotifier<Map<String, dynamic>> {
         scope: readerPreferenceScope,
         changes: payload,
       );
-      if (_userId != userId) return;
+      if (!ref.mounted || _userId != userId) return;
       final merged = <String, dynamic>{
         ..._liveOr(fallbackMerged),
         ...snapshot.preferences,
@@ -149,6 +177,9 @@ class ReaderPreferencesController extends AsyncNotifier<Map<String, dynamic>> {
   }
 
   PreferenceSyncService? _tryReadSyncService() {
+    if (!ref.mounted) {
+      return null;
+    }
     try {
       return ref.read(preferenceSyncServiceProvider);
     } on Object {

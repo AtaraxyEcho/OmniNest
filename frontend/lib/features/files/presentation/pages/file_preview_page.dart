@@ -14,6 +14,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
+import 'package:omninest/core/media/active_media_players.dart';
 import 'package:omninest/core/media/media_kit_ready.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/utils/download_url_opener.dart';
@@ -200,6 +201,7 @@ class _VideoPlayerBodyState extends State<_VideoPlayerBody> {
     super.initState();
     ensureMediaKitReady();
     _player = Player();
+    registerActiveMediaPlayer(_player);
     _videoController = VideoController(_player);
     _loadController = MediaPreviewLoadController(
       opener: (url) => _player.open(Media(url)),
@@ -218,7 +220,7 @@ class _VideoPlayerBodyState extends State<_VideoPlayerBody> {
     _loadController
       ..removeListener(_handleLoadChanged)
       ..dispose();
-    _player.dispose();
+    unawaited(stopAndDisposeMediaPlayer(_player));
     super.dispose();
   }
 

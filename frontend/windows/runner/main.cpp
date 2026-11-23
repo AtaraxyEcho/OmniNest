@@ -157,6 +157,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   HANDLE single_instance_mutex =
       ::CreateMutexW(nullptr, TRUE, kSingleInstanceMutexName);
   const DWORD mutex_error = ::GetLastError();
+  const bool owns_mutex =
+      single_instance_mutex != nullptr && mutex_error != ERROR_ALREADY_EXISTS;
   if (single_instance_mutex != nullptr &&
       mutex_error == ERROR_ALREADY_EXISTS) {
     std::vector<std::string> args = GetCommandLineArguments();
@@ -206,6 +208,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   Win32Window::Size size(1280, 800);
   if (!window.Create(L"OmniNest", origin, size)) {
     if (single_instance_mutex != nullptr) {
+      if (owns_mutex) {
+        ::ReleaseMutex(single_instance_mutex);
+      }
       ::CloseHandle(single_instance_mutex);
     }
     return EXIT_FAILURE;
@@ -213,13 +218,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   window.SetQuitOnClose(true);
 
   ::MSG msg;
-  while (::GetMessage(&msg, nullptr, 0, 0)) {
+  while (::GetMessage(&msg, nullptr, 0, 0) > 0) {
     ::TranslateMessage(&msg);
     ::DispatchMessage(&msg);
   }
 
   if (single_instance_mutex != nullptr) {
-    ::ReleaseMutex(single_instance_mutex);
+    if (owns_mutex) {
+      ::ReleaseMutex(single_instance_mutex);
+    }
     ::CloseHandle(single_instance_mutex);
   }
   ::CoUninitialize();

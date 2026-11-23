@@ -373,7 +373,9 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
                                         ),
                                         icon: DesktopIcons.queue,
                                         tooltip: l10n.desktopDockQueue,
-                                        active: dockOpen,
+                                        active:
+                                            dockOpen &&
+                                            dockTab == DesktopDockTab.queue,
                                         onPressed: () {
                                           // 样例 Shell.tsx:280 是 setDock(!a.dock)：
                                           // 再点一次收起，而不是无条件打开队列。

@@ -454,6 +454,19 @@ class MusicAudioPlayer implements MusicAudioPlayback {
     }
   }
 
+  /// 应用退出前释放全局 SoLoud 音频引擎，避免原生音频线程阻滞进程退出。
+  static Future<void> deinitEngineForExit() async {
+    final soLoud = SoLoud.instance;
+    if (!soLoud.isInitialized) {
+      return;
+    }
+    try {
+      soLoud.deinit();
+    } on Object catch (error) {
+      devLog('退出前反初始化 SoLoud 引擎失败（忽略继续退出）: $error');
+    }
+  }
+
   /// 释放播放资源。
   @override
   Future<void> dispose() async {

@@ -42,8 +42,14 @@ class PreferenceSyncHandler implements RealtimeScopeHandler {
 
   @override
   Future<bool> refresh(List<RealtimeInvalidation> invalidations) async {
+    if (!ref.mounted) {
+      return false;
+    }
     var allCompleted = true;
     for (final invalidation in invalidations) {
+      if (!ref.mounted) {
+        return false;
+      }
       final requiredTargets =
           invalidation.resourceType == '*'
               ? _targets
@@ -57,6 +63,9 @@ class PreferenceSyncHandler implements RealtimeScopeHandler {
         () => <String>{},
       );
       for (final target in requiredTargets.difference(completed)) {
+        if (!ref.mounted) {
+          return false;
+        }
         if (await _refreshTarget(target)) {
           completed.add(target);
         }
@@ -76,58 +85,81 @@ class PreferenceSyncHandler implements RealtimeScopeHandler {
   }
 
   Future<bool> _refreshTarget(String target) async {
-    switch (target) {
-      case appearancePreferenceScope:
-        await ref
-            .read(appearanceControllerProvider.notifier)
-            .refreshFromRemote();
-        await ref
-            .read(fontScaleControllerProvider.notifier)
-            .refreshFromRemote();
-        return true;
-      case desktopAppearancePreferenceScope:
-        if (!ref.exists(desktopAppearanceProvider)) return true;
-        await ref.read(desktopAppearanceProvider.notifier).refreshFromRemote();
-        return true;
-      case desktopNpStylePreferenceScope:
-        if (!ref.exists(desktopNpStyleProvider)) return true;
-        await ref.read(desktopNpStyleProvider.notifier).refreshFromRemote();
-        return true;
-      case localePreferenceScope:
-        await ref.read(localeControllerProvider.notifier).refreshFromRemote();
-        return true;
-      // 目标 Provider 未挂载时没有本地状态可刷，按已消费确认：页面首次打开
-      // 会自取最新偏好，不能因为那一页从未打开就永久重试（全作用域事件要求
-      // 全部目标完成，否则一个未打开页面就能卡住整条失效记录）。
-      case weatherPreferenceScope:
-        if (!ref.exists(weatherLocationProvider)) return true;
-        await ref.read(weatherLocationProvider.future);
-        await ref.read(weatherLocationProvider.notifier).refreshFromRemote();
-        return true;
-      case readerPreferenceScope:
-        if (!ref.exists(readerPreferencesProvider)) return true;
-        await ref.read(readerPreferencesProvider.future);
-        await ref.read(readerPreferencesProvider.notifier).refreshFromRemote();
-        return true;
-      case notificationPreferenceScope:
-        if (!ref.exists(notificationPreferencesProvider)) return true;
-        await ref.read(notificationPreferencesProvider.future);
-        await ref
-            .read(notificationPreferencesProvider.notifier)
-            .refreshFromRemote();
-        return true;
-      case musicVisualizerPreferenceScope:
-        if (!ref.exists(musicVisualizerPreferencesProvider)) return true;
-        await ref.read(musicVisualizerPreferencesProvider.future);
-        await ref
-            .read(musicVisualizerPreferencesProvider.notifier)
-            .refreshFromRemote();
-        return true;
-      case userProfileSyncTarget:
-        await ref.read(authSessionProvider.notifier).reloadProfile();
-        return true;
-      default:
-        return true;
+    if (!ref.mounted) {
+      return false;
+    }
+    try {
+      switch (target) {
+        case appearancePreferenceScope:
+          await ref
+              .read(appearanceControllerProvider.notifier)
+              .refreshFromRemote();
+          if (!ref.mounted) return false;
+          await ref
+              .read(fontScaleControllerProvider.notifier)
+              .refreshFromRemote();
+          return true;
+        case desktopAppearancePreferenceScope:
+          if (!ref.exists(desktopAppearanceProvider)) return true;
+          await ref
+              .read(desktopAppearanceProvider.notifier)
+              .refreshFromRemote();
+          return true;
+        case desktopNpStylePreferenceScope:
+          if (!ref.exists(desktopNpStyleProvider)) return true;
+          await ref.read(desktopNpStyleProvider.notifier).refreshFromRemote();
+          return true;
+        case localePreferenceScope:
+          await ref.read(localeControllerProvider.notifier).refreshFromRemote();
+          return true;
+        // 目标 Provider 未挂载时没有本地状态可刷，按已消费确认：页面首次打开
+        // 会自取最新偏好，不能因为那一页从未打开就永久重试（全作用域事件要求
+        // 全部目标完成，否则一个未打开页面就能卡住整条失效记录）。
+        case weatherPreferenceScope:
+          if (!ref.exists(weatherLocationProvider)) return true;
+          await ref.read(weatherLocationProvider.future);
+          if (!ref.mounted || !ref.exists(weatherLocationProvider)) return true;
+          await ref.read(weatherLocationProvider.notifier).refreshFromRemote();
+          return true;
+        case readerPreferenceScope:
+          if (!ref.exists(readerPreferencesProvider)) return true;
+          await ref.read(readerPreferencesProvider.future);
+          if (!ref.mounted || !ref.exists(readerPreferencesProvider)) {
+            return true;
+          }
+          await ref
+              .read(readerPreferencesProvider.notifier)
+              .refreshFromRemote();
+          return true;
+        case notificationPreferenceScope:
+          if (!ref.exists(notificationPreferencesProvider)) return true;
+          await ref.read(notificationPreferencesProvider.future);
+          if (!ref.mounted || !ref.exists(notificationPreferencesProvider)) {
+            return true;
+          }
+          await ref
+              .read(notificationPreferencesProvider.notifier)
+              .refreshFromRemote();
+          return true;
+        case musicVisualizerPreferenceScope:
+          if (!ref.exists(musicVisualizerPreferencesProvider)) return true;
+          await ref.read(musicVisualizerPreferencesProvider.future);
+          if (!ref.mounted || !ref.exists(musicVisualizerPreferencesProvider)) {
+            return true;
+          }
+          await ref
+              .read(musicVisualizerPreferencesProvider.notifier)
+              .refreshFromRemote();
+          return true;
+        case userProfileSyncTarget:
+          await ref.read(authSessionProvider.notifier).reloadProfile();
+          return true;
+        default:
+          return true;
+      }
+    } on Object {
+      // 容器卸载或远端异常时返回 false，避免未捕获异常击穿实时同步流。
+      return false;
     }
   }
 }

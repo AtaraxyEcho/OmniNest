@@ -11,12 +11,16 @@ import 'package:flutter/widgets.dart' show Locale;
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/preferences/app_bootstrap_data.dart';
+import 'package:omninest/core/media/active_media_players.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/window/desktop_close_flow.dart';
 import 'package:omninest/core/window/window_geometry_service.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_video_session.dart';
+import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_media_session.dart';
 import 'package:omninest/platform/desktop/desktop_hotkey_service.dart';
+import 'package:omninest/platform/desktop/desktop_shell_bootstrap.dart';
+import 'package:omninest/platform/desktop/desktop_single_instance.dart';
 import 'package:omninest/platform/desktop/desktop_tray_port.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
@@ -55,10 +59,13 @@ class DesktopTrayService with TrayListener, WindowListener {
   static const String posixTrayIconAsset = BrandLogo.assetPath;
 
   /// 非 Windows 桌面端托盘退出清理预算。
-  static const Duration quitCleanupBudget = Duration(milliseconds: 400);
+  static const Duration quitCleanupBudget = Duration(milliseconds: 600);
 
-  /// Windows 退出前暂停/释放活跃音视频会话的异步预算。
-  static const Duration windowsMediaCleanupBudget = Duration(milliseconds: 200);
+  /// Windows 退出前并行释放热键、活跃 media_kit 与 SoLoud 引擎的总预算。
+  static const Duration windowsMediaCleanupBudget = Duration(milliseconds: 600);
+
+  /// `windowManager` 及原生退出通道单次调用超时上限。
+  static const Duration _windowManagerCallTimeout = Duration(milliseconds: 300);
 
   /// Windows 原生窗口帧通道，与 runner 的 flutter_window.cpp 对齐；
   /// window_chrome_controller 内亦声明了同名通道。
@@ -70,6 +77,9 @@ class DesktopTrayService with TrayListener, WindowListener {
   bool _initialized = false;
   bool _windowListenerAttached = false;
   bool _quitting = false;
+
+  /// 托盘是否已完成初始化（500ms 延迟初始化期间为 false）。
+  bool get isInitialized => _initialized;
 
   /// 提前挂载窗口关闭监听（在 setPreventClose(true) 之前调用，消除早关窗空窗）。
   void attachWindowListener() {
@@ -222,11 +232,13 @@ class DesktopTrayService with TrayListener, WindowListener {
 
   /// 托盘菜单或关窗确认退出。
   ///
-  /// Windows 端彻底移除 `exit(0)` 与会阻塞主线程的同步 FFI `_tray.destroy()`：
-  /// 先隐藏窗口、在 200ms 预算内异步暂停/释放活跃音视频会话、解除关闭拦截，
-  /// 再经 `omninest/window_frame` 调用 `requestAppExit` 投递 `WM_CLOSE` 并由
-  /// 原生 1.5s 看门狗兜底。非 Windows 桌面端维持既有安全退出路径。
+  /// 首行无条件取消延迟壳层初始化并立即释放单实例端口与令牌文件；
+  /// Windows 端对 `windowManager` 调用统一设 300ms 超时，在 600ms 预算内
+  /// 并行释放热键、活跃 `media_kit` 播放器与 `SoLoud` 引擎，再经
+  /// `omninest/window_frame` 调用 `requestAppExit` 直通销毁窗口并由原生
+  /// 1.5s 看门狗兜底。
   Future<void> quit() async {
+    cancelDeferredDesktopShellInit();
     if (_quitting) {
       return;
     }
@@ -238,11 +250,16 @@ class DesktopTrayService with TrayListener, WindowListener {
       _windowListenerAttached = false;
     }
 
+    await closeSingleDesktopInstance().timeout(
+      _windowManagerCallTimeout,
+      onTimeout: () {},
+    );
+
     final isWindows =
         Platform.isWindows || defaultTargetPlatform == TargetPlatform.windows;
     if (isWindows) {
       try {
-        await windowManager.hide();
+        await windowManager.hide().timeout(_windowManagerCallTimeout);
       } on Object catch (error) {
         devLog('退出前隐藏窗口失败（忽略继续退出）: $error');
       }
@@ -251,16 +268,20 @@ class DesktopTrayService with TrayListener, WindowListener {
         Future<void>.delayed(windowsMediaCleanupBudget),
       ]);
       try {
-        await windowManager.setPreventClose(false);
+        await windowManager
+            .setPreventClose(false)
+            .timeout(_windowManagerCallTimeout);
       } on Object catch (error) {
         devLog('解除关闭拦截失败: $error');
       }
       try {
-        await _windowFrameChannel.invokeMethod<void>('requestAppExit');
+        await _windowFrameChannel
+            .invokeMethod<void>('requestAppExit')
+            .timeout(_windowManagerCallTimeout);
       } on Object catch (error) {
         devLog('请求 Windows 原生退出通道失败，回退关闭窗口: $error');
         try {
-          await windowManager.close();
+          await windowManager.close().timeout(_windowManagerCallTimeout);
         } on Object catch (_) {}
       }
       return;
@@ -294,36 +315,37 @@ class DesktopTrayService with TrayListener, WindowListener {
         try {
           await AppBackdropVideoSession.releaseActiveSessionsForExit();
         } on Object catch (error) {
-          devLog('退出前释放视频会话失败（忽略继续退出）: $error');
+          devLog('退出前释放背景视频会话失败（忽略继续退出）: $error');
+        }
+      }(),
+      () async {
+        try {
+          await releaseAllActiveMediaPlayersForExit();
+        } on Object catch (error) {
+          devLog('退出前释放前台视频播放器失败（忽略继续退出）: $error');
+        }
+      }(),
+      () async {
+        try {
+          await MusicAudioPlayer.deinitEngineForExit();
+        } on Object catch (error) {
+          devLog('退出前释放 SoLoud 音频引擎失败（忽略继续退出）: $error');
         }
       }(),
     ]);
   }
 
   Future<void> _cleanupBeforeExit() async {
-    try {
-      // 媒体键注册在进程级单例上，退出前注销，避免残留全局热键。
-      await DesktopHotkeyService.instance.dispose();
-    } on Object catch (error) {
-      devLog('媒体键注销失败（忽略继续退出）: $error');
-    }
-    try {
-      await MusicMediaKeyBridge.dispatch(play: false, pause: true);
-    } on Object catch (error) {
-      devLog('退出前暂停音频会话失败（忽略继续退出）: $error');
-    }
-    try {
-      await AppBackdropVideoSession.releaseActiveSessionsForExit();
-    } on Object catch (error) {
-      devLog('退出前释放视频会话失败（忽略继续退出）: $error');
-    }
+    await _cleanupWindowsMediaBeforeExit();
     try {
       await _tray.destroy();
     } on Object catch (error) {
       devLog('托盘销毁失败（忽略继续退出）: $error');
     }
     try {
-      await windowManager.setPreventClose(false);
+      await windowManager
+          .setPreventClose(false)
+          .timeout(_windowManagerCallTimeout);
     } on Object catch (error) {
       devLog('解除关闭拦截失败: $error');
     }

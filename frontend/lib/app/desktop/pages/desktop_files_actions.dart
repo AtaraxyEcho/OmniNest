@@ -128,6 +128,7 @@ extension _FilesPageActions on _DesktopFilesPageState {
   void _goSection(FileBrowserController controller, FileManagerSection value) {
     _search.clear();
     controller.setSearchQuery('');
+    ref.read(desktopShellProvider.notifier).clearDetail();
     unawaited(controller.loadSection(value));
   }
 
@@ -136,6 +137,7 @@ extension _FilesPageActions on _DesktopFilesPageState {
   void _switchSpace(FileBrowserController controller, String spaceType) {
     _search.clear();
     controller.setSearchQuery('');
+    ref.read(desktopShellProvider.notifier).clearDetail();
     unawaited(controller.switchSpace(spaceType));
   }
 
@@ -158,85 +160,12 @@ extension _FilesPageActions on _DesktopFilesPageState {
     bool shared = false,
     List<FileNode>? breadcrumbs,
   }) {
+    ref.read(desktopShellProvider.notifier).clearDetail();
     unawaited(
       shared
           ? controller.openSharedSpaceFolder(folder, breadcrumbs: breadcrumbs)
           : controller.openFolder(folder, breadcrumbs: breadcrumbs),
     );
-  }
-
-  DesktopDetailData _buildFileDetailData(
-    AppLocalizations l10n,
-    FileNode node, {
-    required bool sharedSpace,
-  }) {
-    final isShared = sharedSpace || node.spaceType == SpaceType.shared;
-    final updatedAt = node.updatedAt?.toLocal();
-    final modifiedText =
-        updatedAt == null
-            ? '—'
-            : '${updatedAt.year}-${updatedAt.month.toString().padLeft(2, '0')}-${updatedAt.day.toString().padLeft(2, '0')} '
-                '${updatedAt.hour.toString().padLeft(2, '0')}:${updatedAt.minute.toString().padLeft(2, '0')}';
-    return DesktopDetailData(
-      id: 'file:${node.id}',
-      kind: 'file',
-      title: node.name,
-      subtitle:
-          node.isFolder
-              ? l10n.desktopFilesKindFolder
-              : formatFileSize(node.sizeBytes),
-      squareArt: true,
-      factsLabel: l10n.desktopFileSection,
-      facts: [
-        MapEntry(
-          l10n.filesColumnType,
-          node.isFolder
-              ? l10n.desktopFilesKindFolder
-              : (node.mimeType ?? node.nodeType),
-        ),
-        MapEntry(
-          l10n.desktopFilesSize,
-          node.isFolder ? '—' : formatFileSize(node.sizeBytes),
-        ),
-        MapEntry(l10n.desktopFilesModified, modifiedText),
-        MapEntry(
-          l10n.filesGroupSharing,
-          isShared ? l10n.desktopFilesSharedBadge : l10n.desktopFilesPrivate,
-        ),
-      ],
-      primary: DesktopDetailAction(
-        label: l10n.desktopFilesOpen,
-        icon: node.isFolder ? DesktopIcons.folder : DesktopIcons.eye,
-        onPressed: (ctx, r) {
-          if (node.isFolder) {
-            final ctrl = r.read(fileBrowserControllerProvider.notifier);
-            unawaited(
-              isShared
-                  ? ctrl.openSharedSpaceFolder(node)
-                  : ctrl.openFolder(node),
-            );
-            return;
-          }
-          desktopPush(ctx, DesktopRoutes.filePreview(node.id));
-        },
-      ),
-    );
-  }
-
-  void _syncSelectedFileDetail(FileNode node) {
-    if (!mounted) {
-      return;
-    }
-    final state = ref.read(fileBrowserControllerProvider).asData?.value;
-    final sharedSpace =
-        state?.spaceType == 'SHARED' ||
-        state?.section == FileManagerSection.sharedSpace;
-    final l10n = AppLocalizations.of(context);
-    ref
-        .read(desktopShellProvider.notifier)
-        .selectDetail(
-          _buildFileDetailData(l10n, node, sharedSpace: sharedSpace),
-        );
   }
 
   void _select(
@@ -254,24 +183,25 @@ extension _FilesPageActions on _DesktopFilesPageState {
         _selectionAnchorId!,
         node.id,
       );
-      _syncSelectedFileDetail(node);
+      _syncSelectionDetail(fallbackNode: node);
       return;
     }
     if (keyboard.isControlPressed || keyboard.isMetaPressed) {
       controller.toggleSelection(node.id);
       _selectionAnchorId = node.id;
-      _syncSelectedFileDetail(node);
+      _syncSelectionDetail(fallbackNode: node);
       return;
     }
     controller.clearSelection();
     controller.toggleSelection(node.id);
     _selectionAnchorId = node.id;
-    _syncSelectedFileDetail(node);
+    _syncSelectionDetail(fallbackNode: node);
   }
 
   void _toggleSelect(FileBrowserController controller, FileNode node) {
     controller.toggleSelection(node.id);
     _selectionAnchorId = node.id;
+    _syncSelectionDetail(fallbackNode: node);
   }
 
   void _toggleSelectAll(
@@ -286,10 +216,12 @@ extension _FilesPageActions on _DesktopFilesPageState {
     if (allSelected) {
       controller.clearSelection();
       _selectionAnchorId = null;
+      _syncSelectionDetail();
       return;
     }
     controller.selectAll(items.map((node) => node.id));
     _selectionAnchorId = items.first.id;
+    _syncSelectionDetail();
   }
 
   void _activate(
@@ -298,6 +230,7 @@ extension _FilesPageActions on _DesktopFilesPageState {
     bool shared = false,
   }) {
     if (node.isFolder) {
+      ref.read(desktopShellProvider.notifier).clearDetail();
       unawaited(
         shared
             ? controller.openSharedSpaceFolder(node)
@@ -430,6 +363,7 @@ extension _FilesPageActions on _DesktopFilesPageState {
     if (!mounted) {
       return;
     }
+    ref.read(desktopShellProvider.notifier).clearDetail();
     showDesktopToast(
       context,
       shared
@@ -449,6 +383,7 @@ extension _FilesPageActions on _DesktopFilesPageState {
     if (!mounted) {
       return;
     }
+    ref.read(desktopShellProvider.notifier).clearDetail();
     showDesktopToast(
       context,
       messenger.desktopFilesRestored,
@@ -633,7 +568,13 @@ extension _FilesPageActions on _DesktopFilesPageState {
               () => ref
                   .read(desktopShellProvider.notifier)
                   .showDetail(
-                    _buildFileDetailData(l10n, node, sharedSpace: sharedSpace),
+                    _buildFileDetailData(
+                      l10n,
+                      node,
+                      sharedSpace: sharedSpace,
+                      controller: controller,
+                      recycle: recycle,
+                    ),
                   ),
         ),
       );
@@ -642,11 +583,17 @@ extension _FilesPageActions on _DesktopFilesPageState {
           label: l10n.desktopFilesDetails,
           icon: DesktopIcons.info,
           onPressed:
-              () => showDesktopDialog<void>(
-                context,
-                builder:
-                    (_) => _DetailsDialog(controller: controller, node: node),
-              ),
+              () => ref
+                  .read(desktopShellProvider.notifier)
+                  .showDetail(
+                    _buildFileDetailData(
+                      l10n,
+                      node,
+                      sharedSpace: sharedSpace,
+                      controller: controller,
+                      recycle: recycle,
+                    ),
+                  ),
         ),
       );
       if (!sharedSpace) {
@@ -734,6 +681,7 @@ extension _FilesPageActions on _DesktopFilesPageState {
       return KeyEventResult.ignored;
     }
     // 输入框获得焦点时不抢键：删除/重命名要留给文本框自己。
+    // 注意：全局 Space 归音乐播放/暂停，Files 页不拦截 Space。
     if (FocusManager.instance.primaryFocus?.context?.widget is EditableText) {
       return KeyEventResult.ignored;
     }
@@ -743,10 +691,12 @@ extension _FilesPageActions on _DesktopFilesPageState {
     final selected = _selectedNodes(state);
     if (meta && event.logicalKey == LogicalKeyboardKey.keyA) {
       controller.selectAll();
+      _syncSelectionDetail();
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.escape) {
       controller.clearSelection();
+      ref.read(desktopShellProvider.notifier).clearDetail();
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.f2 && selected.length == 1) {

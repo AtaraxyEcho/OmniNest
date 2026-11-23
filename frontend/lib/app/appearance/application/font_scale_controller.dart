@@ -79,8 +79,14 @@ class FontScaleController extends Notifier<FontScalePreset> {
   }
 
   Future<void> setPreset(FontScalePreset preset) async {
+    if (!ref.mounted) {
+      return;
+    }
     state = preset;
     await _writeDevicePreset(preset);
+    if (!ref.mounted) {
+      return;
+    }
     final userId = _activeUserId;
     final service = _tryReadSyncService();
     if (userId == null || service == null) {
@@ -99,27 +105,40 @@ class FontScaleController extends Notifier<FontScalePreset> {
 
   /// 从远端重新同步字体档位，并保留本地待提交变更。
   Future<void> refreshFromRemote() async {
+    if (!ref.mounted) {
+      return;
+    }
     final userId = _activeUserId;
     final service = _tryReadSyncService();
     if (userId == null || service == null) return;
-    final snapshot = await service.synchronize(
-      userId: userId,
-      scope: appearancePreferenceScope,
-    );
-    if (_activeUserId != userId) return;
-    final remoteName = snapshot.preferences['fontScale']?.toString();
-    if (remoteName == null || remoteName.isEmpty) return;
-    final resolved = FontScalePreset.fromName(remoteName);
-    state = resolved;
-    await _writeDevicePreset(resolved);
+    try {
+      final snapshot = await service.synchronize(
+        userId: userId,
+        scope: appearancePreferenceScope,
+      );
+      if (!ref.mounted || _activeUserId != userId) return;
+      final remoteName = snapshot.preferences['fontScale']?.toString();
+      if (remoteName == null || remoteName.isEmpty) return;
+      final resolved = FontScalePreset.fromName(remoteName);
+      state = resolved;
+      await _writeDevicePreset(resolved);
+    } on Object {
+      // 离线或远端不可用时静默保留本地偏好。
+    }
   }
 
   Future<void> _bindUser(String? userId) async {
+    if (!ref.mounted) {
+      return;
+    }
     final previousUserId = _lastBoundUserId;
     _activeUserId = userId;
     final generation = ++_loadGeneration;
     if (userId == null) {
       final preferences = await SharedPreferences.getInstance();
+      if (!ref.mounted) {
+        return;
+      }
       if (generation == _loadGeneration) {
         state = FontScalePreset.fromName(
           preferences.getString(appearanceDeviceFontScaleKey),
@@ -137,7 +156,9 @@ class FontScaleController extends Notifier<FontScalePreset> {
         userId: userId,
         scope: appearancePreferenceScope,
       );
-      if (generation != _loadGeneration || _activeUserId != userId) {
+      if (!ref.mounted ||
+          generation != _loadGeneration ||
+          _activeUserId != userId) {
         return;
       }
       final remoteName = snapshot.preferences['fontScale']?.toString();
@@ -167,6 +188,9 @@ class FontScaleController extends Notifier<FontScalePreset> {
   }
 
   PreferenceSyncService? _tryReadSyncService() {
+    if (!ref.mounted) {
+      return null;
+    }
     try {
       return ref.read(preferenceSyncServiceProvider);
     } on Object {

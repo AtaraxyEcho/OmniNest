@@ -358,10 +358,8 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump(const Duration(milliseconds: 320));
     expect(container.read(desktopShellProvider).dockOpen, isTrue);
-    expect(
-      find.text('Select a title, track, or file to see its details here.'),
-      findsOneWidget,
-    );
+    // 方案 C：检查器零空态，未选中条目时自动回落为当前播放曲目速览或上下文概览。
+    expect(find.text('Open Now Playing'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump(const Duration(milliseconds: 320));

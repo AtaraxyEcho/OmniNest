@@ -90,12 +90,16 @@ class _ResolvedAmbientSpec {
     required this.showArt,
     required this.artPreset,
     this.fallbackTone,
+    this.useMusicAuth = false,
+    this.isPhotoSource = false,
   });
 
   final String? imageUrl;
   final bool showArt;
   final EditorialArtPreset artPreset;
   final Color? fallbackTone;
+  final bool useMusicAuth;
+  final bool isPhotoSource;
 
   @override
   bool operator ==(Object other) {
@@ -104,11 +108,20 @@ class _ResolvedAmbientSpec {
         other.imageUrl == imageUrl &&
         other.showArt == showArt &&
         other.artPreset == artPreset &&
-        other.fallbackTone == fallbackTone;
+        other.fallbackTone == fallbackTone &&
+        other.useMusicAuth == useMusicAuth &&
+        other.isPhotoSource == isPhotoSource;
   }
 
   @override
-  int get hashCode => Object.hash(imageUrl, showArt, artPreset, fallbackTone);
+  int get hashCode => Object.hash(
+    imageUrl,
+    showArt,
+    artPreset,
+    fallbackTone,
+    useMusicAuth,
+    isPhotoSource,
+  );
 }
 
 /// 环境光层：独立订阅当前路由的环境封面、「强度」与「减动效」，
@@ -171,12 +184,19 @@ class _AmbientLayerState extends ConsumerState<_AmbientLayer> {
   String? _watchMoviesDashboardCover(WidgetRef ref) {
     return ref.watch(
       movieDashboardProvider.select((dashboard) {
-        for (final item
-            in dashboard.asData?.value.recentlyAdded ??
-                const <MovieVideoItem>[]) {
-          final image = item.backdropImageUrl ?? item.posterImageUrl;
-          if (image != null && image.isNotEmpty) {
-            return image;
+        final items =
+            dashboard.asData?.value.recentlyAdded ?? const <MovieVideoItem>[];
+        // 优先遍历所有具备横屏剧照（backdropImageUrl）的作品，再回退竖版海报。
+        for (final item in items) {
+          final backdrop = item.backdropImageUrl;
+          if (backdrop != null && backdrop.isNotEmpty) {
+            return backdrop;
+          }
+        }
+        for (final item in items) {
+          final poster = item.posterImageUrl;
+          if (poster != null && poster.isNotEmpty) {
+            return poster;
           }
         }
         return null;
@@ -217,19 +237,85 @@ class _AmbientLayerState extends ConsumerState<_AmbientLayer> {
     );
   }
 
-  String? _watchPhotosDashboardCover(WidgetRef ref) {
-    return ref.watch(
-      photoDashboardProvider.select((dashboard) {
-        for (final item
-            in dashboard.asData?.value.recentPhotos ?? const <PhotoItem>[]) {
-          final cover = item.coverUrl;
-          if (cover != null && cover.isNotEmpty) {
-            return cover;
+  static String? _freshPhotoImageUrl(PhotoItem item) {
+    final cover = item.coverUrl?.trim();
+    if (cover != null && cover.isNotEmpty) {
+      return cover;
+    }
+    final source = item.sourceUrl?.trim();
+    if (source != null && source.isNotEmpty) {
+      return source;
+    }
+    return null;
+  }
+
+  /// Photos 背景解析链：
+  /// 1) 若存在 `photosLastViewedId`，按 id 从 `photoListProvider` 与
+  ///    `photoDashboardProvider.recentPhotos` 查找鲜活的 `coverUrl ?? sourceUrl`；
+  /// 2) 否则取 `photoListProvider` 最新日期第 1 张非视频图片；
+  /// 3) 否则取 `photoDashboardProvider.recentPhotos` 第 1 张有效图片；
+  /// 4) 若列表中暂未命中且存在内存态 `photosLastViewedUrl`，作最后兼容兜底。
+  String? _watchPhotosAmbientCover(WidgetRef ref, DesktopAmbientHints hints) {
+    final targetId = hints.photosLastViewedId;
+    final listMatch = ref.watch(
+      photoListProvider.select((pageAsync) {
+        final items = pageAsync.asData?.value.items ?? const <PhotoItem>[];
+        String? byId;
+        String? firstImage;
+        for (final item in items) {
+          final url = _freshPhotoImageUrl(item);
+          if (url == null) continue;
+          if (targetId != null && item.id == targetId) {
+            byId = url;
+            break;
+          }
+          if (firstImage == null && !item.isVideo) {
+            firstImage = url;
           }
         }
-        return null;
+        return (byId: byId, firstImage: firstImage);
       }),
     );
+    if (listMatch.byId != null) {
+      return listMatch.byId;
+    }
+
+    final dashboardMatch = ref.watch(
+      photoDashboardProvider.select((dashboardAsync) {
+        final items =
+            dashboardAsync.asData?.value.recentPhotos ?? const <PhotoItem>[];
+        String? byId;
+        String? firstImage;
+        String? firstAny;
+        for (final item in items) {
+          final url = _freshPhotoImageUrl(item);
+          if (url == null) continue;
+          if (targetId != null && item.id == targetId) {
+            byId = url;
+            break;
+          }
+          firstAny ??= url;
+          if (firstImage == null && !item.isVideo) {
+            firstImage = url;
+          }
+        }
+        return (byId: byId, firstImage: firstImage ?? firstAny);
+      }),
+    );
+    if (dashboardMatch.byId != null) {
+      return dashboardMatch.byId;
+    }
+    if (listMatch.firstImage != null) {
+      return listMatch.firstImage;
+    }
+    if (dashboardMatch.firstImage != null) {
+      return dashboardMatch.firstImage;
+    }
+    final fallbackUrl = hints.photosLastViewedUrl;
+    if (fallbackUrl != null && fallbackUrl.isNotEmpty) {
+      return fallbackUrl;
+    }
+    return null;
   }
 
   _ResolvedAmbientSpec _resolveRawSpec(WidgetRef ref) {
@@ -243,6 +329,7 @@ class _AmbientLayerState extends ConsumerState<_AmbientLayer> {
         imageUrl: effective,
         showArt: effective != null && effective.isNotEmpty,
         artPreset: EditorialArtPreset.square,
+        useMusicAuth: true,
       );
     }
 
@@ -260,15 +347,13 @@ class _AmbientLayerState extends ConsumerState<_AmbientLayer> {
     }
 
     if (prefix == '/photos') {
-      final hintUrl = hints.photosLastViewedUrl;
-      final dashboardUrl = _watchPhotosDashboardCover(ref);
-      final resolved =
-          (hintUrl != null && hintUrl.isNotEmpty) ? hintUrl : dashboardUrl;
+      final resolved = _watchPhotosAmbientCover(ref, hints);
       final effective = _rememberOrFallback('/photos', resolved);
       return _ResolvedAmbientSpec(
         imageUrl: effective,
         showArt: effective != null && effective.isNotEmpty,
         artPreset: EditorialArtPreset.landscape,
+        isPhotoSource: true,
       );
     }
 
@@ -297,6 +382,7 @@ class _AmbientLayerState extends ConsumerState<_AmbientLayer> {
         imageUrl: musicCover,
         showArt: true,
         artPreset: EditorialArtPreset.ambientSubtle,
+        useMusicAuth: true,
       );
     }
     final movieCover =
@@ -310,16 +396,13 @@ class _AmbientLayerState extends ConsumerState<_AmbientLayer> {
         artPreset: EditorialArtPreset.ambientSubtle,
       );
     }
-    final photoCover =
-        (hints.photosLastViewedUrl != null &&
-                hints.photosLastViewedUrl!.isNotEmpty)
-            ? hints.photosLastViewedUrl
-            : _watchPhotosDashboardCover(ref);
+    final photoCover = _watchPhotosAmbientCover(ref, hints);
     if (photoCover != null && photoCover.isNotEmpty) {
       return _ResolvedAmbientSpec(
         imageUrl: photoCover,
         showArt: true,
         artPreset: EditorialArtPreset.ambientSubtle,
+        isPhotoSource: true,
       );
     }
     final readerDashboard = _watchReaderDashboardCover(ref);
@@ -399,16 +482,41 @@ class _AmbientLayerState extends ConsumerState<_AmbientLayer> {
     final isReaderRoute = prefix == '/reader';
     final rawSpec = _resolveRawSpec(ref);
     final spec = isHome ? _applyHomeAntiFlicker(rawSpec) : rawSpec;
+    final imageUrl = spec.imageUrl;
+    ImageProvider<Object>? imageProvider;
+    if (spec.useMusicAuth &&
+        imageUrl != null &&
+        imageUrl.isNotEmpty &&
+        !imageUrl.startsWith('assets/')) {
+      final cacheManager = ref.watch(musicCoverCacheManagerProvider(imageUrl));
+      imageProvider = CachedNetworkImageProvider(
+        imageUrl,
+        cacheManager: cacheManager,
+        imageRenderMethodForWeb: musicCoverRenderMethodForWeb(cacheManager),
+      );
+    }
+
+    VoidCallback? onImageError;
+    if (spec.isPhotoSource) {
+      onImageError = () {
+        if (!mounted) return;
+        _lastAmbientByModule.remove('/photos');
+        ref.read(desktopAmbientHintProvider.notifier).clearPhotoHint();
+        setState(() {});
+      };
+    }
 
     return ExcludeSemantics(
       child: DesktopAmbient(
-        imageUrl: spec.imageUrl,
+        imageUrl: imageUrl,
         intensity: intensity,
         reduceMotion: reduceMotion,
         showArt: spec.showArt,
         artPreset: spec.artPreset,
         fallbackTone: spec.fallbackTone,
         isReaderRoute: isReaderRoute,
+        imageProvider: imageProvider,
+        onImageError: onImageError,
       ),
     );
   }

@@ -52,6 +52,7 @@ class _AudioPlayerBodyState extends State<_AudioPlayerBody> {
     super.initState();
     ensureMediaKitReady();
     _player = Player();
+    registerActiveMediaPlayer(_player);
     _loadController = MediaPreviewLoadController(
       opener: (url) => _player.open(Media(url)),
     )..addListener(_handleLoadChanged);
@@ -81,7 +82,7 @@ class _AudioPlayerBodyState extends State<_AudioPlayerBody> {
     _loadController
       ..removeListener(_handleLoadChanged)
       ..dispose();
-    _player.dispose();
+    unawaited(stopAndDisposeMediaPlayer(_player));
     super.dispose();
   }
 

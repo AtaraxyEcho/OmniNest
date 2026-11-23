@@ -1,16 +1,17 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:omninest/app/desktop/desktop_backdrop_layer.dart';
+import 'package:omninest/app/desktop/desktop_ambient_hints.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
-import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
 import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/errors/error_message.dart';
@@ -24,202 +25,247 @@ import 'desktop_book_related_rail.dart';
 
 /// 桌面书籍详情（样例 `BookDetail`）：26 圆角英雄区 + 五格统计条 +
 /// 概览/章节两页。章节列表来自客户端解析，阅读进度按服务端 progress 标记。
-class DesktopBookDetailPage extends ConsumerWidget {
+class DesktopBookDetailPage extends ConsumerStatefulWidget {
   const DesktopBookDetailPage({required this.itemId, super.key});
 
   final String itemId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DesktopBookDetailPage> createState() =>
+      _DesktopBookDetailPageState();
+}
+
+class _DesktopBookDetailPageState extends ConsumerState<DesktopBookDetailPage> {
+  String? _lastSyncedAmbientKey;
+
+  @override
+  void didUpdateWidget(covariant DesktopBookDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.itemId != widget.itemId) {
+      _lastSyncedAmbientKey = null;
+    }
+  }
+
+  void _syncAmbientBook(ReaderItem item) {
+    final coverUrl = item.coverUrl?.trim();
+    final effectiveCover =
+        (coverUrl != null && coverUrl.isNotEmpty) ? coverUrl : null;
+    final key = '${item.id}|${effectiveCover ?? ''}';
+    if (_lastSyncedAmbientKey == key) {
+      return;
+    }
+    _lastSyncedAmbientKey = key;
+    final fallbackTone = DesktopPalette.bookToneFor(item.id).tone;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref
+          .read(desktopAmbientHintProvider.notifier)
+          .rememberReaderBook(effectiveCover, fallbackTone);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
+    final itemId = widget.itemId;
     final detail = ref.watch(readerItemDetailProvider(itemId));
     // 章节清单走 parsedBookProvider（GET /text/manifest），与移动端书详同源。
     // detail.chapters 只在后端将来补字段或测试桩注入时才非空。
     final bookAsync = ref.watch(parsedBookProvider(itemId));
     final stats = ref.watch(readerStatsProvider).asData?.value;
 
-    return ColoredBox(
-      color:
-          desktopBackdropVisibleForRoute(ref, DesktopRoutes.bookDetail(itemId))
-              ? Colors.transparent
-              : skin.bg,
-      child: detail.when(
-        loading:
-            () => const Center(
-              child: SizedBox(
-                width: 320,
-                child: DesktopSkeletonRows(count: 6, avatar: false),
-              ),
+    return detail.when(
+      loading:
+          () => const Center(
+            child: SizedBox(
+              width: 320,
+              child: DesktopSkeletonRows(count: 6, avatar: false),
             ),
-        error:
-            (error, _) => Center(
-              child: Text(
-                failureToast(l10n, l10n.readerChapterLoadFailed, error),
-                style: DesktopType.body(skin.text3),
-              ),
+          ),
+      error:
+          (error, _) => Center(
+            child: Text(
+              failureToast(l10n, l10n.readerChapterLoadFailed, error),
+              style: DesktopType.body(skin.text3),
             ),
-        data: (value) {
-          final item = value.item;
-          final progress = value.progress;
-          final percent = (progress?.progressPercent ??
-                  item.progressPercent ??
-                  0)
-              .toDouble()
-              .clamp(0.0, 100.0);
-          final parsed = bookAsync.asData?.value.chapters;
-          final chapters =
-              value.chapters.isNotEmpty
-                  ? value.chapters
-                  : <ReaderChapter>[
-                    if (parsed != null)
-                      for (var i = 0; i < parsed.length; i++)
-                        ReaderChapter.fromParsed(i, parsed[i]),
-                  ];
-          final chaptersLoading = chapters.isEmpty && bookAsync.isLoading;
-          final chaptersError = chapters.isEmpty && bookAsync.hasError;
-          final currentIndex = chapters.indexWhere(
-            (chapter) => chapter.id == progress?.chapterId,
-          );
-          final hasProgress = percent > 0;
-          final formatLabel =
-              item.isComic
-                  ? '${item.readerType == 'MANGA' ? 'MANGA' : 'COMIC'} · ${item.itemType}'
-                  : item.itemType;
-          final progressLabel =
-              chapters.isEmpty
-                  ? l10n.readerProgressPercent(percent.round())
-                  : l10n.readerChapterPosition(
-                    (currentIndex < 0 ? 0 : currentIndex) + 1,
-                    chapters.length,
-                  );
-          final canOpenReader =
-              item.isComic ||
-              item.itemType.toUpperCase() == 'PDF' ||
-              chapters.isNotEmpty;
-          final tone = Color.lerp(skin.panelSolid, skin.accent, 0.24)!;
+          ),
+      data: (value) {
+        final item = value.item;
+        _syncAmbientBook(item);
+        final progress = value.progress;
+        final percent = (progress?.progressPercent ?? item.progressPercent ?? 0)
+            .toDouble()
+            .clamp(0.0, 100.0);
+        final parsed = bookAsync.asData?.value.chapters;
+        final chapters =
+            value.chapters.isNotEmpty
+                ? value.chapters
+                : <ReaderChapter>[
+                  if (parsed != null)
+                    for (var i = 0; i < parsed.length; i++)
+                      ReaderChapter.fromParsed(i, parsed[i]),
+                ];
+        final chaptersLoading = chapters.isEmpty && bookAsync.isLoading;
+        final chaptersError = chapters.isEmpty && bookAsync.hasError;
+        final currentIndex = chapters.indexWhere(
+          (chapter) => chapter.id == progress?.chapterId,
+        );
+        final hasProgress = percent > 0;
+        final formatLabel =
+            item.isComic
+                ? '${item.readerType == 'MANGA' ? 'MANGA' : 'COMIC'} · ${item.itemType}'
+                : item.itemType;
+        final progressLabel =
+            chapters.isEmpty
+                ? l10n.readerProgressPercent(percent.round())
+                : l10n.readerChapterPosition(
+                  (currentIndex < 0 ? 0 : currentIndex) + 1,
+                  chapters.length,
+                );
+        final canOpenReader =
+            item.isComic ||
+            item.itemType.toUpperCase() == 'PDF' ||
+            chapters.isNotEmpty;
+        final tone = Color.lerp(skin.panelSolid, skin.accent, 0.24)!;
 
-          return SingleChildScrollView(
-            child: DesktopPage(
-              topPadding: DesktopMetrics.pageTopPaddingCompact,
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: DesktopLink(
-                    label: l10n.desktopReaderLibrary,
-                    icon: DesktopIcons.left,
-                    trailing: false,
-                    onPressed:
-                        () =>
-                            exitDetailRoute(context, fallbackRoute: '/reader'),
-                  ),
+        return SingleChildScrollView(
+          child: DesktopPage(
+            topPadding: DesktopMetrics.pageTopPaddingCompact,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: DesktopLink(
+                  label: l10n.desktopReaderLibrary,
+                  icon: DesktopIcons.left,
+                  trailing: false,
+                  onPressed:
+                      () => exitDetailRoute(context, fallbackRoute: '/reader'),
                 ),
-                const SizedBox(height: 12),
-                Container(
-                  clipBehavior: Clip.antiAlias,
-                  // 样例 `.bp-hero { padding: 36px 44px; gap: 40px }`。
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 44,
-                    vertical: 36,
+              ),
+              const SizedBox(height: 12),
+              Container(
+                clipBehavior: Clip.antiAlias,
+                // 样例 `.bp-hero { padding: 36px 44px; gap: 40px }`。
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 44,
+                  vertical: 36,
+                ),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [tone, skin.panelSolid],
                   ),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [tone, skin.panelSolid],
-                    ),
-                    borderRadius: BorderRadius.circular(
-                      DesktopMetrics.radiusHero,
-                    ),
-                    boxShadow: skin.shadow,
+                  borderRadius: BorderRadius.circular(
+                    DesktopMetrics.radiusHero,
                   ),
-                  foregroundDecoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(
-                      DesktopMetrics.radiusHero,
-                    ),
-                    border: Border.all(color: skin.line2),
+                  boxShadow: skin.shadow,
+                ),
+                foregroundDecoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(
+                    DesktopMetrics.radiusHero,
                   ),
-                  child: LayoutBuilder(
-                    builder: (context, heroConstraints) {
-                      final stacked = heroConstraints.maxWidth < 860;
-                      return Flex(
-                        direction: stacked ? Axis.vertical : Axis.horizontal,
-                        crossAxisAlignment:
-                            stacked
-                                ? CrossAxisAlignment.start
-                                : CrossAxisAlignment.center,
-                        children: [
-                          // 样例 `.bp-cover`：200×300，静止 -14deg，hover 收到 -4deg。
-                          DesktopBookTilt(
-                            child: _BookCover(item: item, large: true),
-                          ),
-                          SizedBox(
-                            width: stacked ? 0 : 40,
-                            height: stacked ? 24 : 0,
-                          ),
-                          Flexible(
-                            fit: FlexFit.loose,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Wrap(
-                                  spacing: 6,
-                                  runSpacing: 6,
-                                  children: [
-                                    DesktopChip(formatLabel, solid: true),
-                                    if (item.rating != null)
-                                      DesktopChip(
-                                        '★ ${item.rating!.toStringAsFixed(1)}',
-                                      ),
-                                    if (percent >= 90)
-                                      DesktopChip(l10n.readerStatusCompleted),
-                                  ],
+                  border: Border.all(color: skin.line2),
+                ),
+                child: LayoutBuilder(
+                  builder: (context, heroConstraints) {
+                    final stacked = heroConstraints.maxWidth < 860;
+                    return Flex(
+                      direction: stacked ? Axis.vertical : Axis.horizontal,
+                      crossAxisAlignment:
+                          stacked
+                              ? CrossAxisAlignment.start
+                              : CrossAxisAlignment.center,
+                      children: [
+                        // 样例 `.bp-cover`：200×300，静止 -14deg，hover 收到 -4deg。
+                        DesktopBookTilt(
+                          child: _BookCover(item: item, large: true),
+                        ),
+                        SizedBox(
+                          width: stacked ? 0 : 40,
+                          height: stacked ? 24 : 0,
+                        ),
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  DesktopChip(formatLabel, solid: true),
+                                  if (item.rating != null)
+                                    DesktopChip(
+                                      '★ ${item.rating!.toStringAsFixed(1)}',
+                                    ),
+                                  if (percent >= 90)
+                                    DesktopChip(l10n.readerStatusCompleted),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                item.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: DesktopType.displayXl(
+                                  skin.text,
+                                  MediaQuery.sizeOf(context).width,
                                 ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  item.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: DesktopType.displayXl(
-                                    skin.text,
-                                    MediaQuery.sizeOf(context).width,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                item.authorName ?? '',
+                                style: DesktopType.dense(skin.text2),
+                              ),
+                              const SizedBox(height: 18),
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 420,
+                                ),
+                                child: _ProgressBar(value: percent / 100),
+                              ),
+                              const SizedBox(height: 6),
+                              _HeroDurationLine(
+                                progressLabel: progressLabel,
+                                percent: percent,
+                                chaptersCount: chapters.length,
+                                isComic: item.isComic,
+                                totalMinutesThisWeek:
+                                    stats?.totalMinutesThisWeek,
+                              ),
+                              const SizedBox(height: 22),
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  DesktopButton(
+                                    label:
+                                        hasProgress
+                                            ? l10n.readerContinueReading
+                                            : l10n.readerStartReading,
+                                    icon: DesktopIcons.book,
+                                    variant: DesktopButtonVariant.primary,
+                                    large: true,
+                                    onPressed:
+                                        !canOpenReader
+                                            ? null
+                                            : () => _openReading(
+                                              context,
+                                              item,
+                                              itemId,
+                                              chapters,
+                                              progress,
+                                              resume: hasProgress,
+                                            ),
                                   ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  item.authorName ?? '',
-                                  style: DesktopType.dense(skin.text2),
-                                ),
-                                const SizedBox(height: 18),
-                                ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 420,
-                                  ),
-                                  child: _ProgressBar(value: percent / 100),
-                                ),
-                                const SizedBox(height: 6),
-                                _HeroDurationLine(
-                                  progressLabel: progressLabel,
-                                  percent: percent,
-                                  chaptersCount: chapters.length,
-                                  isComic: item.isComic,
-                                  totalMinutesThisWeek:
-                                      stats?.totalMinutesThisWeek,
-                                ),
-                                const SizedBox(height: 22),
-                                Wrap(
-                                  spacing: 10,
-                                  runSpacing: 10,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: [
+                                  if (hasProgress)
                                     DesktopButton(
-                                      label:
-                                          hasProgress
-                                              ? l10n.readerContinueReading
-                                              : l10n.readerStartReading,
-                                      icon: DesktopIcons.book,
-                                      variant: DesktopButtonVariant.primary,
+                                      label: l10n.desktopMoviesFromStart,
+                                      variant: DesktopButtonVariant.glass,
                                       large: true,
                                       onPressed:
                                           !canOpenReader
@@ -229,77 +275,59 @@ class DesktopBookDetailPage extends ConsumerWidget {
                                                 item,
                                                 itemId,
                                                 chapters,
-                                                progress,
-                                                resume: hasProgress,
+                                                null,
+                                                resume: false,
                                               ),
                                     ),
-                                    if (hasProgress)
-                                      DesktopButton(
-                                        label: l10n.desktopMoviesFromStart,
-                                        variant: DesktopButtonVariant.glass,
-                                        large: true,
-                                        onPressed:
-                                            !canOpenReader
-                                                ? null
-                                                : () => _openReading(
-                                                  context,
-                                                  item,
-                                                  itemId,
-                                                  chapters,
-                                                  null,
-                                                  resume: false,
-                                                ),
-                                      ),
-                                    _DesktopBookShelfButton(item: item),
-                                    _DesktopBookReadToggleButton(
-                                      item: item,
-                                      isCompleted: percent >= 90,
-                                      chapters: chapters,
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
+                                  _DesktopBookShelfButton(item: item),
+                                  _DesktopBookReadToggleButton(
+                                    item: item,
+                                    isCompleted: percent >= 90,
+                                    chapters: chapters,
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                        ],
-                      );
-                    },
-                  ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
-                const SizedBox(height: 24),
-                _MetaStrip(
-                  percent: percent,
-                  chapters: chapters.length,
-                  currentIndex: currentIndex,
-                  item: item,
-                ),
-                const SizedBox(height: 22),
-                DesktopBookDetailTabs(
-                  item: item,
-                  chapters: chapters,
-                  progress: progress,
-                  chaptersLoading: chaptersLoading,
-                  chaptersError: chaptersError,
-                  onRetryChapters:
-                      () => ref.invalidate(parsedBookProvider(itemId)),
-                  onOpenChapter:
-                      (chapter) => _openReading(
-                        context,
-                        item,
-                        itemId,
-                        chapters,
-                        progress,
-                        resume: false,
-                        chapter: chapter,
-                      ),
-                ),
-                const SizedBox(height: 28),
-                DesktopBookRelatedRail(item: item),
-              ],
-            ),
-          );
-        },
-      ),
+              ),
+              const SizedBox(height: 24),
+              _MetaStrip(
+                percent: percent,
+                chapters: chapters.length,
+                currentIndex: currentIndex,
+                item: item,
+              ),
+              const SizedBox(height: 22),
+              DesktopBookDetailTabs(
+                item: item,
+                chapters: chapters,
+                progress: progress,
+                chaptersLoading: chaptersLoading,
+                chaptersError: chaptersError,
+                onRetryChapters:
+                    () => ref.invalidate(parsedBookProvider(itemId)),
+                onOpenChapter:
+                    (chapter) => _openReading(
+                      context,
+                      item,
+                      itemId,
+                      chapters,
+                      progress,
+                      resume: false,
+                      chapter: chapter,
+                    ),
+              ),
+              const SizedBox(height: 28),
+              DesktopBookRelatedRail(item: item),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -452,59 +480,63 @@ class _MetaStrip extends StatelessWidget {
       ),
       (l10n.desktopBookFormat, item.itemType, item.contentKind),
     ];
-    return Container(
-      decoration: BoxDecoration(
-        color: skin.panel,
-        borderRadius: BorderRadius.circular(DesktopMetrics.radiusCard),
-        border: Border.all(color: skin.line),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Row(
-        children: [
-          for (var i = 0; i < cells.length; i++)
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 14,
-                ),
-                decoration: BoxDecoration(
-                  border:
-                      i == 0
-                          ? null
-                          : Border(left: BorderSide(color: skin.line)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      cells[i].$1.toUpperCase(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: DesktopType.eyebrow(skin.text3),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      cells[i].$2,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: DesktopType.sectionTitle(skin.text),
-                    ),
-                    if (cells[i].$3.isNotEmpty) ...[
-                      const SizedBox(height: 2),
+    final radius = BorderRadius.circular(DesktopMetrics.radiusCard);
+    return DesktopGlassSurface(
+      borderRadius: radius,
+      child: Container(
+        decoration: BoxDecoration(
+          color: skin.panel,
+          borderRadius: radius,
+          border: Border.all(color: skin.line),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Row(
+          children: [
+            for (var i = 0; i < cells.length; i++)
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    border:
+                        i == 0
+                            ? null
+                            : Border(left: BorderSide(color: skin.line)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       Text(
-                        cells[i].$3,
+                        cells[i].$1.toUpperCase(),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: DesktopType.caption(skin.text3),
+                        style: DesktopType.eyebrow(skin.text3),
                       ),
+                      const SizedBox(height: 2),
+                      Text(
+                        cells[i].$2,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.sectionTitle(skin.text),
+                      ),
+                      if (cells[i].$3.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          cells[i].$3,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: DesktopType.caption(skin.text3),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

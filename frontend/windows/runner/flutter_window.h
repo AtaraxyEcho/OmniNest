@@ -11,6 +11,8 @@
 
 #include "win32_window.h"
 
+#include <shellapi.h>
+
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
  public:
@@ -46,6 +48,7 @@ class FlutterWindow : public Win32Window {
   COLORREF ResolveSizingGapColor() const;
   HBRUSH EnsureSizingGapBrush();
   void ResetSizingBrush();
+  void RefreshTaskbarAutoHideState();
 
   // The project to run.
   flutter::DartProject project_;
@@ -71,6 +74,13 @@ class FlutterWindow : public Win32Window {
   // pushes a theme, PaintSizingGap falls back to Windows AppsUseLightTheme.
   std::optional<bool> app_light_theme_;
   HBRUSH sizing_gap_brush_ = nullptr;
+  // Cached taskbar auto-hide state refreshed only on creation and system
+  // settings/display changes so WM_NCCALCSIZE never blocks on SHAppBarMessage.
+  bool taskbar_auto_hide_ = false;
+  UINT taskbar_edge_ = ABE_BOTTOM;
+  // Set by requestAppExit so WM_CLOSE bypasses plugin/Flutter interception and
+  // destroys the window directly.
+  bool exiting_ = false;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

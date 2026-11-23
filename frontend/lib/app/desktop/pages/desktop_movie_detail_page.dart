@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:omninest/app/desktop/desktop_backdrop_layer.dart';
+import 'package:omninest/app/desktop/desktop_ambient_hints.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
@@ -12,6 +12,7 @@ import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/pages/desktop_movie_detail_actions.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -51,37 +52,51 @@ class _DesktopMovieDetailPageState
   _MovieDetailTab _tab = _MovieDetailTab.overview;
   bool _savingFavorite = false;
   bool _transcoding = false;
+  String? _lastSyncedAmbientCover;
+
+  @override
+  void didUpdateWidget(covariant DesktopMovieDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.videoItemId != widget.videoItemId) {
+      _lastSyncedAmbientCover = null;
+    }
+  }
+
+  void _syncAmbientCover(String? url) {
+    final normalized = url?.trim();
+    final effective =
+        (normalized != null && normalized.isNotEmpty) ? normalized : null;
+    if (effective == null || _lastSyncedAmbientCover == effective) {
+      return;
+    }
+    _lastSyncedAmbientCover = effective;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(desktopAmbientHintProvider.notifier).setMoviesCover(effective);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
-    final bgColor =
-        desktopBackdropVisibleForRoute(
-              ref,
-              DesktopRoutes.movieDetail(widget.videoItemId),
-            )
-            ? Colors.transparent
-            : skin.bg;
     final detail = ref.watch(movieDetailProvider(widget.videoItemId));
     final item = detail.asData?.value;
     if (item == null) {
-      return ColoredBox(
-        color: bgColor,
-        child: Center(
-          child:
-              detail.hasError
-                  ? Text(
-                    failureToast(l10n, l10n.videoRedesignDetail, detail.error!),
-                    style: DesktopType.body(skin.text3),
-                  )
-                  : const SizedBox(
-                    width: 320,
-                    child: DesktopSkeletonRows(count: 6, avatar: false),
-                  ),
-        ),
+      return Center(
+        child:
+            detail.hasError
+                ? Text(
+                  failureToast(l10n, l10n.videoRedesignDetail, detail.error!),
+                  style: DesktopType.body(skin.text3),
+                )
+                : const SizedBox(
+                  width: 320,
+                  child: DesktopSkeletonRows(count: 6, avatar: false),
+                ),
       );
     }
+    _syncAmbientCover(item.backdropImageUrl ?? item.posterImageUrl);
     final history =
         ref.watch(movieItemHistoryProvider(widget.videoItemId)).asData?.value;
     final favorite =
@@ -108,73 +123,70 @@ class _DesktopMovieDetailPageState
           candidate,
     ].take(5).toList(growable: false);
 
-    return ColoredBox(
-      color: bgColor,
-      child: SingleChildScrollView(
-        child: DesktopPage(
-          // 样例 `.film-page { padding-top: 14px }` + `.fd-hero { margin: 6px 0 22px }`。
-          topPadding: DesktopMetrics.pageTopPaddingCompact,
-          children: [
-            const SizedBox(height: 6),
-            _Hero(
-              item: item,
-              history: history,
-              favorite: favorite,
-              watched: watched,
-              watchlisted: watchlisted,
-              saving: _savingFavorite,
-              engaging: engagementState.engaging,
-              onBack: () => exitDetailRoute(context, fallbackRoute: '/video'),
-              onPlay:
-                  () => desktopPush(context, DesktopRoutes.moviePlay(item.id)),
-              onFromStart:
-                  () => desktopPush(
-                    context,
-                    DesktopRoutes.moviePlay(item.id, fromStart: true),
-                  ),
-              onToggleFavorite: () => _toggleFavorite(item, favorite),
-              onToggleWatched: () => _toggleWatched(item, history),
-              onToggleWatchlist: () => _toggleWatchlist(item),
+    return SingleChildScrollView(
+      child: DesktopPage(
+        // 样例 `.film-page { padding-top: 14px }` + `.fd-hero { margin: 6px 0 22px }`。
+        topPadding: DesktopMetrics.pageTopPaddingCompact,
+        children: [
+          const SizedBox(height: 6),
+          _Hero(
+            item: item,
+            history: history,
+            favorite: favorite,
+            watched: watched,
+            watchlisted: watchlisted,
+            saving: _savingFavorite,
+            engaging: engagementState.engaging,
+            onBack: () => exitDetailRoute(context, fallbackRoute: '/video'),
+            onPlay:
+                () => desktopPush(context, DesktopRoutes.moviePlay(item.id)),
+            onFromStart:
+                () => desktopPush(
+                  context,
+                  DesktopRoutes.moviePlay(item.id, fromStart: true),
+                ),
+            onToggleFavorite: () => _toggleFavorite(item, favorite),
+            onToggleWatched: () => _toggleWatched(item, history),
+            onToggleWatchlist: () => _toggleWatchlist(item),
+          ),
+          const SizedBox(height: 22),
+          _MetaStrip(item: item),
+          const SizedBox(height: 22),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: DesktopSeg<_MovieDetailTab>(
+              options: _MovieDetailTab.values,
+              value: _tab,
+              onChanged: (value) => setState(() => _tab = value),
+              labelOf:
+                  (value) => switch (value) {
+                    _MovieDetailTab.overview => l10n.videoDetailTabOverview,
+                    _MovieDetailTab.files => l10n.videoDetailTabFiles,
+                    _MovieDetailTab.subtitles => l10n.desktopSeriesSubtitles,
+                  },
+              small: true,
             ),
-            const SizedBox(height: 22),
-            _MetaStrip(item: item),
-            const SizedBox(height: 22),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: DesktopSeg<_MovieDetailTab>(
-                options: _MovieDetailTab.values,
-                value: _tab,
-                onChanged: (value) => setState(() => _tab = value),
-                labelOf:
-                    (value) => switch (value) {
-                      _MovieDetailTab.overview => l10n.videoDetailTabOverview,
-                      _MovieDetailTab.files => l10n.videoDetailTabFiles,
-                      _MovieDetailTab.subtitles => l10n.desktopSeriesSubtitles,
-                    },
-                small: true,
-              ),
+          ),
+          const SizedBox(height: 20),
+          switch (_tab) {
+            _MovieDetailTab.overview => _Overview(item: item),
+            _MovieDetailTab.files => _MovieFilesTab(
+              videoItemId: item.id,
+              transcoding: _transcoding,
+              onTranscode: () => _queueTranscode(item),
             ),
-            const SizedBox(height: 20),
-            switch (_tab) {
-              _MovieDetailTab.overview => _Overview(item: item),
-              _MovieDetailTab.files => _MovieFilesTab(
-                videoItemId: item.id,
-                transcoding: _transcoding,
-                onTranscode: () => _queueTranscode(item),
-              ),
-              _MovieDetailTab.subtitles => _Subtitles(videoItemId: item.id),
-            },
-            if (related.isNotEmpty) ...[
-              const SizedBox(height: 40),
-              Text(
-                l10n.desktopMoviesMoreLikeThis,
-                style: DesktopType.sectionTitle(skin.text),
-              ),
-              const SizedBox(height: 18),
-              _RelatedRail(items: related),
-            ],
+            _MovieDetailTab.subtitles => _Subtitles(videoItemId: item.id),
+          },
+          if (related.isNotEmpty) ...[
+            const SizedBox(height: 40),
+            Text(
+              l10n.desktopMoviesMoreLikeThis,
+              style: DesktopType.sectionTitle(skin.text),
+            ),
+            const SizedBox(height: 18),
+            _RelatedRail(items: related),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -376,61 +388,65 @@ class _MetaStrip extends StatelessWidget {
         (item.audioCodec ?? '').trim().toUpperCase(),
       ),
     ];
-    return Container(
-      decoration: BoxDecoration(
-        color: skin.panel,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: skin.line),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Row(
-        children: [
-          for (var i = 0; i < cells.length; i++)
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 14,
-                ),
-                decoration: BoxDecoration(
-                  border:
-                      i == 0
-                          ? null
-                          : Border(left: BorderSide(color: skin.line)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      cells[i].$1.toUpperCase(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: DesktopType.eyebrow(skin.text3),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      cells[i].$2,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: DesktopType.sectionTitle(
-                        skin.text,
-                      ).copyWith(letterSpacing: -24 * 0.01),
-                    ),
-                    if (cells[i].$3.isNotEmpty) ...[
-                      const SizedBox(height: 2),
+    final radius = BorderRadius.circular(16);
+    return DesktopGlassSurface(
+      borderRadius: radius,
+      child: Container(
+        decoration: BoxDecoration(
+          color: skin.panel,
+          borderRadius: radius,
+          border: Border.all(color: skin.line),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Row(
+          children: [
+            for (var i = 0; i < cells.length; i++)
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    border:
+                        i == 0
+                            ? null
+                            : Border(left: BorderSide(color: skin.line)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       Text(
-                        cells[i].$3,
+                        cells[i].$1.toUpperCase(),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: DesktopType.caption(skin.text3),
+                        style: DesktopType.eyebrow(skin.text3),
                       ),
+                      const SizedBox(height: 2),
+                      Text(
+                        cells[i].$2,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.sectionTitle(
+                          skin.text,
+                        ).copyWith(letterSpacing: -24 * 0.01),
+                      ),
+                      if (cells[i].$3.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          cells[i].$3,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: DesktopType.caption(skin.text3),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

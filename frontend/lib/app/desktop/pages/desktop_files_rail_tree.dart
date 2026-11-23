@@ -46,7 +46,19 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load(null));
+    // 禁止在 widget.state == null 时首帧抢跑 _load(null)；
+    // 若首帧已拿到有效 state，直接同步种子化根目录文件夹。
+    if (widget.state != null) {
+      _syncWithState();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _FolderTree oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.state != null && !identical(oldWidget.state, widget.state)) {
+      _syncWithState();
+    }
   }
 
   @override
@@ -64,6 +76,9 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
   );
 
   Future<void> _load(String? parentId) async {
+    if (widget.state == null) {
+      return;
+    }
     final key = parentId ?? '';
     if (_children.containsKey(key)) {
       return;
@@ -73,7 +88,7 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
 
   /// 绕过缓存重取一层；目录改动后调用。
   Future<void> _reload(String key) async {
-    if (!mounted) {
+    if (!mounted || widget.state == null) {
       return;
     }
     await _fetch(key);
@@ -91,12 +106,19 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
       if (!mounted || _fetchGenerations[key] != generation) {
         return;
       }
+      final nextFolders = _sortedFolders(nodes);
+      final nextSig = _signatureOf(nextFolders);
+      final prevFolders = _children[key];
+      final prevSig = prevFolders == null ? null : _signatureOf(prevFolders);
+      if (prevSig == nextSig && _loadedRoot) {
+        return;
+      }
       setState(() {
-        _children[key] = _sortedFolders(nodes);
+        _children[key] = nextFolders;
         _loadedRoot = true;
       });
     } on Object {
-      if (mounted && _fetchGenerations[key] == generation) {
+      if (mounted && _fetchGenerations[key] == generation && !_loadedRoot) {
         setState(() => _loadedRoot = true);
       }
     }
@@ -119,23 +141,71 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
     return folders.map((node) => '${node.id}:${node.name}').join('|');
   }
 
-  /// 列表状态与树缓存的同步：当前目录变化或文件夹集变化时丢缓存重取。
+  /// 列表状态与树缓存的同步：首次拿到有效 state 时同步种子化根层，零清空零塌缩；
+  /// 仅真实空间切换时才清空重拉；当前目录变化或文件夹集变化时按签名局部刷新。
   void _syncWithState() {
     final state = widget.state;
-    if (state == null || state.section != FileManagerSection.allFiles) {
+    if (state == null) {
       return;
     }
-    if (_lastSpaceType != state.spaceType) {
+
+    // 首次拿到有效 state：记录初始空间并直接种子化根目录，避免误判为空间切换。
+    if (_lastSpaceType == null) {
       _lastSpaceType = state.spaceType;
-      _children.clear();
-      _parentSignatures.clear();
-      _open.clear();
-      _loadedRoot = false;
+      if (state.section == FileManagerSection.allFiles) {
+        final parentKey = state.parentId ?? '';
+        final signature = _signatureOf(state.files);
+        _lastParentKey = parentKey;
+        _parentSignatures[parentKey] = signature;
+        if (parentKey.isEmpty) {
+          _children[''] = _sortedFolders(state.files);
+          _loadedRoot = true;
+          // 若根目录分页未取全，后台静默补全，签名未变时不会触发重绘。
+          if (state.fileTotalElements > state.files.length) {
+            _scheduleReload('');
+          }
+          return;
+        }
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_load(null));
       });
       return;
     }
+
+    if (state.section != FileManagerSection.allFiles) {
+      if (!_loadedRoot) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_load(null));
+        });
+      }
+      return;
+    }
+
+    if (_lastSpaceType != state.spaceType) {
+      _lastSpaceType = state.spaceType;
+      _children.clear();
+      _parentSignatures.clear();
+      _open.clear();
+      _lastParentKey = state.parentId ?? '';
+      final parentKey = state.parentId ?? '';
+      if (parentKey.isEmpty) {
+        final signature = _signatureOf(state.files);
+        _parentSignatures[''] = signature;
+        _children[''] = _sortedFolders(state.files);
+        _loadedRoot = true;
+        if (state.fileTotalElements > state.files.length) {
+          _scheduleReload('');
+        }
+      } else {
+        _loadedRoot = false;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_load(null));
+        });
+      }
+      return;
+    }
+
     final parentKey = state.parentId ?? '';
     final signature = _signatureOf(state.files);
     final known = _parentSignatures[parentKey];
@@ -219,7 +289,6 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
 
   @override
   Widget build(BuildContext context) {
-    _syncWithState();
     final root = _children[''] ?? const <FileNode>[];
     if (_loadedRoot && root.isEmpty) {
       return const SizedBox.shrink();
@@ -370,15 +439,18 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
     );
 
     // 树节点自身可拖：样例 `onDragStart` 用单个目录 id。
-    rowWithHover = _AdaptiveFileDraggable(
-      data: <String>[folder.id],
-      feedback: _RowDragGhost(node: folder, count: 1),
-      childWhenDragging: Opacity(
-        opacity: 0.45,
-        alwaysIncludeSemantics: true,
+    rowWithHover = KeyedSubtree(
+      key: ValueKey<String>('files-tree-node-${folder.id}'),
+      child: _AdaptiveFileDraggable(
+        data: <String>[folder.id],
+        feedback: _RowDragGhost(node: folder, count: 1),
+        childWhenDragging: Opacity(
+          opacity: 0.45,
+          alwaysIncludeSemantics: true,
+          child: rowWithHover,
+        ),
         child: rowWithHover,
       ),
-      child: rowWithHover,
     );
 
     return <Widget>[
@@ -527,6 +599,89 @@ class _RailStorageCard extends StatelessWidget {
         'ARCHIVE' => l10n.filesCategoryArchive,
         _ => l10n.filesCategoryOther,
       };
+}
+
+/// 冷启动存储统计尚未就绪时的等高轻骨架占位，防止底部存储卡晚到引起侧栏跳动。
+class _RailStorageSkeleton extends StatelessWidget {
+  const _RailStorageSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    return ExcludeSemantics(
+      child: Container(
+        margin: const EdgeInsets.only(top: 18),
+        padding: const EdgeInsets.fromLTRB(10, 14, 10, 4),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: skin.line)),
+        ),
+        child: const Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: DesktopSkeletonBox(width: 68, height: 10, radius: 4),
+            ),
+            SizedBox(height: 10),
+            DesktopSkeletonBox(width: double.infinity, height: 8, radius: 8),
+            SizedBox(height: 10),
+            Row(
+              children: [
+                DesktopSkeletonBox(width: 8, height: 8, radius: 3),
+                SizedBox(width: 8),
+                Expanded(
+                  child: DesktopSkeletonBox(
+                    width: double.infinity,
+                    height: 10,
+                    radius: 4,
+                  ),
+                ),
+                SizedBox(width: 12),
+                DesktopSkeletonBox(width: 38, height: 10, radius: 4),
+              ],
+            ),
+            SizedBox(height: 7),
+            Row(
+              children: [
+                DesktopSkeletonBox(width: 8, height: 8, radius: 3),
+                SizedBox(width: 8),
+                Expanded(
+                  child: DesktopSkeletonBox(
+                    width: double.infinity,
+                    height: 10,
+                    radius: 4,
+                  ),
+                ),
+                SizedBox(width: 12),
+                DesktopSkeletonBox(width: 34, height: 10, radius: 4),
+              ],
+            ),
+            SizedBox(height: 7),
+            Row(
+              children: [
+                DesktopSkeletonBox(width: 8, height: 8, radius: 3),
+                SizedBox(width: 8),
+                Expanded(
+                  child: DesktopSkeletonBox(
+                    width: double.infinity,
+                    height: 10,
+                    radius: 4,
+                  ),
+                ),
+                SizedBox(width: 12),
+                DesktopSkeletonBox(width: 32, height: 10, radius: 4),
+              ],
+            ),
+            SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: DesktopSkeletonBox(width: 112, height: 11, radius: 4),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// 共享空间没有按文件类型拆分的后端统计；显示真实配额进度，避免用原型演示

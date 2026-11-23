@@ -58,8 +58,8 @@ class _TrackHead extends StatelessWidget {
               child: Icon(DesktopIcons.clock, size: 13, color: skin.text3),
             ),
           ),
-          // 样例 `.t-head/.t-row` 的第五列 80px 是行内动作区，表头留空。
-          const SizedBox(width: 80),
+          // 行内动作区（收藏 + 检查器 i + 更多）。
+          const SizedBox(width: 96),
         ],
       ),
     );
@@ -87,6 +87,12 @@ class _TrackRow extends ConsumerStatefulWidget {
 
 class _TrackRowState extends ConsumerState<_TrackRow> {
   bool _hovered = false;
+
+  static String _formatAudioBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
 
   Future<void> _toggleFavorite(MusicTrack track) async {
     try {
@@ -159,13 +165,32 @@ class _TrackRowState extends ConsumerState<_TrackRow> {
 
   DesktopDetailData _buildDetailData(AppLocalizations l10n) {
     final track = widget.track;
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
     final duration = track.durationSeconds;
+    final sampleRateText =
+        track.sampleRate != null && track.sampleRate! > 0
+            ? '${(track.sampleRate! / 1000).toStringAsFixed(track.sampleRate! % 1000 == 0 ? 0 : 1)} kHz'
+            : null;
+    final bitrateText =
+        track.bitrate != null && track.bitrate! > 0
+            ? '${track.bitrate} kbps'
+            : null;
+    final matchingAlbum =
+        ref
+            .read(musicCenterControllerProvider)
+            .asData
+            ?.value
+            .albums
+            .where((album) => album.title == track.albumTitle)
+            .firstOrNull;
+
     return DesktopDetailData(
       id: 'track:${track.id}',
       kind: 'track',
       title: track.title,
       subtitle: '${track.artistName} · ${track.albumTitle}',
       imageUrl: track.coverUrl ?? track.coverThumbUrl,
+      badge: track.format.toUpperCase(),
       squareArt: true,
       factsLabel: l10n.desktopNavMusic,
       facts: [
@@ -176,7 +201,14 @@ class _TrackRowState extends ConsumerState<_TrackRow> {
               ? '—'
               : formatDesktopClock(Duration(seconds: duration)),
         ),
-        MapEntry(l10n.musicFieldFormat, track.format),
+        MapEntry(l10n.musicFieldFormat, track.format.toUpperCase()),
+        if (bitrateText != null) MapEntry(isZh ? '码率' : 'Bitrate', bitrateText),
+        if (sampleRateText != null)
+          MapEntry(isZh ? '采样率' : 'Sample rate', sampleRateText),
+        if (track.fileSize != null && track.fileSize! > 0)
+          MapEntry(l10n.desktopFilesSize, _formatAudioBytes(track.fileSize!)),
+        if (track.genre != null && track.genre!.trim().isNotEmpty)
+          MapEntry(isZh ? '流派' : 'Genre', track.genre!.trim()),
       ],
       primary: DesktopDetailAction(
         label: l10n.desktopPlay,
@@ -195,6 +227,27 @@ class _TrackRowState extends ConsumerState<_TrackRow> {
           showDesktopToast(ctx, l10n.desktopPlayNext, icon: DesktopIcons.queue);
         },
       ),
+      extraActions: [
+        if (matchingAlbum != null)
+          DesktopDetailAction(
+            label: isZh ? '前往专辑' : 'Open album',
+            icon: DesktopIcons.album,
+            onPressed: (ctx, r) {
+              unawaited(
+                r
+                    .read(musicCenterControllerProvider.notifier)
+                    .openAlbum(matchingAlbum),
+              );
+            },
+          ),
+        DesktopDetailAction(
+          label: l10n.musicEditDetailsLyrics,
+          icon: DesktopIcons.edit,
+          onPressed: (ctx, _) {
+            showDesktopMusicMetadataDrawer(context: ctx, track: track).ignore();
+          },
+        ),
+      ],
     );
   }
 
@@ -368,7 +421,7 @@ class _TrackRowState extends ConsumerState<_TrackRow> {
                 ),
               ),
               SizedBox(
-                width: 80,
+                width: 96,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -383,6 +436,11 @@ class _TrackRowState extends ConsumerState<_TrackRow> {
                               ? l10n.photosUnfavorite
                               : l10n.photosFavorite,
                       onTap: () => _toggleFavorite(track).ignore(),
+                    ),
+                    _TrackAction(
+                      icon: DesktopIcons.info,
+                      tooltip: l10n.desktopOpenDetails,
+                      onTap: _openDetails,
                     ),
                     _TrackAction(
                       icon: DesktopIcons.more,

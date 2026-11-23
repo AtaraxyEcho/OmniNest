@@ -47,6 +47,7 @@ import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
+import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/features/files/media_import_ui.dart'
     show MediaImportButton, MediaImportButtonState, MediaImportCompletionState;
 import 'package:omninest/features/files/application/file_browser_controller.dart';
@@ -73,6 +74,7 @@ part 'desktop_photos_import_actions.dart';
 part 'desktop_photos_album_shelf.dart';
 part 'desktop_photos_solo.dart';
 part 'desktop_photos_actions.dart';
+part 'desktop_photos_single_actions.dart';
 part 'desktop_photos_justified_shell.dart';
 
 /// 桌面相册页（样例 `Photos.tsx`）。
@@ -104,6 +106,7 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
   bool _morePhotosCheckScheduled = false;
   Timer? _gateTimer;
   bool _gateReleased = false;
+  bool _syncedInitialAmbientPhoto = false;
 
   /// 缩略行高：样例 `.zoom` 的 150–320，默认 210。
   double _density = 210;
@@ -191,6 +194,7 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
           ..addAll(items.map((item) => item.id));
         _lastSelectedPhotoId = items.last.id;
       });
+      _syncPhotoSelectionDetail();
       return true;
     }
     if (key == LogicalKeyboardKey.escape &&
@@ -200,6 +204,7 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
         _selectionMode = false;
         _lastSelectedPhotoId = null;
       });
+      ref.read(desktopShellProvider.notifier).clearDetail();
       return true;
     }
     if ((key == LogicalKeyboardKey.delete ||
@@ -292,6 +297,18 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
     final dashboard = dashboardAsync.asData?.value;
     final pageAsync = ref.watch(photoListProvider);
     final page = pageAsync.asData?.value;
+    if (!_syncedInitialAmbientPhoto && page != null && page.items.isNotEmpty) {
+      final firstImage = page.items.where((item) => !item.isVideo).firstOrNull;
+      if (firstImage != null) {
+        _syncedInitialAmbientPhoto = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ref
+              .read(desktopAmbientHintProvider.notifier)
+              .rememberPhotoId(firstImage.id);
+        });
+      }
+    }
     // 按当前活跃 _tab 延迟订阅收藏、相册、地点与回收站，避免首屏并行拉取冗余接口。
     final favoritesAsync =
         _tab == DesktopPhotosTab.favorites
@@ -481,20 +498,28 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
                               globalPos,
                               source: PhotoBrowseSource.library,
                             ),
-                    onSelectMany:
-                        (items) => setState(() {
-                          final ids = items.map((item) => item.id).toSet();
-                          final dayIsSelected =
-                              ids.isNotEmpty && ids.every(_selection.contains);
-                          if (dayIsSelected) {
-                            _selection.removeAll(ids);
-                          } else {
-                            _selection.addAll(ids);
-                            if (items.isNotEmpty) {
-                              _lastSelectedPhotoId = items.last.id;
-                            }
+                    onInspect:
+                        (photo, groupPhotos) => _inspectPhoto(
+                          photo,
+                          groupPhotos,
+                          source: PhotoBrowseSource.library,
+                        ),
+                    onSelectMany: (items) {
+                      setState(() {
+                        final ids = items.map((item) => item.id).toSet();
+                        final dayIsSelected =
+                            ids.isNotEmpty && ids.every(_selection.contains);
+                        if (dayIsSelected) {
+                          _selection.removeAll(ids);
+                        } else {
+                          _selection.addAll(ids);
+                          if (items.isNotEmpty) {
+                            _lastSelectedPhotoId = items.last.id;
                           }
-                        }),
+                        }
+                      });
+                      _syncPhotoSelectionDetail();
+                    },
                     onOrderChanged: _savePhotoOrder,
                     onResetOrder: _resetPhotoOrder,
                     hoverStateOf: _hoverStateForDay,
@@ -594,6 +619,14 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
                                               source:
                                                   PhotoBrowseSource.favorites,
                                             ),
+                                    onInspect:
+                                        (photo, favoritePhotos) =>
+                                            _inspectPhoto(
+                                              photo,
+                                              favoritePhotos,
+                                              source:
+                                                  PhotoBrowseSource.favorites,
+                                            ),
                                     orderContext: 'favorites',
                                     onOrderChanged: _savePhotoOrder,
                                   ),
@@ -668,12 +701,14 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
             onAlbum: () => _addSelectedToAlbum(setState),
             onDownload: () => _downloadSelected(setState),
             onDelete: _deleteSelected,
-            onClear:
-                () => setState(() {
-                  _selection.clear();
-                  _selectionMode = false;
-                  _lastSelectedPhotoId = null;
-                }),
+            onClear: () {
+              setState(() {
+                _selection.clear();
+                _selectionMode = false;
+                _lastSelectedPhotoId = null;
+              });
+              ref.read(desktopShellProvider.notifier).clearDetail();
+            },
           ),
         ),
       ],
@@ -693,6 +728,14 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
         label: l10n.filesOpen,
         icon: DesktopIcons.image,
         onPressed: () => _openPhoto(photo, photos, source),
+      ),
+      DesktopMenuItem(
+        label:
+            Localizations.localeOf(context).languageCode == 'zh'
+                ? '检查信息'
+                : l10n.desktopOpenDetails,
+        icon: DesktopIcons.info,
+        onPressed: () => _inspectPhoto(photo, photos, source: source),
       ),
       DesktopMenuItem(
         label:
@@ -737,110 +780,12 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
     ]);
   }
 
-  Future<void> _toggleSingleFavorite(PhotoItem photo) async {
-    final l10n = AppLocalizations.of(context);
-    try {
-      await ref
-          .read(photoCenterControllerProvider.notifier)
-          .toggleFavorite(photo.id, currentFavorite: photo.favorite);
-      if (!mounted) return;
-      showDesktopToast(
-        context,
-        photo.favorite ? l10n.photosUnfavorite : l10n.desktopPhotosFavorited(1),
-        icon: DesktopIcons.heart,
-      );
-    } on Object catch (error) {
-      if (mounted) {
-        showDesktopToast(
-          context,
-          failureToast(l10n, l10n.photosFavorite, error),
-          kind: DesktopToastKind.error,
-          icon: DesktopIcons.info,
-        );
-      }
-    }
-  }
-
-  Future<void> _downloadSinglePhoto(PhotoItem photo) async {
-    final l10n = AppLocalizations.of(context);
-    final url = photo.sourceUrl;
-    if (url == null || url.isEmpty) {
-      showDesktopToast(
-        context,
-        l10n.photosDownloadNeedsOriginal,
-        kind: DesktopToastKind.warn,
-        icon: DesktopIcons.download,
-      );
-      return;
-    }
-    try {
-      final ext = photo.format.isEmpty ? 'jpg' : photo.format.toLowerCase();
-      final name = '${photo.title}.$ext';
-      final path = await resolvePhotoExportPath(suggestedName: name);
-      if (path == null || !mounted) return;
-      await ref
-          .read(photoRepositoryProvider)
-          .downloadPhotoFile(
-            url: url,
-            sizeBytes: photo.fileSize,
-            destinationPath: path,
-          );
-      await deliverPhotoExport(path: path, fileName: name);
-      if (!mounted) return;
-      showDesktopToast(
-        context,
-        l10n.photosSavedCount(1),
-        icon: DesktopIcons.check,
-      );
-    } on Object catch (error) {
-      if (mounted) {
-        showDesktopToast(
-          context,
-          userFacingErrorText(error),
-          kind: DesktopToastKind.error,
-        );
-      }
-    }
-  }
-
-  Future<void> _deleteSinglePhoto(PhotoItem photo) async {
-    final l10n = AppLocalizations.of(context);
-    final container = ProviderScope.containerOf(context, listen: false);
-    final ids = <String>[photo.id];
-    try {
-      await ref
-          .read(photoCenterControllerProvider.notifier)
-          .movePhotosToTrash(ids);
-      if (!mounted) return;
-      setState(() => _selection.remove(photo.id));
-      showDesktopToast(
-        context,
-        l10n.desktopPhotosMovedToTrash(1),
-        icon: DesktopIcons.trash,
-        actionLabel: l10n.desktopUndo,
-        onAction:
-            () => unawaited(_restoreSelectedFromTrash(container, ids, l10n)),
-      );
-    } on Object catch (error) {
-      if (mounted) {
-        showDesktopToast(
-          context,
-          failureToast(l10n, l10n.photosDelete, error),
-          kind: DesktopToastKind.error,
-          icon: DesktopIcons.info,
-        );
-      }
-    }
-  }
-
   void _openPhoto(
     PhotoItem photo,
     List<PhotoItem> photos,
     PhotoBrowseSource source,
   ) {
-    ref
-        .read(desktopAmbientHintProvider.notifier)
-        .rememberPhotoViewed(photo.coverUrl);
+    ref.read(desktopAmbientHintProvider.notifier).rememberPhotoId(photo.id);
     ref.read(photoBrowseScopeProvider.notifier).set(photos, source);
     desktopPush(context, DesktopRoutes.photoDetail(photo.id));
   }
