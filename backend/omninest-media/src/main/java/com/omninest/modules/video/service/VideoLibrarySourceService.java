@@ -521,15 +521,26 @@ public class VideoLibrarySourceService {
      */
     private void requireNoPathConflict(UUID sourceId, StorageLocation targetLocation, String relativeRoot) {
         String targetRoot = composePhysicalRoot(targetLocation.getRelativeRoot(), relativeRoot);
-        for (StorageLocation location : storageLocationService.listByMountKeyForBusiness(targetLocation.getMountKey())) {
-            for (VideoLibrarySource candidate : sourceRepository.findByStorageLocationId(location.getId())) {
-                if (sourceId != null && candidate.getId().equals(sourceId)) {
-                    continue;
-                }
-                String candidateRoot = composePhysicalRoot(location.getRelativeRoot(), candidate.getRelativeRoot());
-                if (pathsOverlap(candidateRoot, targetRoot)) {
-                    throw new BusinessException(ErrorCode.CONFLICT, "该目录与现有媒体库目录重复或重叠");
-                }
+        List<StorageLocation> locations =
+                storageLocationService.listByMountKeyForBusiness(targetLocation.getMountKey());
+        if (locations.isEmpty()) {
+            return;
+        }
+        Map<UUID, StorageLocation> locationsById = new HashMap<>(locations.size());
+        for (StorageLocation location : locations) {
+            locationsById.put(location.getId(), location);
+        }
+        for (VideoLibrarySource candidate : sourceRepository.findByStorageLocationIdIn(locationsById.keySet())) {
+            if (sourceId != null && candidate.getId().equals(sourceId)) {
+                continue;
+            }
+            StorageLocation location = locationsById.get(candidate.getStorageLocationId());
+            if (location == null) {
+                continue;
+            }
+            String candidateRoot = composePhysicalRoot(location.getRelativeRoot(), candidate.getRelativeRoot());
+            if (pathsOverlap(candidateRoot, targetRoot)) {
+                throw new BusinessException(ErrorCode.CONFLICT, "该目录与现有媒体库目录重复或重叠");
             }
         }
     }

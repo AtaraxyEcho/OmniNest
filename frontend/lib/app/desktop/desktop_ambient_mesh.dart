@@ -19,12 +19,6 @@ const List<Color> desktopReaderDarkPoolColors = <Color>[
   Color(0x9E05080A),
 ];
 
-/// Reader 浅色白纸光池色标。
-const List<Color> desktopReaderLightPoolColors = <Color>[
-  Color(0x57FFFFFF),
-  Color(0x14F4F6F2),
-];
-
 /// 媒体背景艺术层的构图预设。
 ///
 /// v16 起非 Reader 媒体页统一采用全出血 `decodeWidth: 1280` 解码，
@@ -63,13 +57,13 @@ enum EditorialArtPreset {
     verticalStops: <double>[0.45, 0.98],
   ),
 
-  /// 首页等轻氛围模式：1280px 解码、0.55× 不透明度。
+  /// 首页等氛围模式：1280px 解码，取消 0.55× 二次打折。
   ambientSubtle(
     widthFactor: 1.0,
     alignment: Alignment(0.3, 0),
     blurSigma: 0.0,
     decodeWidth: 1280,
-    opacityMultiplier: 0.55,
+    opacityMultiplier: 1.0,
     horizontalStops: <double>[0.12, 0.96],
     verticalStops: <double>[0.50, 1.0],
   );
@@ -108,22 +102,22 @@ class AmbientThemeProfile {
   });
 
   static const AmbientThemeProfile dark = AmbientThemeProfile(
-    meshAlpha: 0.82,
+    meshAlpha: 1.0,
     meshSat: 1.25,
-    meshBright: 0.96,
+    meshBright: 1.0,
     lightWash: 0.0,
-    artAlpha: 0.56,
+    artAlpha: 1.0,
     veilOpacity: 1.0,
     linearFactor: 0.56,
     radialStops: <double>[0.18, 0.96],
   );
 
   static const AmbientThemeProfile light = AmbientThemeProfile(
-    meshAlpha: 0.38,
+    meshAlpha: 1.0,
     meshSat: 1.18,
-    meshBright: 1.16,
-    lightWash: 0.26,
-    artAlpha: 0.28,
+    meshBright: 1.0,
+    lightWash: 0.0,
+    artAlpha: 1.0,
     veilOpacity: 0.0,
     linearFactor: 0.0,
     radialStops: <double>[0.14, 0.94],
@@ -573,12 +567,20 @@ class EditorialArtPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (source.isEmpty) {
+      return const SizedBox.shrink();
+    }
     final effectiveProfile = profile ?? AmbientThemeProfile.of(isDark: isDark);
-    final alpha = (effectiveProfile.artAlpha *
-            preset.opacityMultiplier *
-            intensityFactor)
-        .clamp(0.0, 1.0);
-    if (alpha <= 0.001 || source.isEmpty) {
+    // 浅色非 Reader 直接以 opacity = 1.0 全出血绘制，取消多重白雾打折；
+    // 深色侧由外层 ambient 图层组统一施加 intensityFactor，避免二次打折。
+    final alpha =
+        isDark
+            ? (effectiveProfile.artAlpha * preset.opacityMultiplier).clamp(
+              0.0,
+              1.0,
+            )
+            : 1.0;
+    if (alpha <= 0.001) {
       return const SizedBox.shrink();
     }
     final ImageProvider<Object> baseProvider =

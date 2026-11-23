@@ -25062,6 +25062,12 @@ abstract class AppLocalizations {
   /// **'The queue is empty.'**
   String get desktopDockQueueEmpty;
 
+  /// No description provided for @desktopDockQueueClearConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove every track from the play queue?'**
+  String get desktopDockQueueClearConfirm;
+
   /// No description provided for @desktopClosePanel.
   ///
   /// In en, this message translates to:

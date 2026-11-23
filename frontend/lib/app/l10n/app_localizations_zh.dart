@@ -13355,6 +13355,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get desktopDockQueueEmpty => '队列为空。';
 
   @override
+  String get desktopDockQueueClearConfirm => '确定清空当前播放队列？';
+
+  @override
   String get desktopClosePanel => '关闭面板';
 
   @override

@@ -3,7 +3,6 @@ import 'package:flutter/services.dart'
     show LengthLimitingTextInputFormatter, TextInputFormatter;
 
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
-import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
@@ -179,7 +178,7 @@ class _DesktopTextFieldState extends State<DesktopTextField> {
     final fill = page ? skin.bg : skin.raise;
     final fillFocused = page ? skin.bg2 : skin.raise2;
     final bad = widget.error != null;
-    final lineColor = bad ? DesktopPalette.bad : skin.line2;
+    final lineColor = bad ? skin.bad : skin.line2;
     final borderColor =
         !widget.enabled
             ? skin.line
@@ -203,9 +202,7 @@ class _DesktopTextFieldState extends State<DesktopTextField> {
                   BoxShadow(
                     color:
                         bad
-                            ? const Color(
-                              0xFFE0655F,
-                            ).withValues(alpha: 0.18 * t)
+                            ? skin.bad.withValues(alpha: 0.18 * t)
                             : skin.accent.withValues(alpha: 0.18 * t),
                     blurRadius: 0,
                     spreadRadius: 4,
@@ -342,9 +339,7 @@ class _DesktopTextFieldState extends State<DesktopTextField> {
                               const SizedBox(width: 2),
                               Text(
                                 '*',
-                                style: DesktopType.fieldLabel(
-                                  DesktopPalette.bad,
-                                ),
+                                style: DesktopType.fieldLabel(skin.bad),
                               ),
                             ],
                           ],
@@ -369,7 +364,7 @@ class _DesktopTextFieldState extends State<DesktopTextField> {
           Text(
             message,
             style: DesktopType.fieldHint(
-              widget.error != null ? DesktopPalette.bad : skin.text3,
+              widget.error != null ? skin.bad : skin.text3,
             ),
           ),
         ],

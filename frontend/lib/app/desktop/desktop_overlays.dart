@@ -10,6 +10,7 @@ import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 
@@ -38,29 +39,54 @@ class DesktopModal extends StatelessWidget {
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onClose,
-          child: ColoredBox(
-            color: Colors.black.withValues(alpha: skin.isDark ? 0.50 : 0.28),
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: 1),
+            duration: DesktopMotion.of(context, DesktopMotion.scrim),
+            curve: DesktopMotion.ease,
+            builder: (context, scrimT, content) {
+              final scrimAlpha = skin.isDark ? 0.50 : 0.28;
+              return ColoredBox(
+                color: Colors.black.withValues(
+                  alpha: scrimAlpha * scrimT.clamp(0.0, 1.0),
+                ),
+                child: content,
+              );
+            },
             child: Center(
-              child: GestureDetector(
-                onTap: () {},
-                child: Material(
-                  color: Colors.transparent,
-                  child: Container(
-                    width: width,
-                    constraints: BoxConstraints(
-                      maxWidth: MediaQuery.sizeOf(context).width - 40,
-                      maxHeight: MediaQuery.sizeOf(context).height - 80,
-                    ),
-                    decoration: BoxDecoration(
-                      color: skin.panelSolid,
-                      borderRadius: BorderRadius.circular(
-                        DesktopMetrics.radiusDialog,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: 1),
+                duration: DesktopMotion.of(context, DesktopMotion.lift),
+                curve: DesktopMotion.spring,
+                builder:
+                    (context, t, modalCard) => Opacity(
+                      opacity: t.clamp(0.0, 1.0),
+                      alwaysIncludeSemantics: true,
+                      child: Transform.scale(
+                        scale: 0.94 + 0.06 * t,
+                        child: modalCard,
                       ),
-                      border: Border.all(color: skin.line2),
-                      boxShadow: skin.shadow,
                     ),
-                    clipBehavior: Clip.antiAlias,
-                    child: SingleChildScrollView(child: child),
+                child: GestureDetector(
+                  onTap: () {},
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Container(
+                      width: width,
+                      constraints: BoxConstraints(
+                        maxWidth: MediaQuery.sizeOf(context).width - 40,
+                        maxHeight: MediaQuery.sizeOf(context).height - 80,
+                      ),
+                      decoration: BoxDecoration(
+                        color: skin.panelSolid,
+                        borderRadius: BorderRadius.circular(
+                          DesktopMetrics.radiusDialog,
+                        ),
+                        border: Border.all(color: skin.line2),
+                        boxShadow: skin.shadow,
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: SingleChildScrollView(child: child),
+                    ),
                   ),
                 ),
               ),

@@ -94,20 +94,36 @@ class _ReaderLibraryStickyBar extends StatelessWidget {
     required this.type,
     required this.sort,
     required this.grid,
+    required this.status,
+    required this.genre,
+    required this.genres,
+    required this.visibleCount,
+    required this.hasActiveFilters,
     required this.onSearchChanged,
     required this.onTypeChanged,
     required this.onSortChanged,
     required this.onGridChanged,
+    required this.onStatus,
+    required this.onGenre,
+    required this.onClearFilters,
   });
 
   final TextEditingController search;
   final _ReaderType type;
   final _ReaderSort sort;
   final bool grid;
+  final DesktopReaderFilter status;
+  final String? genre;
+  final List<String> genres;
+  final int visibleCount;
+  final bool hasActiveFilters;
   final VoidCallback onSearchChanged;
   final ValueChanged<_ReaderType> onTypeChanged;
   final ValueChanged<_ReaderSort> onSortChanged;
   final ValueChanged<bool> onGridChanged;
+  final ValueChanged<DesktopReaderFilter> onStatus;
+  final ValueChanged<String?> onGenre;
+  final VoidCallback onClearFilters;
 
   @override
   Widget build(BuildContext context) {
@@ -123,78 +139,139 @@ class _ReaderLibraryStickyBar extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
-      child: LayoutBuilder(
-        builder: (context, barConstraints) {
-          final searchField = DesktopTextField(
-            keyName: 'desktop-reader-search',
-            controller: search,
-            hint: l10n.desktopReaderSearchHint,
-            prefixIcon: DesktopIcons.search,
-            width: barConstraints.maxWidth < 920 ? 220 : 280,
-            height: 36,
-            onChanged: (_) => onSearchChanged(),
-          );
-          final typeSeg = DesktopSeg<_ReaderType>(
-            options: _ReaderType.values,
-            value: type,
-            small: true,
-            labelOf:
-                (value) => switch (value) {
-                  _ReaderType.all => l10n.desktopFilterAll,
-                  _ReaderType.books => l10n.readerSegmentBooks,
-                  _ReaderType.comics => l10n.readerSegmentComics,
-                },
-            onChanged: onTypeChanged,
-          );
-          final sortGroup = Row(
-            mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          LayoutBuilder(
+            builder: (context, barConstraints) {
+              final searchField = DesktopTextField(
+                keyName: 'desktop-reader-search',
+                controller: search,
+                hint: l10n.desktopReaderSearchHint,
+                prefixIcon: DesktopIcons.search,
+                width: barConstraints.maxWidth < 920 ? 220 : 280,
+                height: 36,
+                onChanged: (_) => onSearchChanged(),
+              );
+              final typeSeg = DesktopSeg<_ReaderType>(
+                options: _ReaderType.values,
+                value: type,
+                small: true,
+                labelOf:
+                    (value) => switch (value) {
+                      _ReaderType.all => l10n.desktopFilterAll,
+                      _ReaderType.books => l10n.readerSegmentBooks,
+                      _ReaderType.comics => l10n.readerSegmentComics,
+                    },
+                onChanged: onTypeChanged,
+              );
+              final sortGroup = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    l10n.desktopReaderSortLabel,
+                    style: DesktopType.caption(skin.text3),
+                  ),
+                  const SizedBox(width: 8),
+                  DesktopSelect<_ReaderSort>(
+                    value: sort,
+                    width: 148,
+                    variant: DesktopSelectVariant.small,
+                    options: [
+                      for (final value in _ReaderSort.values)
+                        DesktopSelectOption(
+                          value: value,
+                          label: sortLabels[value] ?? '',
+                        ),
+                    ],
+                    onChanged: onSortChanged,
+                  ),
+                ],
+              );
+              final viewToggle = _LibraryViewToggle(
+                isGrid: grid,
+                gridTooltip: l10n.desktopFilesGridView,
+                listTooltip: l10n.desktopFilesListView,
+                onChanged: onGridChanged,
+              );
+              if (barConstraints.maxWidth < 760) {
+                return Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [searchField, typeSeg, sortGroup, viewToggle],
+                );
+              }
+              return Row(
+                children: [
+                  searchField,
+                  const SizedBox(width: 12),
+                  typeSeg,
+                  const Spacer(),
+                  sortGroup,
+                  const SizedBox(width: 10),
+                  viewToggle,
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final filterStatus in DesktopReaderFilter.values)
+                DesktopChipButton(
+                  label: switch (filterStatus) {
+                    DesktopReaderFilter.all => l10n.desktopFilterAll,
+                    DesktopReaderFilter.inProgress =>
+                      l10n.desktopFilterInProgress,
+                    DesktopReaderFilter.finished => l10n.desktopFilterFinished,
+                    DesktopReaderFilter.unread => l10n.desktopFilterUnread,
+                  },
+                  selected: status == filterStatus,
+                  onTap: () => onStatus(filterStatus),
+                ),
+            ],
+          ),
+          if (genres.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                DesktopChipButton(
+                  label: l10n.desktopFilterAll,
+                  selected: genre == null,
+                  onTap: () => onGenre(null),
+                ),
+                for (final itemGenre in genres.take(10))
+                  DesktopChipButton(
+                    label: itemGenre,
+                    selected: genre == itemGenre,
+                    onTap: () => onGenre(genre == itemGenre ? null : itemGenre),
+                  ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 8),
+          Row(
             children: [
               Text(
-                l10n.desktopReaderSortLabel,
+                l10n.desktopReaderTitleCount(visibleCount),
                 style: DesktopType.caption(skin.text3),
               ),
-              const SizedBox(width: 8),
-              DesktopSelect<_ReaderSort>(
-                value: sort,
-                width: 148,
-                variant: DesktopSelectVariant.small,
-                options: [
-                  for (final value in _ReaderSort.values)
-                    DesktopSelectOption(
-                      value: value,
-                      label: sortLabels[value] ?? '',
-                    ),
-                ],
-                onChanged: onSortChanged,
-              ),
-            ],
-          );
-          final viewToggle = _LibraryViewToggle(
-            isGrid: grid,
-            gridTooltip: l10n.desktopFilesGridView,
-            listTooltip: l10n.desktopFilesListView,
-            onChanged: onGridChanged,
-          );
-          if (barConstraints.maxWidth < 760) {
-            return Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [searchField, typeSeg, sortGroup, viewToggle],
-            );
-          }
-          return Row(
-            children: [
-              searchField,
-              const SizedBox(width: 12),
-              typeSeg,
               const Spacer(),
-              sortGroup,
-              const SizedBox(width: 10),
-              viewToggle,
+              if (hasActiveFilters)
+                DesktopLink(
+                  label: l10n.desktopReaderClearFilters,
+                  trailing: false,
+                  onPressed: onClearFilters,
+                ),
             ],
-          );
-        },
+          ),
+        ],
       ),
     );
   }
@@ -204,28 +281,14 @@ class _ReaderLibraryBody extends StatelessWidget {
   const _ReaderLibraryBody({
     required this.query,
     required this.loadingMore,
-    required this.status,
-    required this.type,
-    required this.genre,
     required this.grid,
-    required this.hasSearchNeedle,
-    required this.onStatus,
-    required this.onGenre,
-    required this.onClearFilters,
     required this.onOpen,
     required this.onRead,
   });
 
   final _ReaderLibraryQueryResult query;
   final bool loadingMore;
-  final DesktopReaderFilter status;
-  final _ReaderType type;
-  final String? genre;
   final bool grid;
-  final bool hasSearchNeedle;
-  final ValueChanged<DesktopReaderFilter> onStatus;
-  final ValueChanged<String?> onGenre;
-  final VoidCallback onClearFilters;
   final ValueChanged<ReaderItem> onOpen;
   final ValueChanged<ReaderItem> onRead;
 
@@ -234,68 +297,11 @@ class _ReaderLibraryBody extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
     final visible = query.visible;
-    final genres = query.genres;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            for (final filterStatus in DesktopReaderFilter.values)
-              DesktopChipButton(
-                label: switch (filterStatus) {
-                  DesktopReaderFilter.all => l10n.desktopFilterAll,
-                  DesktopReaderFilter.inProgress =>
-                    l10n.desktopFilterInProgress,
-                  DesktopReaderFilter.finished => l10n.desktopFilterFinished,
-                  DesktopReaderFilter.unread => l10n.desktopFilterUnread,
-                },
-                selected: status == filterStatus,
-                onTap: () => onStatus(filterStatus),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            DesktopChipButton(
-              label: l10n.desktopFilterAll,
-              selected: genre == null,
-              onTap: () => onGenre(null),
-            ),
-            for (final itemGenre in genres.take(10))
-              DesktopChipButton(
-                label: itemGenre,
-                selected: genre == itemGenre,
-                onTap: () => onGenre(genre == itemGenre ? null : itemGenre),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Text(
-              l10n.desktopReaderTitleCount(visible.length),
-              style: DesktopType.caption(skin.text3),
-            ),
-            const Spacer(),
-            if (hasSearchNeedle ||
-                status != DesktopReaderFilter.all ||
-                type != _ReaderType.all ||
-                genre != null)
-              DesktopLink(
-                label: l10n.desktopReaderClearFilters,
-                trailing: false,
-                onPressed: onClearFilters,
-              ),
-          ],
-        ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 14),
         if (visible.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 70),
@@ -307,7 +313,7 @@ class _ReaderLibraryBody extends StatelessWidget {
             ),
           )
         else if (grid)
-          _Shelf(items: visible, onOpen: onOpen)
+          _Shelf(items: visible, onOpen: onOpen, onRead: onRead)
         else
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -339,7 +345,7 @@ class _ReaderLibraryBody extends StatelessWidget {
   }
 }
 
-class _ReaderRow extends StatelessWidget {
+class _ReaderRow extends ConsumerWidget {
   const _ReaderRow({
     required this.item,
     required this.onTap,
@@ -351,91 +357,102 @@ class _ReaderRow extends StatelessWidget {
   final VoidCallback onRead;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final skin = DesktopSkin.of(context);
     final progress = (item.progressPercent ?? 0).clamp(0.0, 100.0);
-    return DesktopHoverLift(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: skin.raise,
-          borderRadius: BorderRadius.circular(DesktopMetrics.radiusSmall),
-          border: Border.all(color: skin.line),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 44,
-              child: AspectRatio(
-                aspectRatio: 2 / 3,
-                child: DesktopReaderBookCover(
-                  itemId: item.id,
-                  title: item.title,
-                  author: item.authorName ?? '',
-                  coverUrl: item.coverUrl,
-                  isComic: item.isDisplayedAsComic,
-                  readerType: item.readerType,
-                  volumeNumber: item.volumeNumber,
-                  compact: true,
+    return GestureDetector(
+      onSecondaryTapDown:
+          (details) => _openBookContextMenu(
+            context: context,
+            ref: ref,
+            item: item,
+            position: details.globalPosition,
+            onOpen: onTap,
+            onRead: onRead,
+          ),
+      child: DesktopHoverLift(
+        onTap: onTap,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: skin.raise,
+            borderRadius: BorderRadius.circular(DesktopMetrics.radiusSmall),
+            border: Border.all(color: skin.line),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 44,
+                child: AspectRatio(
+                  aspectRatio: 2 / 3,
+                  child: DesktopReaderBookCover(
+                    itemId: item.id,
+                    title: item.title,
+                    author: item.authorName ?? '',
+                    coverUrl: item.coverUrl,
+                    isComic: item.isDisplayedAsComic,
+                    readerType: item.readerType,
+                    volumeNumber: item.volumeNumber,
+                    compact: true,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: DesktopType.rowTitle(skin.text),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    item.authorName ?? item.itemType,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: DesktopType.caption(skin.text3),
-                  ),
-                ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: DesktopType.rowTitle(skin.text),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      item.authorName ?? item.itemType,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: DesktopType.caption(skin.text3),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            if (item.rating != null) ...[
-              Icon(DesktopIcons.starFilled, size: 11, color: skin.warm),
-              const SizedBox(width: 4),
-              Text(
-                item.rating!.toStringAsFixed(1),
-                style: DesktopType.numeric(skin.text3),
+              if (item.rating != null) ...[
+                Icon(DesktopIcons.starFilled, size: 11, color: skin.warm),
+                const SizedBox(width: 4),
+                Text(
+                  item.rating!.toStringAsFixed(1),
+                  style: DesktopType.numeric(skin.text3),
+                ),
+                const SizedBox(width: 18),
+              ],
+              SizedBox(
+                width: 140,
+                child: DesktopProgress(fraction: progress / 100),
               ),
-              const SizedBox(width: 18),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 44,
+                child: Text(
+                  '${progress.round()}%',
+                  textAlign: TextAlign.right,
+                  style: DesktopType.numeric(skin.text3),
+                ),
+              ),
+              const SizedBox(width: 14),
+              DesktopButton(
+                label:
+                    progress > 0 && progress < 90
+                        ? AppLocalizations.of(context).readerContinueReading
+                        : AppLocalizations.of(context).readerStartReading,
+                icon: DesktopIcons.book,
+                variant: DesktopButtonVariant.soft,
+                onPressed: onRead,
+              ),
             ],
-            SizedBox(
-              width: 140,
-              child: DesktopProgress(fraction: progress / 100),
-            ),
-            const SizedBox(width: 12),
-            SizedBox(
-              width: 44,
-              child: Text(
-                '${progress.round()}%',
-                textAlign: TextAlign.right,
-                style: DesktopType.numeric(skin.text3),
-              ),
-            ),
-            const SizedBox(width: 14),
-            DesktopButton(
-              label:
-                  progress > 0 && progress < 90
-                      ? AppLocalizations.of(context).readerContinueReading
-                      : AppLocalizations.of(context).readerStartReading,
-              icon: DesktopIcons.book,
-              variant: DesktopButtonVariant.soft,
-              onPressed: onRead,
-            ),
-          ],
+          ),
         ),
       ),
     );

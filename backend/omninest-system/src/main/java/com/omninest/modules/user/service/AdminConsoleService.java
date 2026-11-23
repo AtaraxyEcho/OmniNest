@@ -105,7 +105,9 @@ public class AdminConsoleService {
         }
         Map<String, Long> counts = new LinkedHashMap<>();
         for (Object[] row : authUserRepository.countUsersByStatus()) {
-            counts.put(row[0].toString(), toLong(row[1]));
+            if (row != null && row.length >= 2 && row[0] != null) {
+                counts.put(row[0].toString(), toLong(row[1]));
+            }
         }
         long total = counts.values().stream().mapToLong(Long::longValue).sum();
         return new AdminConsoleSummaryDto.UserStats(
@@ -241,6 +243,7 @@ public class AdminConsoleService {
 
     private List<AdminAnalyticsDto.DailyMetric> toDailyMetrics(List<Object[]> rows) {
         return rows.stream()
+                .filter(row -> row != null && row.length >= 2 && row[0] != null)
                 .map(row -> new AdminAnalyticsDto.DailyMetric(
                         row[0].toString(), toLong(row[1])))
                 .toList();
@@ -248,12 +251,16 @@ public class AdminConsoleService {
 
     private List<AdminAnalyticsDto.DailyTaskMetric> toDailyTaskMetrics(List<Object[]> rows) {
         return rows.stream()
+                .filter(row -> row != null && row.length >= 4 && row[0] != null)
                 .map(row -> new AdminAnalyticsDto.DailyTaskMetric(
                         row[0].toString(), toLong(row[1]), toLong(row[2]), toLong(row[3])))
                 .toList();
     }
 
     private long toLong(Object value) {
+        if (value == null) {
+            return 0L;
+        }
         if (value instanceof Number number) {
             return number.longValue();
         }

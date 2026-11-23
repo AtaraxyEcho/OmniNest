@@ -110,31 +110,31 @@ class _DesktopBarTipOverlayState extends State<DesktopBarTipOverlay> {
     return OverlayPortal(
       controller: _portalController,
       overlayChildBuilder: (context) {
-        if (!widget.visible || !_hasContent) {
-          return const ExcludeSemantics(child: SizedBox.shrink());
-        }
-        return ExcludeSemantics(
-          child: Positioned(
-            top: 0,
-            left: 0,
-            child: CompositedTransformFollower(
-              link: _layerLink,
-              showWhenUnlinked: false,
-              targetAnchor: targetAnchor,
-              followerAnchor: followerAnchor,
-              offset: const Offset(0, -8),
-              child: IgnorePointer(
-                child: Material(
-                  type: MaterialType.transparency,
-                  child: _DesktopTipCapsule(
-                    title: widget.title,
-                    value: widget.value,
-                    subtitle: widget.subtitle,
-                    dotColor: widget.dotColor,
-                    align: widget.align,
-                  ),
-                ),
-              ),
+        final show = widget.visible && _hasContent;
+        return Align(
+          alignment: Alignment.topLeft,
+          child: ExcludeSemantics(
+            child: IgnorePointer(
+              child:
+                  show
+                      ? CompositedTransformFollower(
+                        link: _layerLink,
+                        showWhenUnlinked: false,
+                        targetAnchor: targetAnchor,
+                        followerAnchor: followerAnchor,
+                        offset: const Offset(0, -8),
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: _DesktopTipCapsule(
+                            title: widget.title,
+                            value: widget.value,
+                            subtitle: widget.subtitle,
+                            dotColor: widget.dotColor,
+                            align: widget.align,
+                          ),
+                        ),
+                      )
+                      : const SizedBox.shrink(),
             ),
           ),
         );

@@ -3,7 +3,6 @@ import 'dart:typed_data';
 
 import 'package:drift/native.dart';
 import 'package:file_selector/file_selector.dart';
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -13,15 +12,12 @@ import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_preferences.dart';
-import 'package:omninest/features/backdrop/application/app_backdrop_scene_controller.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_video_session.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_api.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_bundled_asset.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_file_picker.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_repository.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
-import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
-import 'package:omninest/features/backdrop/presentation/app_backdrop_scene_scope.dart';
 
 const String _testOwnerId = '11111111-1111-1111-1111-111111111111';
 

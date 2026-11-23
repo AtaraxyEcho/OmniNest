@@ -360,37 +360,11 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
                                     )
                                     .toUpperCase(),
                         title: l10n.modulePhotosTitle,
+                        sticky: true,
                         actionsRightAlignedWhenWrapped: true,
                         actions: [
                           _importAction(context, l10n),
-                          if (supportsSelection)
-                            DesktopButton(
-                              label:
-                                  selectionActive
-                                      ? l10n.photosDone
-                                      : l10n.desktopPhotosSelect,
-                              icon:
-                                  selectionActive
-                                      ? DesktopIcons.close
-                                      : DesktopIcons.check,
-                              variant:
-                                  selectionActive
-                                      ? DesktopButtonVariant.soft
-                                      : DesktopButtonVariant.ghost,
-                              onPressed: () {
-                                setState(() {
-                                  if (selectionActive) {
-                                    _selection.clear();
-                                    _selectionMode = false;
-                                    _lastSelectedPhotoId = null;
-                                  } else {
-                                    _selectionMode = true;
-                                  }
-                                });
-                              },
-                            ),
-                          // 样例 `Photos.tsx:54-55`：`.head-actions` 里 Seg 在左、缩放
-                          // 滑条在右；滑条只在 Library 档出现。
+                          // 对齐 `Photos.tsx:108-115`：Import → Seg → Select(soft) → Zoom。
                           DesktopSeg<DesktopPhotosTab>(
                             options: DesktopPhotosTab.values,
                             value: _tab,
@@ -427,6 +401,32 @@ class _DesktopPhotosPageState extends ConsumerState<DesktopPhotosPage> {
                               }
                             },
                           ),
+                          if (supportsSelection)
+                            DesktopButton(
+                              label:
+                                  selectionActive
+                                      ? l10n.photosDone
+                                      : l10n.desktopPhotosSelect,
+                              icon:
+                                  selectionActive
+                                      ? DesktopIcons.close
+                                      : DesktopIcons.check,
+                              variant:
+                                  selectionActive
+                                      ? DesktopButtonVariant.primary
+                                      : DesktopButtonVariant.soft,
+                              onPressed: () {
+                                setState(() {
+                                  if (selectionActive) {
+                                    _selection.clear();
+                                    _selectionMode = false;
+                                    _lastSelectedPhotoId = null;
+                                  } else {
+                                    _selectionMode = true;
+                                  }
+                                });
+                              },
+                            ),
                           if (_tab == DesktopPhotosTab.library)
                             _DensitySlider(
                               value: _density,

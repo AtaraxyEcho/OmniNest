@@ -92,8 +92,8 @@ abstract final class DesktopTheme {
             return Color.lerp(
               skin.accent,
               skin.text,
-              0.30,
-            )!.withValues(alpha: 0.8);
+              0.125,
+            )!.withValues(alpha: 0.80);
           }
           return skin.text.withValues(alpha: 0.16);
         }),

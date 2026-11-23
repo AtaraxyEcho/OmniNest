@@ -6491,6 +6491,7 @@
   "desktopDockNowPlaying": "Now playing",
   "desktopDockClear": "Clear",
   "desktopDockQueueEmpty": "The queue is empty.",
+  "desktopDockQueueClearConfirm": "Remove every track from the play queue?",
   "desktopClosePanel": "Close panel",
   "desktopCast": "Cast",
   "desktopFileSection": "File",

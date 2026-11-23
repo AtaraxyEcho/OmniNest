@@ -407,8 +407,10 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     final outgoingFrame = _outgoingFrame;
     final isReaderRoute = widget.isReaderRoute;
     final isLightMedia = !skin.isDark && !isReaderRoute;
+    final isLightReader = !skin.isDark && isReaderRoute;
     final showCoverLayer =
         isLightMedia ||
+        isLightReader ||
         (activeFrame?.hasMesh ?? false) ||
         (outgoingFrame?.hasMesh ?? false);
     final showArtLayer =
@@ -425,10 +427,10 @@ class _DesktopAmbientState extends State<DesktopAmbient>
             if (intensityFactor <= 0.001) {
               return const SizedBox.shrink();
             }
-            return Stack(
+            final content = Stack(
               fit: StackFit.expand,
               children: [
-                // 边界 1：浅色非 Reader 为纯底色 #F4F6F2；深色/Reader 为 4×3 矢量色网双缓冲。
+                // 边界 1：浅色非 Reader 为纯底色 #F4F6F2；浅色 Reader 为干净 #F4F6F2（无封面时叠轻 .amb-tone）；深色为 4×3 矢量色网双缓冲。
                 if (showCoverLayer)
                   RepaintBoundary(
                     key: const ValueKey('ambient-cover'),
@@ -437,6 +439,8 @@ class _DesktopAmbientState extends State<DesktopAmbient>
                             ? const ColoredBox(
                               color: desktopAmbientLightBaseColor,
                             )
+                            : isLightReader
+                            ? _buildLightReaderBackdrop(activeFrame)
                             : isReaderRoute
                             ? ClipRect(
                               child: Transform.scale(
@@ -451,6 +455,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
                                     skin: skin,
                                     profile: profile,
                                     intensityFactor: intensityFactor,
+                                    isReaderRoute: true,
                                     active: activeFrame,
                                     outgoing: outgoingFrame,
                                   ),
@@ -461,6 +466,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
                               skin: skin,
                               profile: profile,
                               intensityFactor: intensityFactor,
+                              isReaderRoute: false,
                               active: activeFrame,
                               outgoing: outgoingFrame,
                             ),
@@ -477,33 +483,78 @@ class _DesktopAmbientState extends State<DesktopAmbient>
                       outgoing: outgoingFrame,
                     ),
                   ),
-                // 边界 3：Reader 深/浅色中心光池；深色媒体页单层平铺暗纱（35%）；浅色媒体页无暗纱无噪点。
-                if (isReaderRoute)
+                // 边界 3：Reader 深色 70%×60% 椭圆光池（浅色对齐 polish.css:823 移除暗纱）；深色非 Reader 单层 35% 暗纱 + 5% overlay 细噪点。
+                if (isReaderRoute && skin.isDark)
                   RepaintBoundary(
                     key: const ValueKey('ambient-veil'),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: RadialGradient(
-                          center: const Alignment(0.1, -0.1),
-                          radius: 0.70,
-                          colors:
-                              skin.isDark
-                                  ? desktopReaderDarkPoolColors
-                                  : desktopReaderLightPoolColors,
+                    child: ClipRect(
+                      child: Transform.scale(
+                        scaleX: 1.167,
+                        scaleY: 1.0,
+                        child: const DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: RadialGradient(
+                              center: Alignment(0.1, -0.1),
+                              radius: 0.60,
+                              colors: desktopReaderDarkPoolColors,
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   )
-                else if (skin.isDark)
+                else if (!isReaderRoute && skin.isDark) ...[
                   const RepaintBoundary(
                     key: ValueKey('ambient-veil'),
                     child: ColoredBox(color: desktopAmbientDarkVeilColor),
                   ),
+                  const RepaintBoundary(
+                    key: ValueKey('ambient-grain'),
+                    child: CustomPaint(
+                      painter: _DarkAmbientGrainPainter(),
+                      child: SizedBox.expand(),
+                    ),
+                  ),
+                ],
               ],
             );
+            if (skin.isDark) {
+              return Opacity(
+                opacity: intensityFactor.clamp(0.0, 1.0),
+                alwaysIncludeSemantics: true,
+                child: content,
+              );
+            }
+            return content;
           },
         ),
       ),
+    );
+  }
+
+  Widget _buildLightReaderBackdrop(_AmbientSceneFrame? active) {
+    final tone =
+        (active != null && !active.hasCover) ? active.fallbackTone : null;
+    if (tone == null) {
+      return const ColoredBox(color: desktopAmbientLightBaseColor);
+    }
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const ColoredBox(color: desktopAmbientLightBaseColor),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: const Alignment(0.1, -0.1),
+              radius: 0.85,
+              colors: <Color>[
+                tone.withValues(alpha: 0.24),
+                tone.withValues(alpha: 0.0),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -511,6 +562,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     required DesktopSkin skin,
     required AmbientThemeProfile profile,
     required double intensityFactor,
+    required bool isReaderRoute,
     required _AmbientSceneFrame? active,
     required _AmbientSceneFrame? outgoing,
   }) {
@@ -526,6 +578,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
               skin: skin,
               profile: profile,
               intensityFactor: intensityFactor,
+              isReaderRoute: isReaderRoute,
               frame: outgoing,
             ),
           ),
@@ -538,6 +591,7 @@ class _DesktopAmbientState extends State<DesktopAmbient>
           skin: skin,
           profile: profile,
           intensityFactor: intensityFactor,
+          isReaderRoute: isReaderRoute,
           frame: active,
         ),
       );
@@ -565,14 +619,19 @@ class _DesktopAmbientState extends State<DesktopAmbient>
     required DesktopSkin skin,
     required AmbientThemeProfile profile,
     required double intensityFactor,
+    required bool isReaderRoute,
     required _AmbientSceneFrame frame,
   }) {
-    final meshAlpha = (profile.meshAlpha * intensityFactor).clamp(0.0, 1.0);
+    final meshAlpha =
+        skin.isDark
+            ? profile.meshAlpha.clamp(0.0, 1.0)
+            : (profile.meshAlpha * intensityFactor).clamp(0.0, 1.0);
+    final saturation = (skin.isDark && isReaderRoute) ? 1.35 : profile.meshSat;
     return DesktopAmbientMeshSurface(
       source: frame.imageUrl ?? '',
       preloadedGrid: frame.meshGrid,
       opacity: meshAlpha,
-      saturation: profile.meshSat,
+      saturation: saturation,
       brightness: profile.meshBright,
       fallbackColor:
           frame.fallbackTone?.withValues(alpha: meshAlpha) ??
@@ -691,6 +750,62 @@ class DesktopAmbientPlain extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 深色非 Reader 5% overlay 细噪点绘制器（轻量无外部资源依赖）。
+class _DarkAmbientGrainPainter extends CustomPainter {
+  const _DarkAmbientGrainPainter();
+
+  static const double _tileSize = 96.0;
+  static const List<Offset> _dots = <Offset>[
+    Offset(7, 11),
+    Offset(23, 5),
+    Offset(41, 19),
+    Offset(63, 9),
+    Offset(82, 17),
+    Offset(14, 34),
+    Offset(35, 29),
+    Offset(57, 42),
+    Offset(76, 36),
+    Offset(91, 48),
+    Offset(9, 59),
+    Offset(28, 66),
+    Offset(49, 58),
+    Offset(71, 69),
+    Offset(88, 63),
+    Offset(19, 82),
+    Offset(44, 78),
+    Offset(65, 89),
+    Offset(84, 85),
+    Offset(5, 91),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    final paint =
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.05)
+          ..blendMode = BlendMode.overlay;
+    final cols = math.min((size.width / _tileSize).ceil(), 36);
+    final rows = math.min((size.height / _tileSize).ceil(), 24);
+    for (var r = 0; r < rows; r++) {
+      final baseY = r * _tileSize;
+      for (var c = 0; c < cols; c++) {
+        final baseX = c * _tileSize;
+        for (final dot in _dots) {
+          final x = baseX + dot.dx;
+          final y = baseY + dot.dy;
+          if (x < size.width && y < size.height) {
+            canvas.drawRect(Rect.fromLTWH(x, y, 1, 1), paint);
+          }
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DarkAmbientGrainPainter oldDelegate) => false;
 }
 
 /// Plain 模式极轻静态噪点绘制器（仅在外层 `RepaintBoundary` 首次光栅化一次）。

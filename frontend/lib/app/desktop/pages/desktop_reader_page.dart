@@ -41,6 +41,7 @@ part 'desktop_reader_insights.dart';
 
 /// Library 是完整清单（搜索/排序/标签/网格-列表切换）。
 part 'desktop_reader_library.dart';
+part 'desktop_reader_book_card.dart';
 
 enum DesktopReaderFilter { all, inProgress, finished, unread }
 
@@ -200,6 +201,7 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
                       .toUpperCase(),
               title: l10n.desktopNavReader,
               subtitle: l10n.desktopReaderSubtitle,
+              sticky: true,
               actions: [
                 ReaderLibraryImportAction(
                   style: ImportButtonStyle.outlinedButton,
@@ -236,6 +238,15 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
                 type: _libraryType,
                 sort: _librarySort,
                 grid: _libraryGrid,
+                status: _filter,
+                genre: _libraryGenre,
+                genres: libraryQuery.genres,
+                visibleCount: libraryQuery.visible.length,
+                hasActiveFilters:
+                    _librarySearch.text.trim().isNotEmpty ||
+                    _filter != DesktopReaderFilter.all ||
+                    _libraryType != _ReaderType.all ||
+                    _libraryGenre != null,
                 onSearchChanged: () => setState(() {}),
                 onTypeChanged:
                     (value) => setState(() {
@@ -244,17 +255,6 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
                     }),
                 onSortChanged: (value) => setState(() => _librarySort = value),
                 onGridChanged: (grid) => setState(() => _libraryGrid = grid),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: _ReaderLibraryBody(
-                query: libraryQuery,
-                loadingMore: center?.itemsLoadingMore ?? false,
-                status: _filter,
-                type: _libraryType,
-                genre: _libraryGenre,
-                grid: _libraryGrid,
-                hasSearchNeedle: _librarySearch.text.trim().isNotEmpty,
                 onStatus: (value) => setState(() => _filter = value),
                 onGenre: (value) => setState(() => _libraryGenre = value),
                 onClearFilters:
@@ -264,6 +264,13 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
                       _libraryType = _ReaderType.all;
                       _libraryGenre = null;
                     }),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: _ReaderLibraryBody(
+                query: libraryQuery,
+                loadingMore: center?.itemsLoadingMore ?? false,
+                grid: _libraryGrid,
                 onOpen: _openBook,
                 onRead: (item) => unawaited(_openContinueReading(item)),
               ),
@@ -381,6 +388,7 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
                         title: l10n.readerSegmentBooks,
                         items: visibleBooks,
                         onOpen: _openBook,
+                        onRead: (item) => unawaited(_openContinueReading(item)),
                         onSeeAll:
                             () => setState(() => _view = _ReaderView.library),
                       ),
@@ -389,6 +397,7 @@ class _DesktopReaderPageState extends ConsumerState<DesktopReaderPage> {
                         title: l10n.readerSegmentComics,
                         items: visibleComics,
                         onOpen: _openBook,
+                        onRead: (item) => unawaited(_openContinueReading(item)),
                         onSeeAll:
                             () => setState(() => _view = _ReaderView.library),
                       ),
@@ -751,12 +760,14 @@ class _ShelfSection extends StatelessWidget {
     required this.title,
     required this.items,
     required this.onOpen,
+    required this.onRead,
     required this.onSeeAll,
   });
 
   final String title;
   final List<ReaderItem> items;
   final ValueChanged<ReaderItem> onOpen;
+  final ValueChanged<ReaderItem> onRead;
   final VoidCallback onSeeAll;
 
   @override
@@ -765,16 +776,21 @@ class _ShelfSection extends StatelessWidget {
       title: title,
       actionLabel: AppLocalizations.of(context).desktopSeeAll,
       onAction: onSeeAll,
-      child: _Shelf(items: items, onOpen: onOpen),
+      child: _Shelf(items: items, onOpen: onOpen, onRead: onRead),
     );
   }
 }
 
 class _Shelf extends StatelessWidget {
-  const _Shelf({required this.items, required this.onOpen});
+  const _Shelf({
+    required this.items,
+    required this.onOpen,
+    required this.onRead,
+  });
 
   final List<ReaderItem> items;
   final ValueChanged<ReaderItem> onOpen;
+  final ValueChanged<ReaderItem> onRead;
 
   @override
   Widget build(BuildContext context) {
@@ -800,91 +816,11 @@ class _Shelf extends StatelessWidget {
                   child: _BookCard(
                     item: items[i],
                     onTap: () => onOpen(items[i]),
+                    onRead: () => onRead(items[i]),
                   ),
                 ),
               ),
           ],
-        );
-      },
-    );
-  }
-}
-
-class _BookCard extends StatelessWidget {
-  const _BookCard({required this.item, required this.onTap});
-
-  final ReaderItem item;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
-    final progress = (item.progressPercent ?? 0).clamp(0, 100);
-    return DesktopHover(
-      builder: (context, hovered) {
-        return AnimatedContainer(
-          key: ValueKey<String>('desktop-reader-book-card-${item.id}'),
-          duration: MotionToken.reduced(
-            context,
-            const Duration(milliseconds: 220),
-          ),
-          curve: Curves.easeOutCubic,
-          transformAlignment: Alignment.center,
-          transform:
-              Matrix4.identity()
-                ..translateByDouble(0.0, hovered ? -14.0 : 0.0, 0, 1)
-                ..rotateZ(hovered ? -1.2 * math.pi / 180.0 : 0.0)
-                ..scaleByDouble(
-                  hovered ? 1.022 : 1.0,
-                  hovered ? 1.022 : 1.0,
-                  1.0,
-                  1.0,
-                ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Semantics(
-                button: true,
-                label: item.title,
-                child: GestureDetector(
-                  onTap: onTap,
-                  child: AspectRatio(
-                    aspectRatio: 168 / 240,
-                    child: _BookCover(item: item, hoveredOverride: hovered),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                item.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: DesktopType.rowTitle(skin.text),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                item.authorName ?? '',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: DesktopType.caption(skin.text3),
-              ),
-              if (progress > 0) ...[
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(3),
-                  child: SizedBox(
-                    height: 3,
-                    child: LinearProgressIndicator(
-                      value: progress / 100,
-                      backgroundColor: skin.raise3,
-                      valueColor: AlwaysStoppedAnimation<Color>(skin.accent),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
         );
       },
     );

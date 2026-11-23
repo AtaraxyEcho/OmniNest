@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -207,6 +209,7 @@ class DesktopWindowChrome extends ConsumerWidget {
       return child;
     }
     final chrome = ref.read(windowChromeControllerProvider.notifier);
+    final isMacOS = defaultTargetPlatform == TargetPlatform.macOS;
     return DesktopWindowFrame(
       child: Stack(
         fit: StackFit.expand,
@@ -222,10 +225,13 @@ class DesktopWindowChrome extends ConsumerWidget {
               behavior: HitTestBehavior.translucent,
               onPanStart: (_) => chrome.startDragging(),
               onDoubleTap: () => chrome.toggleMaximize(),
-              child: const Align(
-                alignment: Alignment.topRight,
-                child: DesktopWindowControls(),
-              ),
+              child:
+                  isMacOS
+                      ? const SizedBox.expand()
+                      : const Align(
+                        alignment: Alignment.topRight,
+                        child: DesktopWindowControls(),
+                      ),
             ),
           ),
         ],

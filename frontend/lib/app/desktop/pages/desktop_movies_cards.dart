@@ -152,6 +152,11 @@ class _PosterCardState extends ConsumerState<_PosterCard> {
         onPressed: () => desktopPush(context, DesktopRoutes.moviePlay(item.id)),
       ),
       DesktopMenuItem(
+        label: l10n.desktopQuickLook,
+        icon: DesktopIcons.panel,
+        onPressed: () => _showMovieQuickLook(ref, l10n, item),
+      ),
+      DesktopMenuItem(
         label: l10n.desktopOpenDetails,
         icon: DesktopIcons.info,
         onPressed:
@@ -425,6 +430,11 @@ class _SeriesPosterState extends ConsumerState<_SeriesPoster> {
     final series = widget.series;
     ref.read(desktopShellProvider.notifier).openMenu(position, [
       DesktopMenuItem(
+        label: l10n.desktopQuickLook,
+        icon: DesktopIcons.panel,
+        onPressed: () => _showSeriesQuickLook(ref, l10n, series),
+      ),
+      DesktopMenuItem(
         label: l10n.desktopOpenDetails,
         icon: DesktopIcons.info,
         onPressed: () => desktopPush(context, '/video/series/${series.id}'),
@@ -564,6 +574,11 @@ class _WideCardState extends ConsumerState<_WideCard> {
         label: l10n.desktopContinue,
         icon: DesktopIcons.play,
         onPressed: () => desktopPush(context, DesktopRoutes.moviePlay(item.id)),
+      ),
+      DesktopMenuItem(
+        label: l10n.desktopQuickLook,
+        icon: DesktopIcons.panel,
+        onPressed: () => _showContinueQuickLook(ref, l10n, item, detailRoute),
       ),
       DesktopMenuItem(
         label: l10n.desktopOpenDetails,
@@ -885,68 +900,4 @@ String _shortDateTime(DateTime value) {
   final hour = local.hour.toString().padLeft(2, '0');
   final minute = local.minute.toString().padLeft(2, '0');
   return '${local.year}-$month-$day $hour:$minute';
-}
-
-class _PosterGrid extends StatelessWidget {
-  const _PosterGrid({required this.items});
-
-  final List<MovieVideoItem> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = _posterGridColumns(context, constraints.maxWidth);
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.only(bottom: 8),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            crossAxisSpacing: 22,
-            mainAxisSpacing: 22,
-            childAspectRatio: 2 / 3,
-          ),
-          itemCount: items.length,
-          itemBuilder:
-              (context, index) => DesktopStagger(
-                index: index,
-                child: _PosterCard(item: items[index]),
-              ),
-        );
-      },
-    );
-  }
-}
-
-class _SeriesGrid extends StatelessWidget {
-  const _SeriesGrid({required this.items});
-
-  final List<MovieSeries> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = _posterGridColumns(context, constraints.maxWidth);
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.only(bottom: 8),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            crossAxisSpacing: 22,
-            mainAxisSpacing: 22,
-            childAspectRatio: 2 / 3,
-          ),
-          itemCount: items.length,
-          itemBuilder:
-              (context, index) => DesktopStagger(
-                index: index,
-                child: _SeriesPoster(series: items[index]),
-              ),
-        );
-      },
-    );
-  }
 }

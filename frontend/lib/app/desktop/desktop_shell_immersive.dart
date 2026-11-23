@@ -378,10 +378,15 @@ class _AmbientLayerState extends ConsumerState<_AmbientLayer> {
 /// 桌面工作区（`DesktopShellMode.chrome`）内的一级分支与常规/二级路由统一由本层
 /// 单一承载过渡，不再与内层分支动画或路由动画叠跑，也不再强行展示伪进度条。
 class _RouteEnter extends StatefulWidget {
-  const _RouteEnter({required this.path, required this.child});
+  const _RouteEnter({
+    required this.path,
+    required this.child,
+    this.suppressEnter = false,
+  });
 
   final String path;
   final Widget child;
+  final bool suppressEnter;
 
   @override
   State<_RouteEnter> createState() => _RouteEnterState();
@@ -415,7 +420,8 @@ class _RouteEnterState extends State<_RouteEnter>
     if (oldWidget.path == widget.path) {
       return;
     }
-    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+    if (widget.suppressEnter ||
+        (MediaQuery.maybeDisableAnimationsOf(context) ?? false)) {
       _controller.value = 1;
       return;
     }

@@ -17,7 +17,7 @@ void main() {
   DesktopSkin skinAt(WidgetTester tester, Finder finder) =>
       DesktopSkin.of(tester.element(finder));
 
-  testWidgets('筛选胶囊选中是 18% 淡底 + 45% 描边 + 600 字重', (tester) async {
+  testWidgets('筛选胶囊默认选中是实心强调底 + accentInk + 600 字重', (tester) async {
     await tester.pumpWidget(
       wrapDesktop(
         Center(
@@ -39,12 +39,42 @@ void main() {
       ),
     );
     final decoration = box.decoration! as BoxDecoration;
-    expect(decoration.color, skin.accentWash(0.18));
-    expect((decoration.border! as Border).top.color, skin.accentWash(0.45));
+    expect(decoration.color, skin.accent);
+    expect((decoration.border! as Border).top.color, skin.accent);
 
     final text = tester.widget<Text>(find.text('Documents'));
     expect(text.style!.fontWeight, FontWeight.w600);
-    // 淡底配正文色，不再反白。
+    expect(text.style!.color, skin.accentInk);
+  });
+
+  testWidgets('筛选胶囊 soft 模式选中是 18% 淡底 + 45% 描边 + 正文色', (tester) async {
+    await tester.pumpWidget(
+      wrapDesktop(
+        Center(
+          child: DesktopChipButton(
+            label: 'Tracks',
+            selected: true,
+            soft: true,
+            onTap: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final skin = skinAt(tester, find.byType(DesktopChipButton));
+    final box = tester.widget<AnimatedContainer>(
+      find.descendant(
+        of: find.byType(DesktopChipButton),
+        matching: find.byType(AnimatedContainer),
+      ),
+    );
+    final decoration = box.decoration! as BoxDecoration;
+    expect(decoration.color, skin.accentWash(0.18));
+    expect((decoration.border! as Border).top.color, skin.accentWash(0.45));
+
+    final text = tester.widget<Text>(find.text('Tracks'));
+    expect(text.style!.fontWeight, FontWeight.w600);
     expect(text.style!.color, skin.text);
   });
 

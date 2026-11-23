@@ -411,7 +411,7 @@ class _SkyPainter extends CustomPainter {
           ..shader = RadialGradient(
             colors: [
               (isDay ? DesktopPalette.sunGlow : DesktopPalette.moonGlow)
-                  .withValues(alpha: dim * (isDay ? 0.55 : 0.28)),
+                  .withValues(alpha: dim * (isDay ? 0.30 : 0.16)),
               DesktopPalette.onStage.withValues(alpha: 0),
             ],
           ).createShader(

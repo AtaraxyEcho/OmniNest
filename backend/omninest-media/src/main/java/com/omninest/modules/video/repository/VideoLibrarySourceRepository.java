@@ -1,6 +1,7 @@
 package com.omninest.modules.video.repository;
 
 import com.omninest.modules.video.domain.VideoLibrarySource;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,6 +27,8 @@ public interface VideoLibrarySourceRepository extends JpaRepository<VideoLibrary
     List<VideoLibrarySource> findByEnabledTrueOrderByNameAsc();
 
     List<VideoLibrarySource> findByStorageLocationId(UUID storageLocationId);
+
+    List<VideoLibrarySource> findByStorageLocationIdIn(Collection<UUID> storageLocationIds);
 
     /**
      * 查询用户拥有的影视库来源。

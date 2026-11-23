@@ -416,6 +416,7 @@ class _TracksViewState extends State<_TracksView> {
                       ),
                     ),
                     DesktopChipButton(
+                      soft: true,
                       label: l10n.desktopFilterAll,
                       selected: !_favoritesOnly,
                       count: widget.tracks.length,
@@ -426,6 +427,7 @@ class _TracksViewState extends State<_TracksView> {
                           }),
                     ),
                     DesktopChipButton(
+                      soft: true,
                       label: l10n.desktopPinnedFavorites,
                       selected: _favoritesOnly,
                       count:

@@ -13,28 +13,31 @@ void main() {
     expect(skin.bg, const Color(0xFF0B0E11));
     expect(skin.bg2, const Color(0xFF11151A));
     expect(skin.panelSolid, const Color(0xFF161B20));
-    expect(skin.panel.a, closeTo(0.66, 0.005));
-    expect(skin.text, const Color(0xFFE8ECEA));
-    expect(skin.text2, const Color(0xFFA3ADAA));
-    expect(skin.text3, const Color(0xFF68726F));
+    expect(skin.panel, const Color(0xFF161B20).withValues(alpha: 0.66));
+    expect(skin.card, const Color(0xFF0E1216).withValues(alpha: 0.58));
+    expect(skin.text, const Color(0xFFEEF2F0));
+    expect(skin.text2, const Color(0xFFB1BBB8));
+    expect(skin.text3, const Color(0xFF86918D));
     expect(skin.accent, const Color(0xFF8CC5B2));
     expect(skin.accentInk, const Color(0xFF0A1411));
     expect(skin.warm, const Color(0xFFD9B48A));
     expect(skin.veil.a, closeTo(0.72, 0.005));
+    expect(DesktopPalette.danger, const Color(0xFFC9534B));
   });
 
   test('桌面浅色令牌与样例一致', () {
     final skin = DesktopSkin.resolve(isDark: false, accent: DesktopAccent.sage);
-    expect(skin.bg, const Color(0xFFEEF0EC));
-    expect(skin.bg2, const Color(0xFFE6E9E4));
-    expect(skin.panelSolid, const Color(0xFFFBFCFA));
-    expect(skin.panel.a, closeTo(0.66, 0.005));
-    expect(skin.text, const Color(0xFF19211E));
-    expect(skin.text2, const Color(0xFF526059));
-    expect(skin.text3, const Color(0xFF8A9690));
-    expect(skin.accent, const Color(0xFF2F7A68));
+    expect(skin.bg, const Color(0xFFF5F4EF));
+    expect(skin.bg2, const Color(0xFFECEBE4));
+    expect(skin.panelSolid, const Color(0xFFFFFFFF));
+    expect(skin.panel, const Color(0xFFFFFFFF).withValues(alpha: 0.78));
+    expect(skin.card, const Color(0xFFF5F4EF).withValues(alpha: 0.55));
+    expect(skin.text, const Color(0xFF0F1613));
+    expect(skin.text2, const Color(0xFF2C3832));
+    expect(skin.text3, const Color(0xFF46524B));
+    expect(skin.accent, const Color(0xFF266B5A));
     expect(skin.accentInk, const Color(0xFFFFFFFF));
-    expect(skin.warm, const Color(0xFF9A6A3A));
-    expect(skin.veil.a, closeTo(0.80, 0.005));
+    expect(skin.warm, const Color(0xFF85582C));
+    expect(skin.veil, const Color(0xFFF6F5F0).withValues(alpha: 0.90));
   });
 }

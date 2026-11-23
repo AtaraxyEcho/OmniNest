@@ -12,6 +12,7 @@ import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
+part 'desktop_places_globe_zoom.dart';
 
 /// 地点（样例 `Globe.tsx` 的 `GlobePlace`）：名称、照片数、经纬度与封面图。
 class DesktopGlobePlace {
@@ -81,22 +82,26 @@ class _DesktopPlacesGlobeState extends State<DesktopPlacesGlobe>
   bool _dragging = false;
   String? _hoveredPlace;
 
+  void _handleTurnTick() {
+    final t = Curves.easeOutCubic.transform(_turn.value);
+    setState(() {
+      _lon = _from.dx + (_to.dx - _from.dx) * t;
+      _lat = _from.dy + (_to.dy - _from.dy) * t;
+    });
+  }
+
+  void _handleZoomTick() {
+    final t = Curves.easeOutCubic.transform(_zoomCtrl.value);
+    setState(() {
+      _zoom = _zoomFrom + (_zoomTo - _zoomFrom) * t;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
-    _turn.addListener(() {
-      final t = Curves.easeOutCubic.transform(_turn.value);
-      setState(() {
-        _lon = _from.dx + (_to.dx - _from.dx) * t;
-        _lat = _from.dy + (_to.dy - _from.dy) * t;
-      });
-    });
-    _zoomCtrl.addListener(() {
-      final t = Curves.easeOutCubic.transform(_zoomCtrl.value);
-      setState(() {
-        _zoom = _zoomFrom + (_zoomTo - _zoomFrom) * t;
-      });
-    });
+    _turn.addListener(_handleTurnTick);
+    _zoomCtrl.addListener(_handleZoomTick);
     _faceSelected(animate: false, autoZoom: false);
   }
 
@@ -132,6 +137,8 @@ class _DesktopPlacesGlobeState extends State<DesktopPlacesGlobe>
 
   @override
   void dispose() {
+    _turn.removeListener(_handleTurnTick);
+    _zoomCtrl.removeListener(_handleZoomTick);
     _ping.dispose();
     _zoomCtrl.dispose();
     _turn.dispose();
@@ -401,114 +408,6 @@ class _DesktopPlacesGlobeState extends State<DesktopPlacesGlobe>
           ],
         );
       },
-    );
-  }
-}
-
-class _GlobeZoomCapsule extends StatelessWidget {
-  const _GlobeZoomCapsule({
-    required this.zoom,
-    required this.canZoomOut,
-    required this.canZoomIn,
-    required this.onZoomOut,
-    required this.onReset,
-    required this.onZoomIn,
-    required this.resetTooltip,
-  });
-
-  final double zoom;
-  final bool canZoomOut;
-  final bool canZoomIn;
-  final VoidCallback onZoomOut;
-  final VoidCallback onReset;
-  final VoidCallback onZoomIn;
-  final String resetTooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: BackdropFilter.grouped(
-        filterConfig: ImageFilterConfig(
-          ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        ),
-        child: Container(
-          height: 30,
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: BoxDecoration(
-            color: skin.pop.withValues(alpha: 0.86),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: skin.line2),
-            boxShadow: skin.shadow,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _ZoomCapsuleButton(
-                enabled: canZoomOut,
-                onTap: onZoomOut,
-                child: Icon(DesktopIcons.minimize, size: 14, color: skin.text),
-              ),
-              Tooltip(
-                message: resetTooltip,
-                child: _ZoomCapsuleButton(
-                  enabled: true,
-                  horizontalPadding: 8,
-                  onTap: onReset,
-                  child: Text(
-                    '${zoom.toStringAsFixed(1)}×',
-                    style: DesktopType.caption(skin.text).copyWith(
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ),
-              ),
-              _ZoomCapsuleButton(
-                enabled: canZoomIn,
-                onTap: onZoomIn,
-                child: Icon(DesktopIcons.plus, size: 14, color: skin.text),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ZoomCapsuleButton extends StatelessWidget {
-  const _ZoomCapsuleButton({
-    required this.enabled,
-    required this.onTap,
-    required this.child,
-    this.horizontalPadding = 6,
-  });
-
-  final bool enabled;
-  final VoidCallback onTap;
-  final Widget child;
-  final double horizontalPadding;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-      child: GestureDetector(
-        onTap: enabled ? onTap : null,
-        behavior: HitTestBehavior.opaque,
-        child: Opacity(
-          opacity: enabled ? 1.0 : 0.35,
-          alwaysIncludeSemantics: true,
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: horizontalPadding,
-              vertical: 4,
-            ),
-            child: child,
-          ),
-        ),
-      ),
     );
   }
 }

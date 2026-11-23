@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:omninest/app/desktop/desktop_backdrop_layer.dart';
 import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
@@ -11,6 +12,7 @@ import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/pages/desktop_movie_detail_actions.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
@@ -54,11 +56,18 @@ class _DesktopMovieDetailPageState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
+    final bgColor =
+        desktopBackdropVisibleForRoute(
+              ref,
+              DesktopRoutes.movieDetail(widget.videoItemId),
+            )
+            ? Colors.transparent
+            : skin.bg;
     final detail = ref.watch(movieDetailProvider(widget.videoItemId));
     final item = detail.asData?.value;
     if (item == null) {
       return ColoredBox(
-        color: skin.bg,
+        color: bgColor,
         child: Center(
           child:
               detail.hasError
@@ -66,7 +75,10 @@ class _DesktopMovieDetailPageState
                     failureToast(l10n, l10n.videoRedesignDetail, detail.error!),
                     style: DesktopType.body(skin.text3),
                   )
-                  : const SizedBox(width: 28, height: 28),
+                  : const SizedBox(
+                    width: 320,
+                    child: DesktopSkeletonRows(count: 6, avatar: false),
+                  ),
         ),
       );
     }
@@ -97,7 +109,7 @@ class _DesktopMovieDetailPageState
     ].take(5).toList(growable: false);
 
     return ColoredBox(
-      color: skin.bg,
+      color: bgColor,
       child: SingleChildScrollView(
         child: DesktopPage(
           // 样例 `.film-page { padding-top: 14px }` + `.fd-hero { margin: 6px 0 22px }`。

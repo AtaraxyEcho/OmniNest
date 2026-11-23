@@ -8,103 +8,151 @@ import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
+import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
-import 'package:omninest/app/theme/desktop/desktop_motion.dart';
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/features/music/music_portal.dart';
 
 /// 右侧详情坞（样例 `.dock`）：348px，两个页签「详情 / 队列」。
 ///
-/// 关闭时宽度收到 0 而不是整块卸载，滑出/滑入与样例一致；内容常驻，
-/// 切回详情不重新取数。
-class DesktopDock extends ConsumerWidget {
+/// 关闭时宽度滑收至 0，动画期间隔离语义、指针与焦点，动画结束后卸载内部
+/// `BackdropFilter(26)` 与 348px 子树以消除 GPU 浪费与 Windows `AXTree` 报错。
+class DesktopDock extends ConsumerStatefulWidget {
   const DesktopDock({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DesktopDock> createState() => _DesktopDockState();
+}
+
+class _DesktopDockState extends ConsumerState<DesktopDock> {
+  late bool _mountedContent;
+
+  @override
+  void initState() {
+    super.initState();
+    _mountedContent = ref.read(desktopShellProvider.select((s) => s.dockOpen));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
-    final shell = ref.watch(desktopShellProvider);
+    final dockOpen = ref.watch(desktopShellProvider.select((s) => s.dockOpen));
+    final dockTab = ref.watch(desktopShellProvider.select((s) => s.dockTab));
+    final detail = ref.watch(desktopShellProvider.select((s) => s.detail));
     final controller = ref.read(desktopShellProvider.notifier);
 
-    return DesktopGlassSurface(
-      borderRadius: BorderRadius.zero,
-      blur: 26,
-      saturation: 1.4,
-      child: AnimatedContainer(
-        duration: DesktopMotion.of(context, DesktopMotion.dock),
-        curve: DesktopMotion.ease,
-        width: shell.dockOpen ? DesktopMetrics.dockWidth : 0,
-        clipBehavior: Clip.hardEdge,
-        decoration: BoxDecoration(
-          color: skin.bg.withValues(alpha: 0.38),
-          border: Border(
-            left: BorderSide(
-              color: skin.line,
-              width: shell.dockOpen ? DesktopMetrics.hairline : 0,
-            ),
-          ),
-        ),
-        child: ClipRect(
-          child: OverflowBox(
-            // Dock 本身按样例从 0 到 348px 动画；内容保持完整规格，避免
-            // 收放途中把页签行压窄后触发 RenderFlex 溢出。
-            alignment: Alignment.centerLeft,
-            minWidth: DesktopMetrics.dockWidth,
-            maxWidth: DesktopMetrics.dockWidth,
-            child: SizedBox(
-              width: DesktopMetrics.dockWidth,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DesktopSeg<DesktopDockTab>(
-                            options: DesktopDockTab.values,
-                            value: shell.dockTab,
-                            small: true,
-                            labelOf:
-                                (tab) =>
-                                    tab == DesktopDockTab.details
-                                        ? l10n.desktopDockDetails
-                                        : l10n.desktopDockQueue,
-                            onChanged: controller.setDockTab,
-                          ),
-                        ),
-                        DesktopIconButton(
-                          icon: DesktopIcons.close,
-                          tooltip: l10n.desktopClosePanel,
-                          onPressed: () => controller.setDock(false),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (shell.dockTab == DesktopDockTab.details)
-                              _DetailsBody(detail: shell.detail)
-                            else
-                              const _QueueBody(),
-                            const SizedBox(
-                              height: DesktopMetrics.playerBarClearance,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+    if (dockOpen && !_mountedContent) {
+      _mountedContent = true;
+    }
+
+    return ExcludeSemantics(
+      excluding: !dockOpen,
+      child: IgnorePointer(
+        ignoring: !dockOpen,
+        child: FocusScope(
+          canRequestFocus: dockOpen,
+          child: AnimatedContainer(
+            duration: DesktopMotion.of(context, DesktopMotion.dock),
+            curve: DesktopMotion.ease,
+            width: dockOpen ? DesktopMetrics.dockWidth : 0,
+            onEnd: () {
+              if (!mounted) {
+                return;
+              }
+              final isOpen = ref.read(
+                desktopShellProvider.select((s) => s.dockOpen),
+              );
+              if (!isOpen && _mountedContent) {
+                setState(() => _mountedContent = false);
+              }
+            },
+            clipBehavior: Clip.hardEdge,
+            decoration: BoxDecoration(
+              color: _mountedContent ? skin.bg.withValues(alpha: 0.38) : null,
+              border: Border(
+                left: BorderSide(
+                  color: skin.line,
+                  width: dockOpen ? DesktopMetrics.hairline : 0,
                 ),
               ),
             ),
+            child:
+                _mountedContent
+                    ? DesktopGlassSurface(
+                      borderRadius: BorderRadius.zero,
+                      blur: 26,
+                      saturation: 1.4,
+                      child: ClipRect(
+                        child: OverflowBox(
+                          // Dock 本身按样例从 0 到 348px 动画；内容保持完整规格，避免
+                          // 收放途中把页签行压窄后触发 RenderFlex 溢出。
+                          alignment: Alignment.centerLeft,
+                          minWidth: DesktopMetrics.dockWidth,
+                          maxWidth: DesktopMetrics.dockWidth,
+                          child: SizedBox(
+                            width: DesktopMetrics.dockWidth,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      DesktopSeg<DesktopDockTab>(
+                                        options: DesktopDockTab.values,
+                                        value: dockTab,
+                                        small: true,
+                                        labelOf:
+                                            (tab) =>
+                                                tab == DesktopDockTab.details
+                                                    ? l10n.desktopDockDetails
+                                                    : l10n.desktopDockQueue,
+                                        onChanged: controller.setDockTab,
+                                      ),
+                                      DesktopIconButton(
+                                        icon: DesktopIcons.close,
+                                        tooltip: l10n.desktopClosePanel,
+                                        onPressed:
+                                            () => controller.setDock(false),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Expanded(
+                                    child: SingleChildScrollView(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          if (dockTab == DesktopDockTab.details)
+                                            _DetailsBody(detail: detail)
+                                          else
+                                            const _QueueBody(),
+                                          const SizedBox(
+                                            height:
+                                                DesktopMetrics
+                                                    .playerBarClearance,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                    : const Offstage(offstage: true, child: SizedBox.shrink()),
           ),
         ),
       ),
@@ -112,157 +160,181 @@ class DesktopDock extends ConsumerWidget {
   }
 }
 
-class _DetailsBody extends StatelessWidget {
+class _DetailsBody extends ConsumerWidget {
   const _DetailsBody({required this.detail});
 
   final DesktopDetailData? detail;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
     final data = detail;
+
+    final Widget content;
     if (data == null) {
-      return DesktopEmpty(
-        message: l10n.desktopDockEmpty,
-        icon: DesktopIcons.info,
-      );
-    }
-    final radius = BorderRadius.circular(14);
-    Widget art;
-    if (data.paperCover != null) {
-      art = DesktopPaperCover(
-        title: data.title,
-        author: data.subtitle ?? '',
-        tone: data.paperCover!.tone,
-        ink: data.paperCover!.ink,
-        compact: true,
-      );
-    } else if (data.imageUrl == null && data.kind == 'file') {
-      art = ColoredBox(
-        color: skin.raise2,
-        child: Center(
-          child: Icon(DesktopIcons.folder, size: 44, color: skin.accent),
+      content = KeyedSubtree(
+        key: const ValueKey('dock-detail-empty'),
+        child: DesktopEmpty(
+          message: l10n.desktopDockEmpty,
+          icon: DesktopIcons.info,
         ),
       );
     } else {
-      art = DesktopCover(
-        url: data.imageUrl,
-        kind:
-            data.kind == 'track'
-                ? DesktopCoverKind.music
-                : DesktopCoverKind.network,
-        fallbackIcon: switch (data.kind) {
-          'track' => DesktopIcons.music,
-          'book' => DesktopIcons.book,
-          'file' => DesktopIcons.folder,
-          _ => DesktopIcons.film,
-        },
-        iconSize: 40,
-      );
-    }
+      final radius = BorderRadius.circular(14);
+      Widget art;
+      if (data.paperCover != null) {
+        art = DesktopPaperCover(
+          title: data.title,
+          author: data.subtitle ?? '',
+          tone: data.paperCover!.tone,
+          ink: data.paperCover!.ink,
+          compact: true,
+        );
+      } else if (data.imageUrl == null && data.kind == 'file') {
+        art = ColoredBox(
+          color: skin.raise2,
+          child: Center(
+            child: Icon(DesktopIcons.folder, size: 44, color: skin.accent),
+          ),
+        );
+      } else {
+        art = DesktopCover(
+          url: data.imageUrl,
+          kind:
+              data.kind == 'track'
+                  ? DesktopCoverKind.music
+                  : DesktopCoverKind.network,
+          fallbackIcon: switch (data.kind) {
+            'track' => DesktopIcons.music,
+            'book' => DesktopIcons.book,
+            'file' => DesktopIcons.folder,
+            _ => DesktopIcons.film,
+          },
+          iconSize: 40,
+        );
+      }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Align(
-          alignment: Alignment.center,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: data.squareArt ? 240 : 348),
-            child: AspectRatio(
-              aspectRatio: data.squareArt ? 1 : 16 / 10,
-              child: Container(
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  borderRadius: radius,
-                  boxShadow: data.kind == 'file' ? null : skin.shadow,
+      content = KeyedSubtree(
+        key: ValueKey(data.effectiveId),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              alignment: Alignment.center,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: data.squareArt ? 240 : 348,
                 ),
-                child: Stack(
-                  fit: StackFit.expand,
+                child: AspectRatio(
+                  aspectRatio: data.squareArt ? 1 : 16 / 10,
+                  child: Container(
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      borderRadius: radius,
+                      boxShadow: data.kind == 'file' ? null : skin.shadow,
+                    ),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        art,
+                        if (data.badge != null)
+                          Positioned(
+                            left: 10,
+                            top: 10,
+                            child: DesktopChip(data.badge!),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              data.title,
+              style:
+                  data.squareArt
+                      ? DesktopType.displaySm(skin.text)
+                      : DesktopType.display(skin.text),
+            ),
+            if (data.subtitle != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 14),
+                child: Text(
+                  data.subtitle!,
+                  style: DesktopType.dense(skin.text2),
+                ),
+              ),
+            if (data.primary != null || data.secondary != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    art,
-                    if (data.badge != null)
-                      Positioned(
-                        left: 10,
-                        top: 10,
-                        child: DesktopChip(data.badge!),
+                    if (data.primary != null)
+                      DesktopButton(
+                        label: data.primary!.label,
+                        icon: data.primary!.icon,
+                        variant: DesktopButtonVariant.primary,
+                        onPressed: () => data.primary!.onPressed(context, ref),
+                      ),
+                    if (data.secondary != null)
+                      DesktopButton(
+                        label: data.secondary!.label,
+                        icon: data.secondary!.icon,
+                        variant: DesktopButtonVariant.soft,
+                        onPressed:
+                            () => data.secondary!.onPressed(context, ref),
                       ),
                   ],
                 ),
               ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Text(
-          data.title,
-          style:
-              data.squareArt
-                  ? DesktopType.displaySm(skin.text)
-                  : DesktopType.display(skin.text),
-        ),
-        if (data.subtitle != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 14),
-            child: Text(data.subtitle!, style: DesktopType.dense(skin.text2)),
-          ),
-        if (data.primary != null || data.secondary != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (data.primary != null)
-                  DesktopButton(
-                    label: data.primary!.label,
-                    icon: data.primary!.icon,
-                    variant: DesktopButtonVariant.primary,
-                    onPressed: data.primary!.onPressed,
+            if (data.progress != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: DesktopProgress(
+                  fraction: data.progress!,
+                  label: l10n.desktopProgressPercent(
+                    (data.progress! * 100).round(),
                   ),
-                if (data.secondary != null)
-                  DesktopButton(
-                    label: data.secondary!.label,
-                    icon: data.secondary!.icon,
-                    variant: DesktopButtonVariant.soft,
-                    onPressed: data.secondary!.onPressed,
-                  ),
-              ],
-            ),
-          ),
-        if (data.progress != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: DesktopProgress(
-              fraction: data.progress!,
-              label: l10n.desktopProgressPercent(
-                (data.progress! * 100).round(),
+                ),
               ),
-            ),
-          ),
-        if (data.about != null && data.about!.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: Text(
-              data.about!,
-              style: DesktopType.dense(skin.text2).copyWith(height: 1.6),
-            ),
-          ),
-        if (data.chips.isNotEmpty) ...[
-          DesktopEyebrow(data.chipsLabel ?? l10n.desktopCast),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [for (final chip in data.chips) DesktopChip(chip)],
-          ),
-          const SizedBox(height: 14),
-        ],
-        if (data.facts.isNotEmpty) ...[
-          DesktopEyebrow(l10n.desktopFileSection),
-          DesktopKeyValues(entries: data.facts),
-        ],
-      ],
+            if (data.about != null && data.about!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Text(
+                  data.about!,
+                  style: DesktopType.dense(skin.text2).copyWith(height: 1.6),
+                ),
+              ),
+            if (data.chips.isNotEmpty) ...[
+              DesktopEyebrow(data.chipsLabel ?? l10n.desktopCast),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [for (final chip in data.chips) DesktopChip(chip)],
+              ),
+              const SizedBox(height: 14),
+            ],
+            if (data.facts.isNotEmpty) ...[
+              DesktopEyebrow(data.factsLabel ?? l10n.desktopFileSection),
+              DesktopKeyValues(entries: data.facts),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return AnimatedSwitcher(
+      duration: DesktopMotion.of(context, DesktopMotion.fast),
+      switchInCurve: DesktopMotion.ease,
+      switchOutCurve: DesktopMotion.ease,
+      layoutBuilder: excludeExitingSemanticsStack,
+      transitionBuilder: semanticsSafeFadeTransition,
+      child: content,
     );
   }
 }
@@ -283,6 +355,8 @@ class _QueueBody extends ConsumerWidget {
       return DesktopEmpty(
         message: l10n.desktopDockQueueEmpty,
         icon: DesktopIcons.queue,
+        actionLabel: l10n.desktopOpenMusic,
+        onAction: () => desktopGo(context, DesktopRoutes.music),
       );
     }
 
@@ -295,7 +369,18 @@ class _QueueBody extends ConsumerWidget {
             DesktopLink(
               label: l10n.desktopDockClear,
               trailing: false,
-              onPressed: () {
+              onPressed: () async {
+                final confirmed = await showDesktopConfirm(
+                  context,
+                  title: l10n.musicQueueClear,
+                  message: l10n.desktopDockQueueClearConfirm,
+                  confirmLabel: l10n.desktopDockClear,
+                  cancelLabel: l10n.desktopCancel,
+                  destructive: true,
+                );
+                if (!confirmed || !context.mounted) {
+                  return;
+                }
                 controller.clearQueue();
                 showDesktopToast(
                   context,
@@ -411,7 +496,7 @@ class _QueueBody extends ConsumerWidget {
                                 icon: DesktopIcons.close,
                                 size: DesktopMetrics.iconButtonSmallSize,
                                 iconSize: 13,
-                                tooltip: l10n.desktopDockClear,
+                                tooltip: l10n.desktopBookRemove,
                                 onPressed:
                                     () => controller.removeFromQueue(
                                       item.ref.playableKey,

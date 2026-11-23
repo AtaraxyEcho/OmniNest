@@ -442,6 +442,7 @@ class DesktopChipButton extends StatelessWidget {
     required this.onTap,
     this.count,
     this.dashed = false,
+    this.soft = false,
     super.key,
   });
 
@@ -450,6 +451,10 @@ class DesktopChipButton extends StatelessWidget {
   final VoidCallback onTap;
   final int? count;
   final bool dashed;
+
+  /// `false`（默认）：实心 `skin.accent` + `skin.accentInk` + `w600`（`desktop.css:66-67`）；
+  /// `true`：`accentWash(0.18)` + `accentWash(0.45)` 边框 + `skin.text`（`more.css:21`，Music Tracks 专用）。
+  final bool soft;
 
   @override
   Widget build(BuildContext context) {
@@ -464,17 +469,20 @@ class DesktopChipButton extends StatelessWidget {
               curve: MotionToken.curve,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               decoration: BoxDecoration(
-                // 样例 `more.css:21`：选中是 `accent 18%` 淡底 + `accent 45%`
-                // 描边 + 600 字重，不是实底反白；实底留给主按钮。
                 color:
                     selected
-                        ? skin.accentWash(dashed ? 0.14 : 0.18)
+                        ? (soft
+                            ? skin.accentWash(dashed ? 0.14 : 0.18)
+                            : skin.accent)
                         : hovered
                         ? skin.raise2
                         : Colors.transparent,
                 borderRadius: BorderRadius.circular(DesktopMetrics.radiusPill),
                 border: Border.all(
-                  color: selected ? skin.accentWash(0.45) : skin.line,
+                  color:
+                      selected
+                          ? (soft ? skin.accentWash(0.45) : skin.accent)
+                          : skin.line,
                 ),
               ),
               child: Row(
@@ -483,14 +491,25 @@ class DesktopChipButton extends StatelessWidget {
                   Text(
                     label,
                     style: DesktopType.chipButton(
-                      selected || hovered ? skin.text : skin.text2,
+                      selected
+                          ? (soft ? skin.text : skin.accentInk)
+                          : hovered
+                          ? skin.text
+                          : skin.text2,
                     ).copyWith(
                       fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                     ),
                   ),
                   if (count != null) ...[
                     const SizedBox(width: 6),
-                    Text('$count', style: DesktopType.micro(skin.text3)),
+                    Text(
+                      '$count',
+                      style: DesktopType.micro(
+                        selected && !soft
+                            ? skin.accentInk.withValues(alpha: 0.78)
+                            : skin.text3,
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -632,18 +651,18 @@ class _DesktopSegState<T> extends State<DesktopSeg<T>> {
                             ),
                             child: Text(
                               widget.labelOf(option),
-                              style: DesktopType.dense(
-                                option == widget.value
-                                    ? skin.text
-                                    : hovered
-                                    ? skin.text2
-                                    : skin.text2,
-                              ).copyWith(
-                                fontWeight:
-                                    option == widget.value
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
-                              ),
+                              style: (widget.small
+                                      ? DesktopType.caption(
+                                        option == widget.value
+                                            ? skin.text
+                                            : skin.text2,
+                                      )
+                                      : DesktopType.dense(
+                                        option == widget.value
+                                            ? skin.text
+                                            : skin.text2,
+                                      ))
+                                  .copyWith(fontWeight: FontWeight.w500),
                             ),
                           ),
                         ),

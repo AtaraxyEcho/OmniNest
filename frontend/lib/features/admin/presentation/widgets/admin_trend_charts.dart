@@ -111,7 +111,7 @@ class _AdminThroughputBarChartState extends State<AdminThroughputBarChart> {
         builder: (context, constraints) {
           final width = constraints.maxWidth;
           final height = constraints.maxHeight;
-          final chartHeight = height - 20;
+          final chartHeight = (height - 20).clamp(0.0, double.infinity);
           return Column(
             children: [
               SizedBox(
@@ -194,6 +194,11 @@ class _AdminThroughputBarChartState extends State<AdminThroughputBarChart> {
       0,
       widget.data.length - 1,
     );
+    if (_hoverIndex == index &&
+        _hoverPosition != null &&
+        (position - _hoverPosition!).distanceSquared < 4) {
+      return;
+    }
     setState(() {
       _hoverIndex = index;
       _hoverPosition = position;
@@ -466,7 +471,7 @@ class _AdminHairlineLineChartState extends State<AdminHairlineLineChart> {
         builder: (context, constraints) {
           final width = constraints.maxWidth;
           final height = constraints.maxHeight;
-          final chartHeight = height - 20;
+          final chartHeight = (height - 20).clamp(0.0, double.infinity);
           return Column(
             children: [
               SizedBox(
@@ -543,6 +548,11 @@ class _AdminHairlineLineChartState extends State<AdminHairlineLineChart> {
             : ((position.dx - plotLeft) / plotWidth * (count - 1))
                 .round()
                 .clamp(0, count - 1);
+    if (_hoverIndex == index &&
+        _hoverPosition != null &&
+        (position - _hoverPosition!).distanceSquared < 4) {
+      return;
+    }
     setState(() {
       _hoverIndex = index;
       _hoverPosition = position;

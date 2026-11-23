@@ -144,31 +144,28 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
     }
   }
 
-  Future<void> _handleBack() async {
+  void _handleBack() {
     if (_leaving || !mounted) {
       return;
     }
     _leaving = true;
-    try {
-      await _flushReadingProgress();
-    } on Exception {
-      // 落库异常不阻塞返回导航，本地进度已尽最大努力写入。
+    final container = ProviderScope.containerOf(context, listen: false);
+    final itemId = widget.itemId;
+    // 后台异步刷写进度并在完成后失效详情 Provider，不阻塞返回转场动画。
+    unawaited(
+      _flushReadingProgress()
+          .catchError((Object _) {
+            // 落库异常不阻塞返回导航，本地进度已尽最大努力写入。
+          })
+          .whenComplete(() {
+            container.invalidate(readerItemDetailProvider(itemId));
+          }),
+    );
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/reader/items/$itemId');
     }
-    if (!mounted) {
-      return;
-    }
-    // 落库完成后再失效详情 Provider，彻底消除详情页抢跑拉到旧进度导致“继续阅读”回退。
-    ref.invalidate(readerItemDetailProvider(widget.itemId));
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      if (context.canPop()) {
-        context.pop();
-      } else {
-        context.go('/reader/items/${widget.itemId}');
-      }
-    });
   }
 
   String? _resolveManifestError(ComicManifest manifest, String? importStatus) {
@@ -268,7 +265,7 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
             SafeArea(
               child: IconButton(
                 tooltip: AppLocalizations.of(context).coreBack,
-                onPressed: () => unawaited(_handleBack()),
+                onPressed: _handleBack,
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
             ),
@@ -315,7 +312,7 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
                 alignment: Alignment.topLeft,
                 child: IconButton(
                   tooltip: AppLocalizations.of(context).coreBack,
-                  onPressed: () => unawaited(_handleBack()),
+                  onPressed: _handleBack,
                   icon: const Icon(Icons.arrow_back_rounded),
                 ),
               ),
@@ -329,7 +326,7 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
       return Scaffold(
         body: AppErrorView(
           message: _error ?? l10n.readerComicEmpty,
-          onBack: () => unawaited(_handleBack()),
+          onBack: _handleBack,
           onRetry: () {
             setState(() {
               _loading = true;
@@ -348,7 +345,7 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
       bookTitle: _bookTitle,
       initialPageIndex: _initialPage,
       initialIntraPageOffset: _initialIntraPageOffset,
-      onBack: () => unawaited(_handleBack()),
+      onBack: _handleBack,
     );
   }
 }

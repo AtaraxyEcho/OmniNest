@@ -219,17 +219,20 @@ class _NpBackdropState extends ConsumerState<_NpBackdrop>
                     child: Transform.scale(scale: driftScale, child: child),
                   );
                 },
-                child: ImageFiltered(
-                  imageFilter: desktopGlassFilter(
-                    blur: 20,
-                    saturation: 1.5,
-                    brightness: 0.55,
-                  ),
-                  child: Image.network(
-                    widget.cover!,
-                    fit: BoxFit.cover,
-                    filterQuality: FilterQuality.low,
-                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                child: RepaintBoundary(
+                  child: ImageFiltered(
+                    imageFilter: desktopGlassFilter(
+                      blur: 20 + style.blur,
+                      saturation: 1.5,
+                      brightness: 0.55,
+                    ),
+                    child: Image.network(
+                      widget.cover!,
+                      fit: BoxFit.cover,
+                      cacheWidth: 256,
+                      filterQuality: FilterQuality.low,
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    ),
                   ),
                 ),
               ),
@@ -260,10 +263,14 @@ class _NpBackdropState extends ConsumerState<_NpBackdrop>
       DesktopNpBackground.library => _wallpaper(context, ref, style.wallId),
     };
 
-    if (style.blur > 0) {
-      base = ImageFiltered(
-        imageFilter: ImageFilter.blur(sigmaX: style.blur, sigmaY: style.blur),
-        child: base,
+    // cover 模式已把 style.blur 合并进 AnimatedBuilder 静态 child + RepaintBoundary，
+    // 避免 60fps 推镜动画每帧整屏重算高斯模糊。
+    if (style.blur > 0 && style.background != DesktopNpBackground.cover) {
+      base = RepaintBoundary(
+        child: ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: style.blur, sigmaY: style.blur),
+          child: base,
+        ),
       );
     }
 

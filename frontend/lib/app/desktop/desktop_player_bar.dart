@@ -119,7 +119,8 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
     // 订阅 `musicPortalPlaybackTimelineProvider`，避免播放期间每帧进度
     // tick 触发外层 36σ 毛玻璃容器整条重建。
     final actions = ref.watch(musicPortalActionsProvider);
-    final shellState = ref.watch(desktopShellProvider);
+    final dockOpen = ref.watch(desktopShellProvider.select((s) => s.dockOpen));
+    final dockTab = ref.watch(desktopShellProvider.select((s) => s.dockTab));
     final shellController = ref.read(desktopShellProvider.notifier);
     final engine = track == null ? null : ref.watch(musicAudioPlaybackProvider);
 
@@ -147,13 +148,11 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
             height: DesktopMetrics.playerBarHeight,
             // 阴影画在玻璃盒外：CSS 的 box-shadow 在 playerbar 外面，Flutter
             // 的 ClipRRect 会裁掉子内容的阴影，所以由这层非裁剪盒单独负责。
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(
-                  DesktopMetrics.radiusPlayerBar,
-                ),
-                boxShadow: skin.shadow,
+            child: DesktopOutsetShadow(
+              borderRadius: BorderRadius.circular(
+                DesktopMetrics.radiusPlayerBar,
               ),
+              shadows: skin.shadow,
               child: DesktopGlassSurface(
                 key: const ValueKey('desktop-player-bar-glass'),
                 borderRadius: BorderRadius.circular(
@@ -374,13 +373,12 @@ class _DesktopPlayerBarState extends ConsumerState<DesktopPlayerBar> {
                                         ),
                                         icon: DesktopIcons.queue,
                                         tooltip: l10n.desktopDockQueue,
-                                        active: shellState.dockOpen,
+                                        active: dockOpen,
                                         onPressed: () {
                                           // 样例 Shell.tsx:280 是 setDock(!a.dock)：
                                           // 再点一次收起，而不是无条件打开队列。
-                                          if (shellState.dockOpen &&
-                                              shellState.dockTab ==
-                                                  DesktopDockTab.queue) {
+                                          if (dockOpen &&
+                                              dockTab == DesktopDockTab.queue) {
                                             shellController.setDock(false);
                                           } else {
                                             shellController.setDockTab(

@@ -41,6 +41,8 @@ import 'package:omninest/features/video/video_dashboard.dart';
 // 单文件 800 行的源码闸门，按职责拆成 part 而不是压行数。
 part 'desktop_movies_cinema.dart';
 part 'desktop_movies_cards.dart';
+part 'desktop_movies_quick_look.dart';
+part 'desktop_movies_slivers.dart';
 
 /// 桌面影视页（样例 `Movies.tsx` 的 `Browse`）。
 enum DesktopMoviesTab {
@@ -539,79 +541,100 @@ class _DesktopMoviesPageState extends ConsumerState<DesktopMoviesPage> {
                       ),
                     ),
                   ),
-                DesktopSection(
-                  eyebrow: l10n.desktopMoviesTitlesCount(activeTabCount),
-                  title: activeTabTitle,
-                  child: switch (_tab) {
-                    DesktopMoviesTab.continueWatching => _WideGrid(
-                      items: continueWatching,
+                if (_tab == DesktopMoviesTab.continueWatching ||
+                    _tab == DesktopMoviesTab.history)
+                  DesktopSection(
+                    eyebrow: l10n.desktopMoviesTitlesCount(activeTabCount),
+                    title: activeTabTitle,
+                    child:
+                        _tab == DesktopMoviesTab.continueWatching
+                            ? _WideGrid(items: continueWatching)
+                            : _HistoryGrid(
+                              entries: history,
+                              onClear: () async {
+                                final snapshot = List<MovieWatchHistory>.of(
+                                  history,
+                                );
+                                try {
+                                  await ref
+                                      .read(
+                                        movieCenterControllerProvider.notifier,
+                                      )
+                                      .clearHistory();
+                                  if (!context.mounted) {
+                                    return;
+                                  }
+                                  showDesktopToast(
+                                    context,
+                                    l10n.videoClearHistory,
+                                    kind: DesktopToastKind.success,
+                                    actionLabel: l10n.desktopUndo,
+                                    onAction:
+                                        () => unawaited(
+                                          _restoreHistory(snapshot),
+                                        ),
+                                  );
+                                } on Exception catch (error) {
+                                  if (!context.mounted) {
+                                    return;
+                                  }
+                                  showDesktopToast(
+                                    context,
+                                    userFacingErrorText(error),
+                                    kind: DesktopToastKind.error,
+                                  );
+                                }
+                              },
+                            ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        DesktopEyebrow(
+                          l10n.desktopMoviesTitlesCount(activeTabCount),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            activeTabTitle,
+                            style: DesktopType.sectionTitle(
+                              DesktopSkin.of(context).text,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    DesktopMoviesTab.movies => _PosterGrid(
-                      items: _sorted(movies),
-                    ),
-                    DesktopMoviesTab.favorites => _PosterGrid(
-                      items: _sorted(favorites),
-                    ),
-                    DesktopMoviesTab.watchlist => _PosterGrid(
-                      items: _sorted(watchlistItems),
-                    ),
-                    DesktopMoviesTab.anime => _SeriesGrid(
-                      items: _sortedSeries(anime),
-                    ),
-                    DesktopMoviesTab.history => _HistoryGrid(
-                      entries: history,
-                      onClear: () async {
-                        final snapshot = List<MovieWatchHistory>.of(history);
-                        try {
-                          await ref
-                              .read(movieCenterControllerProvider.notifier)
-                              .clearHistory();
-                          if (!context.mounted) {
-                            return;
-                          }
-                          showDesktopToast(
-                            context,
-                            l10n.videoClearHistory,
-                            kind: DesktopToastKind.success,
-                            actionLabel: l10n.desktopUndo,
-                            onAction:
-                                () => unawaited(_restoreHistory(snapshot)),
-                          );
-                        } on Exception catch (error) {
-                          if (!context.mounted) {
-                            return;
-                          }
-                          showDesktopToast(
-                            context,
-                            userFacingErrorText(error),
-                            kind: DesktopToastKind.error,
-                          );
-                        }
-                      },
-                    ),
-                    DesktopMoviesTab.series => _SeriesGrid(
-                      items: _sortedSeries(series),
-                    ),
-                    DesktopMoviesTab.forYou => const SizedBox.shrink(),
-                  },
-                ),
+                  ),
               ],
-              if (!initialLoading &&
-                  !dashboardState.isLoading &&
-                  !centerState.isLoading &&
-                  _isEmptyTab(
-                    movies: movies,
-                    series: series,
-                    anime: anime,
-                    favorites: favorites,
-                    history: history,
-                    continueWatching: continueWatching,
-                    watchlistItems: watchlistItems,
-                  ))
-                _MoviesEmpty(tab: _tab),
             ],
           ),
         ),
+        if (!initialLoading && _tab == DesktopMoviesTab.movies)
+          _PosterSliverGrid(items: _sorted(movies)),
+        if (!initialLoading && _tab == DesktopMoviesTab.favorites)
+          _PosterSliverGrid(items: _sorted(favorites)),
+        if (!initialLoading && _tab == DesktopMoviesTab.watchlist)
+          _PosterSliverGrid(items: _sorted(watchlistItems)),
+        if (!initialLoading && _tab == DesktopMoviesTab.series)
+          _SeriesSliverGrid(items: _sortedSeries(series)),
+        if (!initialLoading && _tab == DesktopMoviesTab.anime)
+          _SeriesSliverGrid(items: _sortedSeries(anime)),
+        if (!initialLoading &&
+            !dashboardState.isLoading &&
+            !centerState.isLoading &&
+            _isEmptyTab(
+              movies: movies,
+              series: series,
+              anime: anime,
+              favorites: favorites,
+              history: history,
+              continueWatching: continueWatching,
+              watchlistItems: watchlistItems,
+            ))
+          SliverToBoxAdapter(child: _MoviesEmpty(tab: _tab)),
       ],
     );
   }
@@ -706,6 +729,7 @@ class _Head extends StatelessWidget {
     return DesktopPageHead(
       eyebrow: subtitle.toUpperCase(),
       title: l10n.moduleMoviesTitle,
+      sticky: true,
       actionsRightAlignedWhenWrapped: true,
       actions: [
         importAction,

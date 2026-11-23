@@ -11,6 +11,7 @@ import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 part 'desktop_image_loading.dart';
+part 'desktop_image.dart';
 
 /// 样例 `.eyebrow`：大写小字眉标。
 class DesktopEyebrow extends StatelessWidget {
@@ -27,7 +28,9 @@ class DesktopEyebrow extends StatelessWidget {
       padding: padding ?? EdgeInsets.zero,
       child: Text(
         text.toUpperCase(),
-        style: DesktopType.eyebrow(color ?? skin.text3),
+        style: DesktopType.eyebrow(
+          color ?? (skin.isDark ? skin.text3 : skin.text2),
+        ),
       ),
     );
   }
@@ -317,34 +320,38 @@ class _DesktopStickySliverDelegate extends SliverPersistentHeaderDelegate {
                       if (opacity <= 0.01) {
                         return const SizedBox.shrink();
                       }
-                      return Opacity(
-                        opacity: opacity.clamp(0.0, 1.0),
-                        alwaysIncludeSemantics: true,
-                        child: ClipRect(
-                          child: BackdropFilter(
-                            filter: desktopGlassFilter(
-                              blur: 26,
-                              saturation: 1.4,
+                      final t = opacity.clamp(0.0, 1.0);
+                      return ClipRect(
+                        child: BackdropFilter.grouped(
+                          filterConfig: ImageFilterConfig(
+                            desktopGlassFilter(
+                              blur: 26 * t,
+                              saturation: 1.0 + 0.4 * t,
                             ),
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: skin.bg.withValues(alpha: 0.38),
-                                border: Border(
-                                  bottom: BorderSide(color: skin.line),
+                          ),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: skin.bg.withValues(alpha: 0.38 * t),
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: skin.line.withValues(
+                                    alpha: skin.line.a * t,
+                                  ),
                                 ),
-                                boxShadow:
-                                    skin.isDark
-                                        ? [
-                                          BoxShadow(
-                                            color: Colors.black.withValues(
-                                              alpha: 0.08,
-                                            ),
-                                            blurRadius: 24,
-                                            offset: const Offset(0, 6),
-                                          ),
-                                        ]
-                                        : null,
                               ),
+                              boxShadow:
+                                  skin.isDark
+                                      ? [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.60 * t,
+                                          ),
+                                          blurRadius: 24,
+                                          spreadRadius: -18,
+                                          offset: const Offset(0, 12),
+                                        ),
+                                      ]
+                                      : null,
                             ),
                           ),
                         ),
@@ -421,6 +428,7 @@ class DesktopPageHead extends StatelessWidget {
     this.subtitle,
     this.actions = const <Widget>[],
     this.actionsRightAlignedWhenWrapped = false,
+    this.sticky = false,
     super.key,
   });
 
@@ -429,6 +437,7 @@ class DesktopPageHead extends StatelessWidget {
   final String? subtitle;
   final List<Widget> actions;
   final bool actionsRightAlignedWhenWrapped;
+  final bool sticky;
 
   @override
   Widget build(BuildContext context) {
@@ -461,7 +470,10 @@ class DesktopPageHead extends StatelessWidget {
     );
 
     return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 26),
+      padding:
+          sticky
+              ? const EdgeInsets.symmetric(vertical: 10)
+              : const EdgeInsets.only(top: 8, bottom: 26),
       child: LayoutBuilder(
         builder: (context, constraints) {
           if (actions.isEmpty || !actionsRightAlignedWhenWrapped) {
@@ -646,49 +658,46 @@ class DesktopCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
     final radius = BorderRadius.circular(DesktopMetrics.radiusCard);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: ClipRRect(
-        borderRadius: radius,
-        child: BackdropFilter.grouped(
-          filterConfig: ImageFilterConfig(
-            desktopGlassFilter(blur: 24, saturation: 1.3),
-          ),
-          child: RepaintBoundary(
-            child: Container(
-              decoration: BoxDecoration(
-                color: skin.panel,
-                borderRadius: radius,
-                border: Border.all(color: skin.line),
-              ),
-              child: Material(
-                type: MaterialType.transparency,
-                borderRadius: radius,
-                clipBehavior: Clip.antiAlias,
-                child: Padding(
-                  padding: padding,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (title != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  title!,
-                                  style: DesktopType.cardTitle(skin.text),
-                                ),
+    Widget surface = ClipRRect(
+      borderRadius: radius,
+      child: BackdropFilter.grouped(
+        filterConfig: ImageFilterConfig(
+          desktopGlassFilter(blur: 24, saturation: 1.3),
+        ),
+        child: RepaintBoundary(
+          child: Container(
+            decoration: BoxDecoration(
+              color: skin.card,
+              borderRadius: radius,
+              border: Border.all(color: skin.line),
+            ),
+            child: Material(
+              type: MaterialType.transparency,
+              borderRadius: radius,
+              clipBehavior: Clip.antiAlias,
+              child: Padding(
+                padding: padding,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (title != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                title!,
+                                style: DesktopType.cardTitle(skin.text),
                               ),
-                              if (action != null) action!,
-                            ],
-                          ),
+                            ),
+                            if (action != null) action!,
+                          ],
                         ),
-                      child,
-                    ],
-                  ),
+                      ),
+                    child,
+                  ],
                 ),
               ),
             ),
@@ -696,6 +705,26 @@ class DesktopCard extends StatelessWidget {
         ),
       ),
     );
+    if (!skin.isDark) {
+      surface = DesktopOutsetShadow(
+        borderRadius: radius,
+        shadows: const [
+          BoxShadow(
+            color: Color(0x0F28322C),
+            blurRadius: 2,
+            offset: Offset(0, 1),
+          ),
+          BoxShadow(
+            color: Color(0x47283730),
+            blurRadius: 28,
+            spreadRadius: -18,
+            offset: Offset(0, 10),
+          ),
+        ],
+        child: surface,
+      );
+    }
+    return Padding(padding: const EdgeInsets.only(bottom: 16), child: surface);
   }
 }
 
@@ -917,108 +946,5 @@ class DesktopEmpty extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-/// 样例 `.img`：加载期为微光底，解码后 600ms 淡入；失败保留底面不露破图。
-class DesktopImage extends StatelessWidget {
-  const DesktopImage({
-    required this.url,
-    this.fit = BoxFit.cover,
-    this.borderRadius,
-    this.cacheWidth,
-    this.fallbackIcon,
-    super.key,
-  });
-
-  final String? url;
-  final BoxFit fit;
-  final BorderRadius? borderRadius;
-
-  /// 缩略图场景按显示尺寸限制解码宽度；null 保持原图解码（全屏查看器用）。
-  final int? cacheWidth;
-  final IconData? fallbackIcon;
-
-  @override
-  Widget build(BuildContext context) {
-    final placeholder = _ImageShimmer(borderRadius: borderRadius);
-    final skin = DesktopSkin.of(context);
-    final fallback = ColoredBox(
-      color: skin.raise2,
-      child:
-          fallbackIcon == null
-              ? null
-              : Center(child: Icon(fallbackIcon, size: 28, color: skin.text3)),
-    );
-    Widget content = fallback;
-    final source = url;
-    if (source != null && source.isNotEmpty) {
-      content = Image.network(
-        source,
-        fit: fit,
-        gaplessPlayback: true,
-        filterQuality: FilterQuality.medium,
-        cacheWidth: cacheWidth,
-        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-          if (wasSynchronouslyLoaded || frame != null) {
-            return _ImageFadeIn(child: child);
-          }
-          return placeholder;
-        },
-        loadingBuilder:
-            (context, child, progress) =>
-                progress == null ? child : placeholder,
-        errorBuilder: (context, error, stack) => fallback,
-      );
-    }
-    if (borderRadius != null) {
-      content = ClipRRect(borderRadius: borderRadius!, child: content);
-    }
-    return content;
-  }
-}
-
-/// 图片加载期的微光底（样例 `.img:not(.ok){animation:shimmer 1.8s}`）。
-class DesktopHoverLift extends StatelessWidget {
-  const DesktopHoverLift({
-    required this.child,
-    this.onTap,
-    this.onSecondaryTap,
-    this.lift = 4,
-    this.tooltip,
-    super.key,
-  });
-
-  final Widget child;
-  final VoidCallback? onTap;
-  final VoidCallback? onSecondaryTap;
-  final double lift;
-  final String? tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget content = DesktopHover(
-      enabled: onTap != null,
-      builder:
-          (context, hovered) => TweenAnimationBuilder<double>(
-            tween: Tween<double>(end: hovered ? -lift : 0),
-            duration: MotionToken.reduced(context, DesktopMotion.lift),
-            curve: DesktopMotion.spring,
-            builder:
-                (context, dy, child) =>
-                    Transform.translate(offset: Offset(0, dy), child: child),
-            child: child,
-          ),
-    );
-    content = GestureDetector(
-      onTap: onTap,
-      onSecondaryTap: onSecondaryTap,
-      behavior: HitTestBehavior.opaque,
-      child: content,
-    );
-    if (tooltip != null) {
-      content = Tooltip(message: tooltip!, child: content);
-    }
-    return content;
   }
 }

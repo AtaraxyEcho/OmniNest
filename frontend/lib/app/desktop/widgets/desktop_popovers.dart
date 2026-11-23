@@ -42,13 +42,18 @@ class _DesktopPopoverState extends State<DesktopPopover>
     duration: DesktopMotion.pop,
     value: 1,
   );
+  bool _played = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_played) {
+      return;
+    }
+    _played = true;
     if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
       _controller.value = 1;
-    } else if (!_controller.isAnimating && _controller.value == 1) {
+    } else {
       _controller.forward(from: 0);
     }
   }
@@ -147,15 +152,18 @@ class DesktopPanelLayer extends ConsumerWidget {
           right: rightInset.clamp(16.0, screenWidth - width - 16),
           child: switch (shell.panel) {
             DesktopPanel.account => DesktopPopover(
+              key: ValueKey<DesktopPanel>(shell.panel),
               width: width,
               padding: const EdgeInsets.all(6),
               child: const _AccountMenu(),
             ),
             DesktopPanel.notifications => DesktopPopover(
+              key: ValueKey<DesktopPanel>(shell.panel),
               width: width,
               child: const NotificationsPanel(),
             ),
             DesktopPanel.tasks => DesktopPopover(
+              key: ValueKey<DesktopPanel>(shell.panel),
               width: width,
               child: const TasksPanel(),
             ),
@@ -210,7 +218,7 @@ class _AccountMenu extends ConsumerWidget {
                   gradient: LinearGradient(
                     colors: [
                       skin.accent,
-                      Color.lerp(skin.accent, skin.warm, 0.55)!,
+                      Color.lerp(const Color(0xFF6B4A8A), skin.accent, 0.45)!,
                     ],
                   ),
                 ),

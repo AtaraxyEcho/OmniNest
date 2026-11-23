@@ -168,7 +168,7 @@ class DesktopHistoryController extends Notifier<DesktopHistory> {
   }
 }
 
-/// 详情坞的动作：由推入详情的模块提供，坞只负责渲染与回调。
+/// 详情坞的动作：由推入详情的模块提供，坞负责渲染并传入当前活跃的 context 与 ref。
 @immutable
 class DesktopDetailAction {
   const DesktopDetailAction({
@@ -179,7 +179,7 @@ class DesktopDetailAction {
 
   final String label;
   final IconData icon;
-  final VoidCallback onPressed;
+  final void Function(BuildContext context, WidgetRef ref) onPressed;
 }
 
 /// 详情坞的内容契约。
@@ -191,11 +191,13 @@ class DesktopDetailData {
   const DesktopDetailData({
     required this.kind,
     required this.title,
+    this.id,
     this.subtitle,
     this.imageUrl,
     this.badge,
     this.about,
     this.facts = const <MapEntry<String, String>>[],
+    this.factsLabel,
     this.chips = const <String>[],
     this.chipsLabel,
     this.progress,
@@ -207,11 +209,13 @@ class DesktopDetailData {
 
   final String kind;
   final String title;
+  final String? id;
   final String? subtitle;
   final String? imageUrl;
   final String? badge;
   final String? about;
   final List<MapEntry<String, String>> facts;
+  final String? factsLabel;
   final List<String> chips;
   final String? chipsLabel;
   final double? progress;
@@ -223,6 +227,8 @@ class DesktopDetailData {
 
   /// 无封面图书的纸封底色与文字色。
   final ({Color tone, Color ink})? paperCover;
+
+  String get effectiveId => id ?? '$kind:$title';
 }
 
 /// 右键菜单项。
@@ -350,6 +356,13 @@ class DesktopShellController extends Notifier<DesktopShellState> {
         dockTab: DesktopDockTab.details,
         panel: DesktopPanel.none,
       );
+
+  /// 仅更新当前详情数据，不强弹 Dock；当 Dock 已展开时可实时联动刷新。
+  void selectDetail(DesktopDetailData? detail) =>
+      state = state.copyWith(detail: detail);
+
+  /// 清空当前详情数据（切主路由时调用，防止跨模块残留）。
+  void clearDetail() => state = state.copyWith(detail: null);
 
   void togglePanel(DesktopPanel panel) =>
       state = state.copyWith(

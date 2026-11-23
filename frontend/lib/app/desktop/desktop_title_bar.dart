@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -35,10 +37,11 @@ class DesktopTitleBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
-    final sidebarExpanded = ref.watch(
-      desktopShellProvider.select((s) => s.sidebarExpanded),
-    );
     final activePanel = ref.watch(desktopShellProvider.select((s) => s.panel));
+    final isFullscreen = ref.watch(
+      windowChromeControllerProvider.select((s) => s.isFullscreen),
+    );
+    final isMacOS = defaultTargetPlatform == TargetPlatform.macOS;
     final dockOpen = ref.watch(desktopShellProvider.select((s) => s.dockOpen));
     final history = ref.watch(desktopHistoryProvider);
     final shellController = ref.read(desktopShellProvider.notifier);
@@ -64,14 +67,13 @@ class DesktopTitleBar extends ConsumerWidget {
         color: skin.bg.withValues(alpha: 0.38),
         border: Border(bottom: BorderSide(color: skin.line)),
       ),
-      padding: const EdgeInsets.only(left: 14),
+      padding: EdgeInsets.only(left: isMacOS ? (isFullscreen ? 0 : 76) : 14),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact =
               constraints.maxWidth <= DesktopMetrics.titleBarCompactBreakpoint;
           final left = _TitleBarLeft(
             l10n: l10n,
-            sidebarExpanded: sidebarExpanded,
             history: history,
             onToggleSidebar: shellController.toggleSidebar,
             onBack: () {
@@ -182,7 +184,6 @@ class DesktopTitleBar extends ConsumerWidget {
 class _TitleBarLeft extends StatelessWidget {
   const _TitleBarLeft({
     required this.l10n,
-    required this.sidebarExpanded,
     required this.history,
     required this.onToggleSidebar,
     required this.onBack,
@@ -190,7 +191,6 @@ class _TitleBarLeft extends StatelessWidget {
   });
 
   final AppLocalizations l10n;
-  final bool sidebarExpanded;
   final DesktopHistory history;
   final VoidCallback onToggleSidebar;
   final VoidCallback onBack;
@@ -209,13 +209,14 @@ class _TitleBarLeft extends StatelessWidget {
           icon: DesktopIcons.sidebar,
           tooltip: '${l10n.desktopToggleSidebar} (Ctrl+B)',
           onPressed: onToggleSidebar,
-          active: !sidebarExpanded,
         ),
+        const SizedBox(width: 3),
         DesktopIconButton(
           icon: DesktopIcons.left,
           tooltip: '${l10n.desktopBack} (Alt+←)',
           onPressed: history.canGoBack ? onBack : null,
         ),
+        const SizedBox(width: 3),
         DesktopIconButton(
           icon: DesktopIcons.chevron,
           tooltip: '${l10n.desktopForward} (Alt+→)',
@@ -265,6 +266,7 @@ class _TitleBarRight extends StatelessWidget {
           tooltip: l10n.desktopToggleTheme,
           onPressed: onToggleTheme,
         ),
+        const SizedBox(width: 3),
         DesktopIconButton(
           icon: DesktopIcons.tasks,
           tooltip: l10n.desktopBackgroundTasks,
@@ -273,6 +275,7 @@ class _TitleBarRight extends StatelessWidget {
           badgeColor: running > 0 ? skin.warm : null,
           onPressed: onToggleTasks,
         ),
+        const SizedBox(width: 3),
         DesktopIconButton(
           icon: DesktopIcons.bell,
           tooltip: l10n.desktopNotifications,
@@ -280,6 +283,7 @@ class _TitleBarRight extends StatelessWidget {
           badge: unread,
           onPressed: onToggleNotifications,
         ),
+        const SizedBox(width: 3),
         DesktopIconButton(
           icon: DesktopIcons.panel,
           tooltip: '${l10n.desktopDetailsPanel} (Ctrl+.)',
@@ -294,7 +298,8 @@ class _TitleBarRight extends StatelessWidget {
             onTap: onToggleAccount,
           ),
         ),
-        if (isDesktopPlatform) ...[
+        if (isDesktopPlatform &&
+            defaultTargetPlatform != TargetPlatform.macOS) ...[
           const SizedBox(width: 4),
           const DesktopWindowControls(),
         ],
@@ -371,9 +376,9 @@ class _SearchPill extends StatelessWidget {
                   hovered
                       ? [
                         BoxShadow(
-                          color: skin.accent.withValues(alpha: 0.14),
+                          color: skin.raise,
                           blurRadius: 0,
-                          spreadRadius: 3,
+                          spreadRadius: 4,
                         ),
                       ]
                       : const <BoxShadow>[],
@@ -508,6 +513,7 @@ class _AvatarButton extends ConsumerWidget {
                             fit: BoxFit.cover,
                             width: 30,
                             height: 30,
+                            cacheWidth: 96,
                             errorBuilder:
                                 (context, error, stack) => Text(
                                   initial,

@@ -70,7 +70,6 @@ class _HeroSky extends StatelessWidget {
               text: weather!.text,
             );
     final showWeatherCard = width >= 1180;
-    final skin = DesktopSkin.of(context);
     final inset = (width * 0.034).clamp(26.0, 44.0);
     final l10n = AppLocalizations.of(context);
 
@@ -99,19 +98,22 @@ class _HeroSky extends StatelessWidget {
           border: Border.all(
             color:
                 backdropActive
-                    ? const Color(0xFFFFFFFF).withValues(alpha: 0.2)
-                    : skin.line2,
+                    ? Colors.white.withValues(alpha: 0.20)
+                    : Colors.white.withValues(alpha: 0.14),
           ),
         ),
         child: Stack(
           fit: StackFit.expand,
           children: [
             if (showSky && !backdropActive)
-              DesktopSky(
-                condition: condition,
-                hour: hour,
-                isDay: isDay,
-                reduceMotion: reduceMotion,
+              ColorFiltered(
+                colorFilter: desktopColorGrade(saturation: 0.82),
+                child: DesktopSky(
+                  condition: condition,
+                  hour: hour,
+                  isDay: isDay,
+                  reduceMotion: reduceMotion,
+                ),
               ),
             if (backdropActive)
               // `extra.css:126`：壁纸态只留底部长渐变（55% → 60% 处透明）。
@@ -126,19 +128,28 @@ class _HeroSky extends StatelessWidget {
                 ),
               )
             else ...[
-              // `polish.css:405`：径向暗角（左下 72% → 48% 处 28% → 72% 透明）
-              // 叠一层顶部 28% 的线性压暗。
+              // `polish.css:453`：三段线性渐变 sky-shade（左→右 0.70/0.38/0.06、下→上 0.55→0、上→下 0.22→0）。
               const DecoratedBox(
                 decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: Alignment.bottomLeft,
-                    radius: 1.2,
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
                     colors: [
-                      Color(0xB8040912),
-                      Color(0x47040912),
-                      Color(0x00040912),
+                      Color(0xB3040912),
+                      Color(0x61040912),
+                      Color(0x0F040912),
                     ],
-                    stops: [0.0, 0.48, 0.72],
+                    stops: [0.0, 0.50, 1.0],
+                  ),
+                ),
+              ),
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Color(0x8C040912), Color(0x00040912)],
+                    stops: [0.0, 0.55],
                   ),
                 ),
               ),
@@ -147,8 +158,8 @@ class _HeroSky extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Color(0x47040912), Color(0x00040912)],
-                    stops: [0.0, 0.32],
+                    colors: [Color(0x38040912), Color(0x00040912)],
+                    stops: [0.0, 0.35],
                   ),
                 ),
               ),
@@ -607,12 +618,8 @@ class _WeatherCard extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: onGlass.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(14),
-            ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
             child: Row(
               children: [
                 Icon(
@@ -709,7 +716,7 @@ class _WeatherCard extends ConsumerWidget {
     }
 
     return DesktopOutsetShadow(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(22),
       shadows: [
         BoxShadow(
           color: Colors.black.withValues(alpha: 0.35),
@@ -719,15 +726,22 @@ class _WeatherCard extends ConsumerWidget {
         ),
       ],
       child: DesktopGlassSurface(
-        borderRadius: BorderRadius.circular(20),
-        blur: 24,
-        saturation: 1.4,
+        borderRadius: BorderRadius.circular(22),
+        blur: 26,
+        saturation: 1.6,
         child: Container(
-          width: 270,
+          width: 264,
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: onGlass.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: const Alignment(-0.34, -0.94),
+              end: const Alignment(0.34, 0.94),
+              colors: [
+                onGlass.withValues(alpha: 0.18),
+                onGlass.withValues(alpha: 0.07),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(22),
             border: Border.all(color: onGlass.withValues(alpha: 0.22)),
           ),
           child: body,

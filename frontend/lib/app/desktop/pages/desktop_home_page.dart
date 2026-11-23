@@ -728,15 +728,20 @@ class _StatCard extends StatelessWidget {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
     final cardRadius = BorderRadius.circular(DesktopMetrics.radiusCard);
+    final statGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [Color.lerp(skin.panel, Colors.white, 0.03)!, skin.panel],
+    );
     if (loading) {
       return DesktopGlassSurface(
         borderRadius: cardRadius,
-        blur: 24,
-        saturation: 1.3,
+        blur: 20,
+        saturation: 1.0,
         child: Container(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
           decoration: BoxDecoration(
-            color: skin.panel,
+            gradient: statGradient,
             borderRadius: cardRadius,
             border: Border.all(color: skin.line),
           ),
@@ -761,19 +766,19 @@ class _StatCard extends StatelessWidget {
       cursor: SystemMouseCursors.basic,
       builder:
           (context, hovered) => AnimatedContainer(
-            duration: DesktopMotion.of(context, DesktopMotion.fast),
-            curve: DesktopMotion.ease,
+            duration: DesktopMotion.of(context, DesktopMotion.lift),
+            curve: DesktopMotion.spring,
             transform: Matrix4.translationValues(0, hovered ? -3 : 0, 0),
             child: DesktopGlassSurface(
               borderRadius: cardRadius,
-              blur: 24,
-              saturation: 1.3,
+              blur: 20,
+              saturation: 1.0,
               child: AnimatedContainer(
-                duration: DesktopMotion.of(context, DesktopMotion.fast),
-                curve: DesktopMotion.ease,
+                duration: DesktopMotion.of(context, DesktopMotion.lift),
+                curve: DesktopMotion.spring,
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
                 decoration: BoxDecoration(
-                  color: skin.panel,
+                  gradient: statGradient,
                   borderRadius: cardRadius,
                   border: Border.all(color: hovered ? skin.line2 : skin.line),
                 ),
@@ -807,40 +812,27 @@ class _StatCard extends StatelessWidget {
                         ],
                       )
                     else
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          Flexible(
-                            child:
-                                numericValue == null
-                                    ? Text(
-                                      value,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: DesktopType.statValue(skin.text),
-                                    )
-                                    : TweenAnimationBuilder<double>(
-                                      tween: Tween(begin: 0, end: numericValue),
-                                      duration: DesktopMotion.progress,
-                                      curve: Curves.easeOutCubic,
-                                      builder:
-                                          (context, animated, _) => Text(
-                                            animated.toStringAsFixed(decimals),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: DesktopType.statValue(
-                                              skin.text,
-                                            ),
-                                          ),
-                                    ),
+                      numericValue == null
+                          ? Text(
+                            unit == null ? value : '$value$unit',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: DesktopType.statValue(skin.text),
+                          )
+                          : TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0, end: numericValue),
+                            duration: DesktopMotion.progress,
+                            curve: Curves.easeOutCubic,
+                            builder:
+                                (context, animated, _) => Text(
+                                  unit == null
+                                      ? animated.toStringAsFixed(decimals)
+                                      : '${animated.toStringAsFixed(decimals)}$unit',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: DesktopType.statValue(skin.text),
+                                ),
                           ),
-                          if (unit != null) ...[
-                            const SizedBox(width: 4),
-                            Text(unit!, style: DesktopType.caption(skin.text3)),
-                          ],
-                        ],
-                      ),
                     const SizedBox(height: 2),
                     Text(
                       failed ? l10n.photosOperationFailed : caption,

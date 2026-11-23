@@ -230,7 +230,7 @@ class _DesktopSidebarState extends ConsumerState<DesktopSidebar>
                     onTap: () => desktopGo(context, DesktopRoutes.movies),
                   ),
                   const Spacer(),
-                  if (canAdmin)
+                  if (canAdmin) ...[
                     _SidebarItem(
                       icon: DesktopIcons.server,
                       label: l10n.desktopNavAdmin,
@@ -243,6 +243,8 @@ class _DesktopSidebarState extends ConsumerState<DesktopSidebar>
                       height: DesktopMetrics.navItemHeight,
                       onTap: () => desktopGo(context, DesktopRoutes.admin),
                     ),
+                    const SizedBox(height: 6),
+                  ],
                   _SidebarItem(
                     icon: DesktopIcons.settings,
                     label: l10n.desktopNavSettings,
@@ -375,7 +377,9 @@ class _SidebarItem extends StatelessWidget {
                   behavior: HitTestBehavior.opaque,
                   child: Container(
                     height: height,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: expanded ? 12 : 13,
+                    ),
                     decoration: BoxDecoration(
                       color:
                           active
@@ -432,9 +436,32 @@ class _SidebarItem extends StatelessWidget {
                                     Opacity(
                                       opacity: hovered ? 0.8 : 0,
                                       alwaysIncludeSemantics: true,
-                                      child: Text(
-                                        shortcut!,
-                                        style: DesktopType.nano(skin.text3),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 5,
+                                          vertical: 1,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: skin.raise,
+                                          borderRadius: BorderRadius.circular(
+                                            5,
+                                          ),
+                                          border: Border(
+                                            top: BorderSide(color: skin.line2),
+                                            left: BorderSide(color: skin.line2),
+                                            right: BorderSide(
+                                              color: skin.line2,
+                                            ),
+                                            bottom: BorderSide(
+                                              color: skin.line2,
+                                              width: 2,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          shortcut!,
+                                          style: DesktopType.kbd(skin.text2),
+                                        ),
                                       ),
                                     ),
                                   ],

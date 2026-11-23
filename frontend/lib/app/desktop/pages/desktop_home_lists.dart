@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
+import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
@@ -263,12 +264,14 @@ class DesktopRecentFiles extends ConsumerWidget {
                                     .read(desktopShellProvider.notifier)
                                     .showDetail(
                                       DesktopDetailData(
+                                        id: 'file:${files[index].id}',
                                         kind: 'file',
                                         title: files[index].name,
                                         subtitle: formatFileSize(
                                           files[index].sizeBytes,
                                         ),
                                         squareArt: true,
+                                        factsLabel: l10n.desktopFileSection,
                                         facts: [
                                           MapEntry(
                                             l10n.desktopFileSection,
@@ -281,6 +284,17 @@ class DesktopRecentFiles extends ConsumerWidget {
                                             ),
                                           ),
                                         ],
+                                        primary: DesktopDetailAction(
+                                          label: l10n.desktopFilesOpen,
+                                          icon: DesktopIcons.folder,
+                                          onPressed:
+                                              (ctx, r) => desktopPush(
+                                                ctx,
+                                                DesktopRoutes.filePreview(
+                                                  files[index].id,
+                                                ),
+                                              ),
+                                        ),
                                       ),
                                     ),
                             behavior: HitTestBehavior.opaque,

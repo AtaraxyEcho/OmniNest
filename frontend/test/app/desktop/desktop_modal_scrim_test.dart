@@ -53,6 +53,8 @@ void main() {
     // 遮罩本身可点击关闭。
     await tester.tapAt(const Offset(12, 12));
     await tester.pump();
+    // 关闭有 160ms 淡出，等退场结束再断言内容已卸载。
+    await tester.pump(const Duration(milliseconds: 220));
     expect(find.text('Modal'), findsNothing);
     expect(tester.takeException(), isNull);
   });

@@ -34,6 +34,7 @@ import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_ov
 
 part 'desktop_photo_viewer_filmstrip.dart';
 part 'desktop_photo_viewer_nav.dart';
+part 'desktop_photo_viewer_info.dart';
 
 /// 桌面照片查看器（样例 `PhotoViewer`）：柔和模糊背景 + 上下暗纱渐变 + 顶栏 +
 /// 左右翻页 + 缩放/旋转舞台 + 底部胶片条/幻灯片分段进度 + 右侧信息面板。
@@ -77,6 +78,7 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
   bool _thumbnailsVisible = true;
   bool _pointerInsideViewer = false;
   bool _shareOpen = false;
+  bool _shareScrimMounted = false;
   bool _loadingMoreBrowsePhotos = false;
 
   @override
@@ -99,6 +101,7 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
       _zoom.value = Matrix4.identity();
       _info = false;
       _shareOpen = false;
+      _shareScrimMounted = false;
       if (_slideshow) _slideProgress.forward(from: 0);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _rememberCurrentPhotoAmbient();
@@ -314,6 +317,7 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
                     setState(() {
                       _info = false;
                       _shareOpen = true;
+                      _shareScrimMounted = true;
                     });
                   },
                   onDelete: () => unawaited(_moveToTrash(photo)),
@@ -370,33 +374,56 @@ class _DesktopPhotoViewerPageState extends ConsumerState<DesktopPhotoViewerPage>
                   onClose: () => setState(() => _info = false),
                   onZoom: _setScale,
                 ),
-                Positioned.fill(
-                  child: IgnorePointer(
-                    ignoring: !_shareOpen,
-                    child: AnimatedOpacity(
-                      opacity: _shareOpen ? 1 : 0,
-                      duration: DesktopMotion.of(
-                        context,
-                        _shareOpen
-                            ? DesktopMotion.drawerScrim
-                            : DesktopMotion.drawerOut,
-                      ),
-                      curve:
-                          _shareOpen
-                              ? DesktopMotion.ease
-                              : DesktopMotion.exitCurve,
-                      alwaysIncludeSemantics: true,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => setState(() => _shareOpen = false),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                          child: const ColoredBox(color: DesktopPalette.scrim),
+                // 分享遮罩仅在打开及退场动画期间挂载，不可见时彻底卸载全屏 BackdropFilter。
+                if (_shareOpen || _shareScrimMounted)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      ignoring: !_shareOpen,
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween<double>(
+                          begin: _shareOpen ? 0.0 : 1.0,
+                          end: _shareOpen ? 1.0 : 0.0,
                         ),
+                        duration: DesktopMotion.of(
+                          context,
+                          _shareOpen
+                              ? DesktopMotion.drawerScrim
+                              : DesktopMotion.drawerOut,
+                        ),
+                        curve:
+                            _shareOpen
+                                ? DesktopMotion.ease
+                                : DesktopMotion.exitCurve,
+                        onEnd: () {
+                          if (!_shareOpen && _shareScrimMounted && mounted) {
+                            setState(() => _shareScrimMounted = false);
+                          }
+                        },
+                        builder: (context, t, _) {
+                          final progress = t.clamp(0.0, 1.0);
+                          if (progress <= 0.001) {
+                            return const SizedBox.shrink();
+                          }
+                          final sigma = 4.0 * progress;
+                          return GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => setState(() => _shareOpen = false),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(
+                                sigmaX: sigma,
+                                sigmaY: sigma,
+                              ),
+                              child: ColoredBox(
+                                color: DesktopPalette.scrim.withValues(
+                                  alpha: DesktopPalette.scrim.a * progress,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ),
-                ),
                 PhotoSharePanel(
                   visible: _shareOpen,
                   photo: photo,
@@ -1008,166 +1035,4 @@ class _TopBar extends StatelessWidget {
       ),
     );
   }
-}
-
-class _InfoPanel extends StatelessWidget {
-  const _InfoPanel({
-    required this.open,
-    required this.photo,
-    required this.scale,
-    required this.onClose,
-    required this.onZoom,
-  });
-
-  final bool open;
-  final PhotoItem photo;
-  final double scale;
-  final VoidCallback onClose;
-  final ValueChanged<double> onZoom;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final skin = DesktopSkin.of(context);
-    final exposure = [
-      if (photo.aperture != null) photo.aperture!,
-      if (photo.shutterSpeed != null) photo.shutterSpeed!,
-      if (photo.iso != null) 'ISO ${photo.iso}',
-      if (photo.focalLength != null) photo.focalLength!,
-    ].join(' · ');
-    final camera = [
-      photo.cameraMake,
-      photo.cameraModel,
-    ].whereType<String>().where((part) => part.isNotEmpty).join(' ');
-    final dimensions =
-        photo.width != null && photo.height != null
-            ? '${photo.width} × ${photo.height}'
-            : '—';
-    // 样例 `.vw-info`：浮在舞台上的圆角卡，顶栏之下（top 76）、胶片条之上
-    // （bottom 96），宽 330，不挤压画面。
-    return AnimatedPositioned(
-      duration: DesktopMotion.of(context, DesktopMotion.pane),
-      curve: DesktopMotion.ease,
-      top: 76,
-      bottom: 96,
-      right: open ? 16 : -346,
-      child: IgnorePointer(
-        ignoring: !open,
-        child: Container(
-          width: 330,
-          padding: const EdgeInsets.fromLTRB(24, 18, 24, 18),
-          decoration: BoxDecoration(
-            color: skin.pop,
-            borderRadius: BorderRadius.circular(DesktopMetrics.radiusLarge),
-            border: Border.all(color: skin.line2),
-            boxShadow: skin.shadow,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        l10n.desktopPhotosInfo.toUpperCase(),
-                        style: DesktopType.eyebrow(skin.text3),
-                      ),
-                    ),
-                    DesktopIconButton(
-                      icon: DesktopIcons.close,
-                      size: 28,
-                      iconSize: 14,
-                      onPressed: onClose,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(photo.title, style: DesktopType.displaySm(skin.text)),
-                const SizedBox(height: 16),
-                DesktopKeyValues(
-                  entries: [
-                    if (photo.dateTaken != null)
-                      MapEntry(
-                        l10n.desktopPhotosTaken,
-                        _formatDateTime(photo.dateTaken!),
-                      ),
-                    if (_placeLabel(photo) != null)
-                      MapEntry(l10n.desktopPhotosLocation, _placeLabel(photo)!),
-                    if (camera.isNotEmpty)
-                      MapEntry(l10n.desktopPhotosCamera, camera),
-                    if (exposure.isNotEmpty)
-                      MapEntry(l10n.desktopPhotosExposure, exposure),
-                    MapEntry(
-                      l10n.desktopPhotosDimensions,
-                      '$dimensions · ${formatFileSize(photo.fileSize)}',
-                    ),
-                  ],
-                ),
-                if (photo.tags.isNotEmpty) ...[
-                  const SizedBox(height: 18),
-                  Text(
-                    l10n.desktopPhotosTags.toUpperCase(),
-                    style: DesktopType.eyebrow(skin.text3),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [for (final tag in photo.tags) DesktopChip(tag)],
-                  ),
-                ],
-                const SizedBox(height: 18),
-                Text(
-                  l10n.desktopPhotosZoom.toUpperCase(),
-                  style: DesktopType.eyebrow(skin.text3),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    DesktopIconButton(
-                      icon: DesktopIcons.zoomOut,
-                      size: 28,
-                      iconSize: 14,
-                      onPressed: () => onZoom(scale - 0.5),
-                    ),
-                    Expanded(
-                      child: DesktopSlider(
-                        value: scale.clamp(1, 5),
-                        max: 5,
-                        onChanged: onZoom,
-                      ),
-                    ),
-                    DesktopIconButton(
-                      icon: DesktopIcons.zoomIn,
-                      size: 28,
-                      iconSize: 14,
-                      onPressed: () => onZoom(scale + 0.5),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// `gpsLocation` 是后端原样下发的地址字段集合，取第一个可读值。
-String? _placeLabel(PhotoItem photo) {
-  final location = photo.gpsLocation;
-  if (location == null || location.isEmpty) return null;
-  for (final key in const ['name', 'displayName', 'locality', 'city']) {
-    final value = location[key];
-    if (value is String && value.isNotEmpty) return value;
-  }
-  return null;
-}
-
-String _formatDateTime(DateTime value) {
-  final l = value.toLocal();
-  String p(int v) => v.toString().padLeft(2, '0');
-  return '${l.year}-${p(l.month)}-${p(l.day)} ${p(l.hour)}:${p(l.minute)}';
 }

@@ -1,5 +1,3 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -388,166 +386,165 @@ class _DesktopCommandPaletteState extends ConsumerState<DesktopCommandPalette> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: _close,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-          child: ColoredBox(
-            color:
-                DesktopSkin.of(context).isDark
-                    ? Colors.black.withValues(alpha: 0.50)
-                    : Colors.black.withValues(alpha: 0.24),
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: Padding(
-                padding: EdgeInsets.only(
-                  top: MediaQuery.sizeOf(context).height * 0.12,
-                ),
-                // 样例 `.palette { animation: modalin .4s var(--spring) }`：
-                // 淡入 + translateY(14→0) + 从 0.94 放大，锚点在顶部中心。
-                child: TweenAnimationBuilder<double>(
-                  tween: Tween<double>(begin: 0, end: 1),
-                  duration: MotionToken.reduced(context, DesktopMotion.fade),
-                  curve: DesktopMotion.spring,
-                  builder:
-                      (context, t, child) => Opacity(
-                        opacity: t.clamp(0.0, 1.0),
-                        alwaysIncludeSemantics: true,
-                        child: Transform.translate(
-                          offset: Offset(0, (1 - t) * 14),
-                          child: Transform.scale(
-                            scale: 0.94 + 0.06 * t,
-                            alignment: Alignment.topCenter,
-                            child: child,
-                          ),
+        child: TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: 0, end: 1),
+          duration: MotionToken.reduced(context, DesktopMotion.scrim),
+          curve: DesktopMotion.ease,
+          builder: (context, scrimT, child) {
+            final baseAlpha = skin.isDark ? 0.50 : 0.24;
+            return ColoredBox(
+              color: Colors.black.withValues(
+                alpha: baseAlpha * scrimT.clamp(0.0, 1.0),
+              ),
+              child: child,
+            );
+          },
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: Padding(
+              padding: EdgeInsets.only(
+                top: MediaQuery.sizeOf(context).height * 0.12,
+              ),
+              // 样例 `.palette { animation: modalin .4s var(--spring) }`：
+              // 淡入 + translateY(14→0) + 从 0.94 放大，锚点在顶部中心。
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: 1),
+                duration: MotionToken.reduced(context, DesktopMotion.fade),
+                curve: DesktopMotion.spring,
+                builder:
+                    (context, t, child) => Opacity(
+                      opacity: t.clamp(0.0, 1.0),
+                      alwaysIncludeSemantics: true,
+                      child: Transform.translate(
+                        offset: Offset(0, (1 - t) * 14),
+                        child: Transform.scale(
+                          scale: 0.94 + 0.06 * t,
+                          alignment: Alignment.topCenter,
+                          child: child,
                         ),
                       ),
-                  child: GestureDetector(
-                    onTap: () {},
-                    child: Material(
-                      color: Colors.transparent,
-                      child: DesktopOutsetShadow(
+                    ),
+                child: GestureDetector(
+                  onTap: () {},
+                  child: Material(
+                    color: Colors.transparent,
+                    child: DesktopOutsetShadow(
+                      borderRadius: BorderRadius.circular(
+                        DesktopMetrics.radiusDialog,
+                      ),
+                      shadows: skin.shadow,
+                      child: DesktopGlassSurface(
                         borderRadius: BorderRadius.circular(
                           DesktopMetrics.radiusDialog,
                         ),
-                        shadows: skin.shadow,
-                        child: DesktopGlassSurface(
-                          borderRadius: BorderRadius.circular(
-                            DesktopMetrics.radiusDialog,
+                        blur: 40,
+                        saturation: 1.6,
+                        child: Container(
+                          width: 640,
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.sizeOf(context).width - 40,
                           ),
-                          blur: 40,
-                          saturation: 1.6,
-                          child: Container(
-                            width: 640,
-                            constraints: BoxConstraints(
-                              maxWidth: MediaQuery.sizeOf(context).width - 40,
+                          decoration: BoxDecoration(
+                            color: skin.pop,
+                            borderRadius: BorderRadius.circular(
+                              DesktopMetrics.radiusDialog,
                             ),
-                            decoration: BoxDecoration(
-                              color: skin.pop,
-                              borderRadius: BorderRadius.circular(
-                                DesktopMetrics.radiusDialog,
+                            border: Border.all(color: skin.line2),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _SearchField(
+                                controller: _query,
+                                focusNode: _inputFocus,
+                                onMove: (delta) => _move(delta, results.length),
+                                onSubmit: () {
+                                  if (results.isNotEmpty) {
+                                    _run(results[_selected]);
+                                  }
+                                },
+                                onClose: _close,
                               ),
-                              border: Border.all(color: skin.line2),
-                            ),
-                            clipBehavior: Clip.antiAlias,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _SearchField(
-                                  controller: _query,
-                                  focusNode: _inputFocus,
-                                  onMove:
-                                      (delta) => _move(delta, results.length),
-                                  onSubmit: () {
-                                    if (results.isNotEmpty) {
-                                      _run(results[_selected]);
-                                    }
-                                  },
-                                  onClose: _close,
+                              _ScopeRow(
+                                scope: _scope,
+                                labelOf: (value) => _scopeLabel(l10n, value),
+                                onChanged: (value) {
+                                  setState(() {
+                                    _scope = value;
+                                    _selected = 0;
+                                  });
+                                  _inputFocus.requestFocus();
+                                },
+                              ),
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxHeight: 400,
                                 ),
-                                _ScopeRow(
-                                  scope: _scope,
-                                  labelOf: (value) => _scopeLabel(l10n, value),
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _scope = value;
-                                      _selected = 0;
-                                    });
-                                    _inputFocus.requestFocus();
-                                  },
-                                ),
-                                ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxHeight: 400,
-                                  ),
-                                  child:
-                                      results.isEmpty
-                                          ? DesktopEmpty(
-                                            message:
-                                                _text.trim().isEmpty
-                                                    ? l10n
-                                                        .desktopPaletteIdleEmpty
-                                                    : l10n.desktopPaletteEmpty(
-                                                      _text.trim(),
-                                                    ),
-                                            icon: DesktopIcons.search,
-                                            actionLabel:
-                                                _scope ==
-                                                        DesktopPaletteScope.all
-                                                    ? null
-                                                    : l10n
-                                                        .desktopSearchEverything,
-                                            onAction:
-                                                () => setState(
-                                                  () =>
-                                                      _scope =
-                                                          DesktopPaletteScope
-                                                              .all,
-                                                ),
-                                          )
-                                          : ListView.builder(
-                                            controller: _scroll,
-                                            shrinkWrap: true,
-                                            padding: const EdgeInsets.all(8),
-                                            itemCount: results.length,
-                                            itemBuilder: (context, index) {
-                                              final command = results[index];
-                                              final showHeader =
-                                                  index == 0 ||
-                                                  results[index - 1].group !=
-                                                      command.group;
-                                              return Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.stretch,
-                                                children: [
-                                                  if (showHeader)
-                                                    DesktopEyebrow(
-                                                      command.group,
-                                                      padding:
-                                                          const EdgeInsets.fromLTRB(
-                                                            10,
-                                                            10,
-                                                            10,
-                                                            4,
-                                                          ),
-                                                    ),
-                                                  _PaletteRow(
-                                                    command: command,
-                                                    selected:
-                                                        index == _selected,
-                                                    onHover:
-                                                        () => setState(
-                                                          () =>
-                                                              _selected = index,
-                                                        ),
-                                                    onTap: () => _run(command),
+                                child:
+                                    results.isEmpty
+                                        ? DesktopEmpty(
+                                          message:
+                                              _text.trim().isEmpty
+                                                  ? l10n.desktopPaletteIdleEmpty
+                                                  : l10n.desktopPaletteEmpty(
+                                                    _text.trim(),
                                                   ),
-                                                ],
-                                              );
-                                            },
-                                          ),
-                                ),
-                                _PaletteFooter(),
-                              ],
-                            ),
+                                          icon: DesktopIcons.search,
+                                          actionLabel:
+                                              _scope == DesktopPaletteScope.all
+                                                  ? null
+                                                  : l10n
+                                                      .desktopSearchEverything,
+                                          onAction:
+                                              () => setState(
+                                                () =>
+                                                    _scope =
+                                                        DesktopPaletteScope.all,
+                                              ),
+                                        )
+                                        : ListView.builder(
+                                          controller: _scroll,
+                                          shrinkWrap: true,
+                                          padding: const EdgeInsets.all(8),
+                                          itemCount: results.length,
+                                          itemBuilder: (context, index) {
+                                            final command = results[index];
+                                            final showHeader =
+                                                index == 0 ||
+                                                results[index - 1].group !=
+                                                    command.group;
+                                            return Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.stretch,
+                                              children: [
+                                                if (showHeader)
+                                                  DesktopEyebrow(
+                                                    command.group,
+                                                    padding:
+                                                        const EdgeInsets.fromLTRB(
+                                                          10,
+                                                          10,
+                                                          10,
+                                                          4,
+                                                        ),
+                                                  ),
+                                                _PaletteRow(
+                                                  command: command,
+                                                  selected: index == _selected,
+                                                  onHover:
+                                                      () => setState(
+                                                        () => _selected = index,
+                                                      ),
+                                                  onTap: () => _run(command),
+                                                ),
+                                              ],
+                                            );
+                                          },
+                                        ),
+                              ),
+                              _PaletteFooter(),
+                            ],
                           ),
                         ),
                       ),

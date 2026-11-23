@@ -138,8 +138,14 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
   /// 会在同一次 go 里先后通知）。
   bool _historySyncScheduled = false;
 
+  /// 程序化前进/后退的目标路径，用于替代单次布尔防抖，避免快速连点导致历史游标错位。
+  String? _pendingProgrammaticTarget;
+
   /// 上一次同步到壳层的路由位置，用于在同帧内去重更新。
   String _lastSyncedPath = '';
+
+  /// 上一次所在的主模块标识，用于主模块切换时清理详情坞旧状态。
+  String? _lastModule;
 
   /// 用独立 ValueNotifier 向下游分发路由变化，避免每次切页在顶层
   /// `_DesktopShellHostState` 调用 `setState` 重建整棵 `Theme` / Scope 树。
@@ -166,6 +172,7 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
   void initState() {
     super.initState();
     _lastSyncedPath = _path;
+    _lastModule = _desktopTopLevelModule(_lastSyncedPath);
     _pathNotifier.value = _lastSyncedPath;
     widget.router.routerDelegate.addListener(_onRouteChanged);
     HardwareKeyboard.instance.addHandler(_handleKey);
@@ -190,6 +197,7 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
       oldWidget.router.routerDelegate.removeListener(_onRouteChanged);
       widget.router.routerDelegate.addListener(_onRouteChanged);
       _lastSyncedPath = _path;
+      _lastModule = _desktopTopLevelModule(_lastSyncedPath);
       _pathNotifier.value = _lastSyncedPath;
     }
   }
@@ -202,18 +210,63 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
     super.dispose();
   }
 
+  static String? _desktopTopLevelModule(String path) {
+    final routePath = Uri.tryParse(path)?.path ?? path.split('?').first;
+    if (routePath == '/' || routePath == DesktopRoutes.home) {
+      return DesktopRoutes.home;
+    }
+    if (routePath == DesktopRoutes.movies ||
+        routePath.startsWith('${DesktopRoutes.movies}/')) {
+      return DesktopRoutes.movies;
+    }
+    if (routePath == DesktopRoutes.photos ||
+        routePath.startsWith('${DesktopRoutes.photos}/')) {
+      return DesktopRoutes.photos;
+    }
+    if (routePath == DesktopRoutes.music ||
+        routePath.startsWith('${DesktopRoutes.music}/')) {
+      return DesktopRoutes.music;
+    }
+    if (routePath == DesktopRoutes.reader ||
+        routePath.startsWith('${DesktopRoutes.reader}/')) {
+      return DesktopRoutes.reader;
+    }
+    if (routePath == DesktopRoutes.files ||
+        routePath.startsWith('${DesktopRoutes.files}/')) {
+      return DesktopRoutes.files;
+    }
+    if (routePath == DesktopRoutes.settings ||
+        routePath.startsWith('${DesktopRoutes.settings}/')) {
+      return DesktopRoutes.settings;
+    }
+    if (routePath == DesktopRoutes.admin ||
+        routePath.startsWith('${DesktopRoutes.admin}/')) {
+      return DesktopRoutes.admin;
+    }
+    return null;
+  }
+
   void _onRouteChanged() {
     if (!mounted) {
       return;
     }
     final nextPath = _path;
     final phase = SchedulerBinding.instance.schedulerPhase;
-    // 非构建期（idle / postFrameCallbacks）同步更新 `_pathNotifier`，确保 `_RouteEnter`
-    // 在新页面挂载的同一帧拿到最新 path，且不会触发顶层 `Theme` 整树重建。
+    var moduleChanged = false;
+    // 非持久回调构建期同步更新 `_pathNotifier`，确保 `_RouteEnter`
+    // 在新页面挂载的同一帧拿到最新 path，消除 1 帧闪现。
     if (nextPath != _lastSyncedPath) {
       _lastSyncedPath = nextPath;
-      if (phase == SchedulerPhase.idle ||
-          phase == SchedulerPhase.postFrameCallbacks) {
+      final nextModule = _desktopTopLevelModule(nextPath);
+      if (nextModule != null &&
+          _lastModule != null &&
+          nextModule != _lastModule) {
+        moduleChanged = true;
+      }
+      if (nextModule != null) {
+        _lastModule = nextModule;
+      }
+      if (phase != SchedulerPhase.persistentCallbacks) {
         _pathNotifier.value = nextPath;
       } else {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -222,6 +275,14 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
           }
         });
       }
+    }
+    if (moduleChanged) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        ref.read(desktopShellProvider.notifier).clearDetail();
+      });
     }
     if (_historySyncScheduled) {
       return;
@@ -233,7 +294,30 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
       if (!mounted) {
         return;
       }
-      ref.read(desktopHistoryProvider.notifier).record(_path);
+      final currentPath = _path;
+      final historyNotifier = ref.read(desktopHistoryProvider.notifier);
+      final pendingTarget = _pendingProgrammaticTarget;
+      if (pendingTarget != null) {
+        if (currentPath == pendingTarget) {
+          _pendingProgrammaticTarget = null;
+          historyNotifier.record(currentPath);
+          return;
+        }
+        final historyState = ref.read(desktopHistoryProvider);
+        if (historyState.entries.contains(currentPath)) {
+          // 忽略快速连点前进/后退途中到达的过期中间路由，等待最终目标路径落位。
+          return;
+        }
+        // 已发生非历史栈跳转或重定向：清除待匹配目标并确保新路径被记录。
+        _pendingProgrammaticTarget = null;
+        historyNotifier.record(currentPath);
+        final after = ref.read(desktopHistoryProvider);
+        if (after.cursor < 0 || after.entries[after.cursor] != currentPath) {
+          historyNotifier.record(currentPath);
+        }
+        return;
+      }
+      historyNotifier.record(currentPath);
     });
     WidgetsBinding.instance.scheduleFrame();
   }
@@ -320,6 +404,7 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
       if (key == LogicalKeyboardKey.arrowLeft) {
         final target = history.back();
         if (target != null) {
+          _pendingProgrammaticTarget = target;
           widget.router.go(target);
           return true;
         }
@@ -327,6 +412,7 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
       if (key == LogicalKeyboardKey.arrowRight) {
         final target = history.forward();
         if (target != null) {
+          _pendingProgrammaticTarget = target;
           widget.router.go(target);
           return true;
         }
@@ -364,6 +450,16 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
 
   @override
   Widget build(BuildContext context) {
+    // 监听顶栏前进/后退引起游标移动（entries 未变），记录预期目标路径供防抖匹配。
+    ref.listen<DesktopHistory>(desktopHistoryProvider, (previous, next) {
+      if (previous != null &&
+          identical(previous.entries, next.entries) &&
+          previous.cursor != next.cursor &&
+          next.cursor >= 0 &&
+          next.cursor < next.entries.length) {
+        _pendingProgrammaticTarget = next.entries[next.cursor];
+      }
+    });
     // 桌面播放条与沉浸播放页只改音乐中心状态；真正开流由播放会话完成。
     // 这里只盯播放相关的三个字段，避免听歌时长写回时把音频层一起抖动。
     ref.listen(
@@ -423,7 +519,7 @@ class _DesktopShellHostState extends ConsumerState<DesktopShellHost> {
   }
 }
 
-class _DesktopShellBody extends ConsumerWidget {
+class _DesktopShellBody extends ConsumerStatefulWidget {
   const _DesktopShellBody({
     required this.path,
     required this.scaffoldBackgroundColor,
@@ -437,9 +533,69 @@ class _DesktopShellBody extends ConsumerWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final routePath = Uri.tryParse(path)?.path ?? path.split('?').first;
-    final mode = desktopShellModeForPath(routePath);
+  ConsumerState<_DesktopShellBody> createState() => _DesktopShellBodyState();
+}
+
+class _DesktopShellBodyState extends ConsumerState<_DesktopShellBody> {
+  Timer? _immersiveExitTimer;
+  bool _holdingImmersiveExit = false;
+  bool _suppressNextRouteEnter = false;
+
+  static String _extractRoutePath(String location) =>
+      Uri.tryParse(location)?.path ?? location.split('?').first;
+
+  @override
+  void didUpdateWidget(covariant _DesktopShellBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.path == widget.path) {
+      return;
+    }
+    final prevMode = desktopShellModeForPath(_extractRoutePath(oldWidget.path));
+    final nextMode = desktopShellModeForPath(_extractRoutePath(widget.path));
+    if (prevMode == DesktopShellMode.immersive &&
+        nextMode == DesktopShellMode.chrome) {
+      // 从沉浸页返回工作区：抑制 `_RouteEnter` 180ms 淡入避免与退场动画对冲，
+      // 并在 320ms 退场过渡期间保持满屏画布，防止退场中的沉浸页被硬塞进缩窄工作区重排。
+      _immersiveExitTimer?.cancel();
+      _suppressNextRouteEnter = true;
+      final disableAnimations =
+          MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+      if (disableAnimations) {
+        _holdingImmersiveExit = false;
+      } else {
+        _holdingImmersiveExit = true;
+        _immersiveExitTimer = Timer(DesktopMotion.immersiveViewerEnter, () {
+          _immersiveExitTimer = null;
+          if (!mounted) {
+            return;
+          }
+          setState(() => _holdingImmersiveExit = false);
+        });
+      }
+    } else if (nextMode != DesktopShellMode.chrome) {
+      _immersiveExitTimer?.cancel();
+      _immersiveExitTimer = null;
+      _holdingImmersiveExit = false;
+      _suppressNextRouteEnter = false;
+    } else if (!_holdingImmersiveExit) {
+      _suppressNextRouteEnter = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _immersiveExitTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final routePath = _extractRoutePath(widget.path);
+    final rawMode = desktopShellModeForPath(routePath);
+    final mode =
+        rawMode == DesktopShellMode.chrome && _holdingImmersiveExit
+            ? DesktopShellMode.immersive
+            : rawMode;
     final backdropConfigured = ref.watch(
       appBackdropControllerProvider.select(
         (async) => async.asData?.value.hasActiveBackdrop ?? false,
@@ -464,7 +620,7 @@ class _DesktopShellBody extends ConsumerWidget {
       // 改掉未指定 style 的文字尺寸。
       child: Material(
         type: MaterialType.transparency,
-        textStyle: bodyTextStyle,
+        textStyle: widget.bodyTextStyle,
         child: Overlay.wrap(
           child:
               hostedOrImmersive
@@ -488,17 +644,24 @@ class _DesktopShellBody extends ConsumerWidget {
                                 enabled: !backdropActive,
                                 child: _AmbientLayer(
                                   key: const ValueKey('desktop-shared-ambient'),
-                                  path: path,
+                                  path: widget.path,
                                 ),
                               ),
                             ),
                             if (backdropActive ||
                                 mode == DesktopShellMode.chrome)
-                              DesktopBackdropLayer(path: path),
+                              DesktopBackdropLayer(path: widget.path),
                             if (mode == DesktopShellMode.chrome)
-                              _Workspace(path: path, child: child)
+                              _Workspace(
+                                path: widget.path,
+                                suppressRouteEnter: _suppressNextRouteEnter,
+                                child: widget.child,
+                              )
                             else
-                              _DesktopImmersiveCanvas(path: path, child: child),
+                              _DesktopImmersiveCanvas(
+                                path: widget.path,
+                                child: widget.child,
+                              ),
                           ],
                         ),
                       ),
@@ -506,8 +669,8 @@ class _DesktopShellBody extends ConsumerWidget {
                   )
                   : DesktopWindowChrome(
                     child: ColoredBox(
-                      color: scaffoldBackgroundColor,
-                      child: child,
+                      color: widget.scaffoldBackgroundColor,
+                      child: widget.child,
                     ),
                   ),
         ),
@@ -517,10 +680,15 @@ class _DesktopShellBody extends ConsumerWidget {
 }
 
 class _Workspace extends ConsumerWidget {
-  const _Workspace({required this.path, required this.child});
+  const _Workspace({
+    required this.path,
+    required this.child,
+    this.suppressRouteEnter = false,
+  });
 
   final String path;
   final Widget child;
+  final bool suppressRouteEnter;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -569,7 +737,13 @@ class _Workspace extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   DesktopSidebar(path: path),
-                  Expanded(child: _RouteEnter(path: path, child: child)),
+                  Expanded(
+                    child: _RouteEnter(
+                      path: path,
+                      suppressEnter: suppressRouteEnter,
+                      child: child,
+                    ),
+                  ),
                   const DesktopDock(),
                 ],
               ),

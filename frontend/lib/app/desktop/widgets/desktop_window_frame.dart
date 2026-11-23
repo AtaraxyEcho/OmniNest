@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -21,7 +23,8 @@ class DesktopWindowFrame extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!isDesktopPlatform) {
+    // macOS 原生 NSWindow 自带边缘缩放，跳过自绘 8 条热区避免冲突。
+    if (!isDesktopPlatform || defaultTargetPlatform == TargetPlatform.macOS) {
       return child;
     }
     final controller = ref.read(windowChromeControllerProvider.notifier);

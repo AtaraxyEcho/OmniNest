@@ -6149,6 +6149,7 @@
   "desktopDockNowPlaying": "正在播放",
   "desktopDockClear": "清空",
   "desktopDockQueueEmpty": "队列为空。",
+  "desktopDockQueueClearConfirm": "确定清空当前播放队列？",
   "desktopClosePanel": "关闭面板",
   "desktopCast": "演职人员",
   "desktopFileSection": "文件",

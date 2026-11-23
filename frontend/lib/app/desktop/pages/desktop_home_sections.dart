@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:omninest/app/desktop/desktop_icons.dart';
+import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
@@ -119,6 +120,36 @@ class _ResumeCard extends ConsumerWidget {
     final skin = DesktopSkin.of(context);
     final l10n = AppLocalizations.of(context);
     final remaining = (100 - item.progressPercent).round().clamp(0, 100);
+    void showQuickLook() {
+      ref
+          .read(desktopShellProvider.notifier)
+          .showDetail(
+            DesktopDetailData(
+              id: 'film:${item.id}',
+              kind: 'film',
+              title: item.title,
+              subtitle: item.mediaType ?? '',
+              imageUrl: item.posterUrl,
+              progress: item.progressPercent / 100,
+              factsLabel: l10n.desktopOpenDetails,
+              primary: DesktopDetailAction(
+                label: l10n.desktopPlay,
+                icon: DesktopIcons.play,
+                onPressed:
+                    (ctx, r) =>
+                        desktopPush(ctx, DesktopRoutes.moviePlay(item.id)),
+              ),
+              secondary: DesktopDetailAction(
+                label: l10n.desktopOpenDetails,
+                icon: DesktopIcons.info,
+                onPressed:
+                    (ctx, r) =>
+                        desktopPush(ctx, DesktopRoutes.movieDetail(item.id)),
+              ),
+            ),
+          );
+    }
+
     return _WideCard(
       imageUrl: item.posterUrl,
       title: item.title,
@@ -126,30 +157,33 @@ class _ResumeCard extends ConsumerWidget {
       progress: item.progressPercent / 100,
       onTap: () => context.push(DesktopRoutes.movieDetail(item.id)),
       onPlay: () => context.push(DesktopRoutes.moviePlay(item.id)),
-      onInspect:
-          () => ref
-              .read(desktopShellProvider.notifier)
-              .showDetail(
-                DesktopDetailData(
-                  kind: 'film',
-                  title: item.title,
-                  subtitle: item.mediaType ?? '',
-                  imageUrl: item.posterUrl,
-                  progress: item.progressPercent / 100,
-                  primary: DesktopDetailAction(
-                    label: l10n.desktopPlay,
-                    icon: DesktopIcons.play,
-                    onPressed:
-                        () => context.push(DesktopRoutes.moviePlay(item.id)),
-                  ),
-                  secondary: DesktopDetailAction(
-                    label: l10n.desktopOpenDetails,
-                    icon: DesktopIcons.info,
-                    onPressed:
-                        () => context.push(DesktopRoutes.movieDetail(item.id)),
-                  ),
-                ),
+      onSecondaryTapDown:
+          (details) => ref.read(desktopShellProvider.notifier).openMenu(
+            details.globalPosition,
+            [
+              DesktopMenuItem(
+                label: l10n.desktopPlay,
+                icon: DesktopIcons.play,
+                onPressed:
+                    () =>
+                        desktopPush(context, DesktopRoutes.moviePlay(item.id)),
               ),
+              DesktopMenuItem(
+                label: l10n.desktopQuickLook,
+                icon: DesktopIcons.panel,
+                onPressed: showQuickLook,
+              ),
+              DesktopMenuItem(
+                label: l10n.desktopOpenDetails,
+                icon: DesktopIcons.info,
+                onPressed:
+                    () => desktopPush(
+                      context,
+                      DesktopRoutes.movieDetail(item.id),
+                    ),
+              ),
+            ],
+          ),
       playLabel: l10n.desktopPlayTitle(item.title),
       surface: skin,
     );
@@ -178,37 +212,74 @@ class _FreshCard extends ConsumerWidget {
       if (runtimeText.isNotEmpty) runtimeText,
       if (genresFull.isNotEmpty) genresFull,
     ];
+    void showQuickLook() {
+      ref
+          .read(desktopShellProvider.notifier)
+          .showDetail(
+            DesktopDetailData(
+              id: 'film:${item.id}',
+              kind: 'film',
+              title: item.title,
+              subtitle: subtitleParts.join(' · '),
+              imageUrl: item.backdropImageUrl ?? item.posterImageUrl,
+              badge:
+                  item.rating != null
+                      ? '★ ${item.rating!.toStringAsFixed(1)}'
+                      : null,
+              about: item.overview,
+              chips: item.castMembers.map((e) => e.name).take(8).toList(),
+              factsLabel: l10n.desktopOpenDetails,
+              primary: DesktopDetailAction(
+                label: l10n.desktopPlay,
+                icon: DesktopIcons.play,
+                onPressed:
+                    (ctx, r) =>
+                        desktopPush(ctx, DesktopRoutes.moviePlay(item.id)),
+              ),
+              secondary: DesktopDetailAction(
+                label: l10n.desktopOpenDetails,
+                icon: DesktopIcons.info,
+                onPressed:
+                    (ctx, r) =>
+                        desktopPush(ctx, DesktopRoutes.movieDetail(item.id)),
+              ),
+            ),
+          );
+    }
+
     return _WideCard(
       imageUrl: item.backdropImageUrl ?? item.posterImageUrl,
       title: item.title,
       caption: captionParts.join(' · '),
       onTap: () => context.push(DesktopRoutes.movieDetail(item.id)),
       onPlay: () => context.push(DesktopRoutes.moviePlay(item.id)),
-      onInspect:
-          () => ref
-              .read(desktopShellProvider.notifier)
-              .showDetail(
-                DesktopDetailData(
-                  kind: 'film',
-                  title: item.title,
-                  subtitle: subtitleParts.join(' · '),
-                  imageUrl: item.backdropImageUrl ?? item.posterImageUrl,
-                  about: item.overview,
-                  chips: item.castMembers.map((e) => e.name).take(8).toList(),
-                  primary: DesktopDetailAction(
-                    label: l10n.desktopPlay,
-                    icon: DesktopIcons.play,
-                    onPressed:
-                        () => context.push(DesktopRoutes.moviePlay(item.id)),
-                  ),
-                  secondary: DesktopDetailAction(
-                    label: l10n.desktopOpenDetails,
-                    icon: DesktopIcons.info,
-                    onPressed:
-                        () => context.push(DesktopRoutes.movieDetail(item.id)),
-                  ),
-                ),
+      onSecondaryTapDown:
+          (details) => ref.read(desktopShellProvider.notifier).openMenu(
+            details.globalPosition,
+            [
+              DesktopMenuItem(
+                label: l10n.desktopPlay,
+                icon: DesktopIcons.play,
+                onPressed:
+                    () =>
+                        desktopPush(context, DesktopRoutes.moviePlay(item.id)),
               ),
+              DesktopMenuItem(
+                label: l10n.desktopQuickLook,
+                icon: DesktopIcons.panel,
+                onPressed: showQuickLook,
+              ),
+              DesktopMenuItem(
+                label: l10n.desktopOpenDetails,
+                icon: DesktopIcons.info,
+                onPressed:
+                    () => desktopPush(
+                      context,
+                      DesktopRoutes.movieDetail(item.id),
+                    ),
+              ),
+            ],
+          ),
       playLabel: l10n.desktopPlayTitle(item.title),
       surface: DesktopSkin.of(context),
     );
@@ -222,7 +293,7 @@ class _WideCard extends StatelessWidget {
     required this.caption,
     required this.onTap,
     required this.onPlay,
-    required this.onInspect,
+    required this.onSecondaryTapDown,
     required this.playLabel,
     required this.surface,
     this.progress,
@@ -233,7 +304,7 @@ class _WideCard extends StatelessWidget {
   final String caption;
   final VoidCallback onTap;
   final VoidCallback onPlay;
-  final VoidCallback onInspect;
+  final GestureTapDownCallback onSecondaryTapDown;
   final String playLabel;
   final DesktopSkin surface;
   final double? progress;
@@ -249,7 +320,7 @@ class _WideCard extends StatelessWidget {
           builder:
               (context, hovered) => GestureDetector(
                 onTap: onTap,
-                onSecondaryTap: onInspect,
+                onSecondaryTapDown: onSecondaryTapDown,
                 behavior: HitTestBehavior.opaque,
                 child: AnimatedScale(
                   duration: MotionToken.reduced(context, MotionToken.normal),
@@ -468,17 +539,19 @@ class DesktopListeningRow extends ConsumerWidget {
                                   .read(desktopShellProvider.notifier)
                                   .showDetail(
                                     DesktopDetailData(
+                                      id: 'track:${track.id}',
                                       kind: 'track',
                                       title: track.title,
                                       subtitle:
                                           '${track.artistName} · ${track.albumTitle}',
                                       imageUrl: track.coverUrl,
                                       squareArt: true,
+                                      factsLabel: l10n.desktopNavMusic,
                                       primary: DesktopDetailAction(
                                         label: l10n.desktopPlay,
                                         icon: DesktopIcons.play,
                                         onPressed:
-                                            () => ref
+                                            (ctx, r) => r
                                                 .read(
                                                   musicPortalActionsProvider,
                                                 )

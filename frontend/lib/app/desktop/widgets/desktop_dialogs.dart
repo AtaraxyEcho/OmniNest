@@ -521,11 +521,12 @@ class _DesktopModalSurfaceState extends State<_DesktopModalSurface>
       _scope.unfocus();
     }
     _pendingExit = onDone;
-    if (widget.slideWidth <= 0) {
-      _finishExit();
-      return;
-    }
-    final run = DesktopMotion.of(context, DesktopMotion.drawerOut);
+    final run = DesktopMotion.of(
+      context,
+      widget.slideWidth > 0
+          ? DesktopMotion.drawerOut
+          : const Duration(milliseconds: 160),
+    );
     setState(() {
       _exit.duration = run;
     });
@@ -690,7 +691,21 @@ class _DesktopModalSurfaceState extends State<_DesktopModalSurface>
               },
               child: animated,
             )
-            : animated;
+            : AnimatedBuilder(
+              animation: _exit,
+              builder: (context, child) {
+                final t = DesktopMotion.exitCurve.transform(_exit.value);
+                return IgnorePointer(
+                  ignoring: _closing,
+                  child: Opacity(
+                    opacity: (1 - _exit.value).clamp(0.0, 1.0),
+                    alwaysIncludeSemantics: true,
+                    child: Transform.scale(scale: 1 - 0.04 * t, child: child),
+                  ),
+                );
+              },
+              child: animated,
+            );
     // 遮罩入场：`.scrim` 用 `fade .25s`，抽屉的 `.drawer-scrim` 用 `dr-fade .32s`
     // （`desktop.css:137` / `polish.css:4`）。两层 Opacity 相乘，退场淡出照旧。
     final scrimIn = TweenAnimationBuilder<double>(
@@ -705,19 +720,16 @@ class _DesktopModalSurfaceState extends State<_DesktopModalSurface>
               Opacity(opacity: t, alwaysIncludeSemantics: true, child: child),
       child: _scrim(),
     );
-    final scrim =
-        drawer
-            ? AnimatedBuilder(
-              animation: _exit,
-              builder:
-                  (context, child) => Opacity(
-                    opacity: 1 - _exit.value,
-                    alwaysIncludeSemantics: true,
-                    child: IgnorePointer(ignoring: _closing, child: child),
-                  ),
-              child: scrimIn,
-            )
-            : scrimIn;
+    final scrim = AnimatedBuilder(
+      animation: _exit,
+      builder:
+          (context, child) => Opacity(
+            opacity: (1 - _exit.value).clamp(0.0, 1.0),
+            alwaysIncludeSemantics: true,
+            child: IgnorePointer(ignoring: _closing, child: child),
+          ),
+      child: scrimIn,
+    );
     final stack = Stack(
       clipBehavior: Clip.none,
       children: [

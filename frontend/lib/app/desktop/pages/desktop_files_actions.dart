@@ -165,6 +165,80 @@ extension _FilesPageActions on _DesktopFilesPageState {
     );
   }
 
+  DesktopDetailData _buildFileDetailData(
+    AppLocalizations l10n,
+    FileNode node, {
+    required bool sharedSpace,
+  }) {
+    final isShared = sharedSpace || node.spaceType == SpaceType.shared;
+    final updatedAt = node.updatedAt?.toLocal();
+    final modifiedText =
+        updatedAt == null
+            ? '—'
+            : '${updatedAt.year}-${updatedAt.month.toString().padLeft(2, '0')}-${updatedAt.day.toString().padLeft(2, '0')} '
+                '${updatedAt.hour.toString().padLeft(2, '0')}:${updatedAt.minute.toString().padLeft(2, '0')}';
+    return DesktopDetailData(
+      id: 'file:${node.id}',
+      kind: 'file',
+      title: node.name,
+      subtitle:
+          node.isFolder
+              ? l10n.desktopFilesKindFolder
+              : formatFileSize(node.sizeBytes),
+      squareArt: true,
+      factsLabel: l10n.desktopFileSection,
+      facts: [
+        MapEntry(
+          l10n.filesColumnType,
+          node.isFolder
+              ? l10n.desktopFilesKindFolder
+              : (node.mimeType ?? node.nodeType),
+        ),
+        MapEntry(
+          l10n.desktopFilesSize,
+          node.isFolder ? '—' : formatFileSize(node.sizeBytes),
+        ),
+        MapEntry(l10n.desktopFilesModified, modifiedText),
+        MapEntry(
+          l10n.filesGroupSharing,
+          isShared ? l10n.desktopFilesSharedBadge : l10n.desktopFilesPrivate,
+        ),
+      ],
+      primary: DesktopDetailAction(
+        label: l10n.desktopFilesOpen,
+        icon: node.isFolder ? DesktopIcons.folder : DesktopIcons.eye,
+        onPressed: (ctx, r) {
+          if (node.isFolder) {
+            final ctrl = r.read(fileBrowserControllerProvider.notifier);
+            unawaited(
+              isShared
+                  ? ctrl.openSharedSpaceFolder(node)
+                  : ctrl.openFolder(node),
+            );
+            return;
+          }
+          desktopPush(ctx, DesktopRoutes.filePreview(node.id));
+        },
+      ),
+    );
+  }
+
+  void _syncSelectedFileDetail(FileNode node) {
+    if (!mounted) {
+      return;
+    }
+    final state = ref.read(fileBrowserControllerProvider).asData?.value;
+    final sharedSpace =
+        state?.spaceType == 'SHARED' ||
+        state?.section == FileManagerSection.sharedSpace;
+    final l10n = AppLocalizations.of(context);
+    ref
+        .read(desktopShellProvider.notifier)
+        .selectDetail(
+          _buildFileDetailData(l10n, node, sharedSpace: sharedSpace),
+        );
+  }
+
   void _select(
     FileBrowserController controller,
     FileNode node, {
@@ -180,16 +254,19 @@ extension _FilesPageActions on _DesktopFilesPageState {
         _selectionAnchorId!,
         node.id,
       );
+      _syncSelectedFileDetail(node);
       return;
     }
     if (keyboard.isControlPressed || keyboard.isMetaPressed) {
       controller.toggleSelection(node.id);
       _selectionAnchorId = node.id;
+      _syncSelectedFileDetail(node);
       return;
     }
     controller.clearSelection();
     controller.toggleSelection(node.id);
     _selectionAnchorId = node.id;
+    _syncSelectedFileDetail(node);
   }
 
   void _toggleSelect(FileBrowserController controller, FileNode node) {
@@ -546,6 +623,18 @@ extension _FilesPageActions on _DesktopFilesPageState {
           label: l10n.desktopFilesOpen,
           icon: DesktopIcons.eye,
           onPressed: () => _activate(controller, node, shared: sharedSpace),
+        ),
+      );
+      items.add(
+        DesktopMenuItem(
+          label: l10n.desktopQuickLook,
+          icon: DesktopIcons.panel,
+          onPressed:
+              () => ref
+                  .read(desktopShellProvider.notifier)
+                  .showDetail(
+                    _buildFileDetailData(l10n, node, sharedSpace: sharedSpace),
+                  ),
         ),
       );
       items.add(

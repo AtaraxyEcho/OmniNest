@@ -13841,6 +13841,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get desktopDockQueueEmpty => 'The queue is empty.';
 
   @override
+  String get desktopDockQueueClearConfirm =>
+      'Remove every track from the play queue?';
+
+  @override
   String get desktopClosePanel => 'Close panel';
 
   @override

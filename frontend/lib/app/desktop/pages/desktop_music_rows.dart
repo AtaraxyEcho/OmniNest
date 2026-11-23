@@ -157,36 +157,57 @@ class _TrackRowState extends ConsumerState<_TrackRow> {
     ]);
   }
 
-  void _openDetails() {
-    final l10n = AppLocalizations.of(context);
+  DesktopDetailData _buildDetailData(AppLocalizations l10n) {
     final track = widget.track;
     final duration = track.durationSeconds;
+    return DesktopDetailData(
+      id: 'track:${track.id}',
+      kind: 'track',
+      title: track.title,
+      subtitle: '${track.artistName} · ${track.albumTitle}',
+      imageUrl: track.coverUrl ?? track.coverThumbUrl,
+      squareArt: true,
+      factsLabel: l10n.desktopNavMusic,
+      facts: [
+        MapEntry(l10n.desktopColAlbum, track.albumTitle),
+        MapEntry(
+          l10n.musicFieldDuration,
+          duration == null
+              ? '—'
+              : formatDesktopClock(Duration(seconds: duration)),
+        ),
+        MapEntry(l10n.musicFieldFormat, track.format),
+      ],
+      primary: DesktopDetailAction(
+        label: l10n.desktopPlay,
+        icon: DesktopIcons.play,
+        onPressed:
+            (ctx, r) =>
+                r.read(musicPortalActionsProvider).playTrackById(track.id),
+      ),
+      secondary: DesktopDetailAction(
+        label: l10n.desktopPlayNext,
+        icon: DesktopIcons.queue,
+        onPressed: (ctx, r) {
+          r
+              .read(musicCenterControllerProvider.notifier)
+              .enqueue(MusicPlayableItem.local(track));
+          showDesktopToast(ctx, l10n.desktopPlayNext, icon: DesktopIcons.queue);
+        },
+      ),
+    );
+  }
+
+  void _selectDetails() {
+    final l10n = AppLocalizations.of(context);
     ref
         .read(desktopShellProvider.notifier)
-        .showDetail(
-          DesktopDetailData(
-            kind: 'track',
-            title: track.title,
-            subtitle: '${track.artistName} · ${track.albumTitle}',
-            imageUrl: track.coverUrl ?? track.coverThumbUrl,
-            squareArt: true,
-            facts: [
-              MapEntry(l10n.desktopColAlbum, track.albumTitle),
-              MapEntry(
-                l10n.musicFieldDuration,
-                duration == null
-                    ? '—'
-                    : formatDesktopClock(Duration(seconds: duration)),
-              ),
-              MapEntry(l10n.musicFieldFormat, track.format),
-            ],
-            primary: DesktopDetailAction(
-              label: l10n.desktopPlay,
-              icon: DesktopIcons.play,
-              onPressed: () => widget.onPlay(track),
-            ),
-          ),
-        );
+        .selectDetail(_buildDetailData(l10n));
+  }
+
+  void _openDetails() {
+    final l10n = AppLocalizations.of(context);
+    ref.read(desktopShellProvider.notifier).showDetail(_buildDetailData(l10n));
   }
 
   void _playFromRow() {
@@ -207,7 +228,7 @@ class _TrackRowState extends ConsumerState<_TrackRow> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: _openDetails,
+        onTap: _selectDetails,
         onDoubleTap: () => widget.onPlay(track),
         onSecondaryTapDown: (details) => _openMoreAt(details.globalPosition),
         behavior: HitTestBehavior.opaque,

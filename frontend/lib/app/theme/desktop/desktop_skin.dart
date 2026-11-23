@@ -15,6 +15,7 @@ class DesktopSkin extends ThemeExtension<DesktopSkin> {
     required this.bg,
     required this.bg2,
     required this.panel,
+    required this.card,
     required this.panelSolid,
     required this.pop,
     required this.raise,
@@ -47,6 +48,10 @@ class DesktopSkin extends ThemeExtension<DesktopSkin> {
       bg2: isDark ? DesktopPalette.bg2Dark : DesktopPalette.bg2Light,
       panel:
           isDark
+              ? DesktopPalette.panelSolidDark.withValues(alpha: 0.66)
+              : DesktopPalette.panelBaseLight.withValues(alpha: 0.78),
+      card:
+          isDark
               ? DesktopPalette.panelBaseDark.withValues(alpha: 0.58)
               : bg.withValues(alpha: 0.55),
       panelSolid:
@@ -70,7 +75,7 @@ class DesktopSkin extends ThemeExtension<DesktopSkin> {
       // `--veil` 自身带 .72/.8 alpha；`.amb-veil` 再以 .86/.7 作为整层
       // opacity 合成，两个值不能互相替代。
       veil: (isDark ? DesktopPalette.veilDark : DesktopPalette.veilLight)
-          .withValues(alpha: isDark ? 0.72 : 0.80),
+          .withValues(alpha: isDark ? 0.72 : 0.90),
       ambientOpacity: isDark ? 1 : 0.55,
       shadow: [
         BoxShadow(
@@ -96,6 +101,7 @@ class DesktopSkin extends ThemeExtension<DesktopSkin> {
   final Color bg;
   final Color bg2;
   final Color panel;
+  final Color card;
   final Color panelSolid;
   final Color pop;
   final Color raise;
@@ -154,6 +160,7 @@ class DesktopSkin extends ThemeExtension<DesktopSkin> {
     Color? bg,
     Color? bg2,
     Color? panel,
+    Color? card,
     Color? panelSolid,
     Color? pop,
     Color? raise,
@@ -176,6 +183,7 @@ class DesktopSkin extends ThemeExtension<DesktopSkin> {
       bg: bg ?? this.bg,
       bg2: bg2 ?? this.bg2,
       panel: panel ?? this.panel,
+      card: card ?? this.card,
       panelSolid: panelSolid ?? this.panelSolid,
       pop: pop ?? this.pop,
       raise: raise ?? this.raise,
@@ -206,6 +214,7 @@ class DesktopSkin extends ThemeExtension<DesktopSkin> {
       bg: mix(bg, other.bg),
       bg2: mix(bg2, other.bg2),
       panel: mix(panel, other.panel),
+      card: mix(card, other.card),
       panelSolid: mix(panelSolid, other.panelSolid),
       pop: mix(pop, other.pop),
       raise: mix(raise, other.raise),

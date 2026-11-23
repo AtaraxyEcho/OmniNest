@@ -50,7 +50,7 @@ abstract final class DesktopPalette {
   static const Color text3Light = Color(0xFF46524B);
   static const Color accentInkLight = Color(0xFFFFFFFF);
   static const Color warmLight = Color(0xFF85582C);
-  static const Color veilLight = Color(0xFFF5F4EF);
+  static const Color veilLight = Color(0xFFF6F5F0);
   static const Color raiseBaseLight = Color(0xFF18241E);
   static const Color shadowLight = Color(0x59283730);
   static const Color shadowSoftLight = Color(0x1A283730);
@@ -68,7 +68,7 @@ abstract final class DesktopPalette {
   static const Color bad = Color(0xFFE57A74);
   static const Color badSeed = Color(0xFFE0655F);
   static const Color info = Color(0xFF7FB0E0);
-  static const Color danger = Color(0xFFC25B55);
+  static const Color danger = Color(0xFFC9534B);
   static const Color liked = Color(0xFFE0777A);
   static const Color likedImmersive = Color(0xFFFF6B8B);
 

@@ -219,6 +219,7 @@ class _Platter extends StatelessWidget {
                           : Image.network(
                             cover!,
                             fit: BoxFit.cover,
+                            cacheWidth: 192,
                             errorBuilder:
                                 (_, _, _) =>
                                     const ColoredBox(color: Color(0xFF1A2026)),

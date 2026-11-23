@@ -120,8 +120,8 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
-    await tester.pump();
-    await tester.pump();
+    // 弹层关闭走 160ms 淡出微缩，等退场播完再断言已卸载。
+    await tester.pump(const Duration(milliseconds: 220));
 
     expect(find.text('Edit'), findsNothing);
     expect(pageFocus.hasFocus, isTrue);

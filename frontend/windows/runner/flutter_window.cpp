@@ -2,6 +2,7 @@
 
 #include <flutter/standard_method_codec.h>
 #include <dwmapi.h>
+#include <shellapi.h>
 #include <optional>
 #include <string>
 #include <thread>
@@ -126,9 +127,12 @@ bool FlutterWindow::OnCreate() {
           if (call.method_name() == kShowWindowMethod) {
             // ShowWindowAsync may be silently dropped for a window created
             // hidden; show synchronously here on the UI thread instead.
-            ::ShowWindow(GetHandle(), SW_SHOW);
-            ::SetForegroundWindow(GetHandle());
-            result->Success(flutter::EncodableValue(true));
+            HWND hwnd = GetHandle();
+            if (hwnd != nullptr) {
+              ::ShowWindow(hwnd, SW_SHOW);
+              ::SetForegroundWindow(hwnd);
+            }
+            result->Success(flutter::EncodableValue(hwnd != nullptr));
             return;
           }
           if (call.method_name() == kIsWindowFullscreenMethod) {
@@ -139,8 +143,11 @@ bool FlutterWindow::OnCreate() {
             // KB135788: after TrackPopupMenu returns, the menu owner window
             // must receive a WM_NULL, otherwise the next tray click can
             // dismiss the freshly opened menu immediately.
-            ::PostMessage(GetHandle(), WM_NULL, 0, 0);
-            result->Success(flutter::EncodableValue(true));
+            HWND hwnd = GetHandle();
+            if (hwnd != nullptr) {
+              ::PostMessage(hwnd, WM_NULL, 0, 0);
+            }
+            result->Success(flutter::EncodableValue(hwnd != nullptr));
             return;
           }
           if (call.method_name() == kRequestAppExitMethod) {
@@ -394,7 +401,9 @@ void ReassertFramelessBorder(HWND hwnd, bool fullscreen) {
   SetDwmBorderVisible(hwnd, false);
   MARGINS margins = fullscreen ? MARGINS{0, 0, 0, 0} : MARGINS{0, 0, 0, 1};
   DwmExtendFrameIntoClientArea(hwnd, &margins);
-  SetDwmCornerPreference(hwnd, fullscreen ? kDwmwcpDoNotRound : kDwmwcpRound);
+  const bool square_corners = fullscreen || (!fullscreen && ::IsZoomed(hwnd));
+  SetDwmCornerPreference(
+      hwnd, square_corners ? kDwmwcpDoNotRound : kDwmwcpRound);
 }
 
 UINT QueryDpiForWindow(HWND hwnd) {
@@ -692,7 +701,9 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       }
       break;
     case WM_FONTCHANGE:
-      flutter_controller_->engine()->ReloadSystemFonts();
+      if (flutter_controller_ && flutter_controller_->engine()) {
+        flutter_controller_->engine()->ReloadSystemFonts();
+      }
       break;
     case WM_ERASEBKGND:
       // Never erase. Filling the client first turned every live-resize step
@@ -741,11 +752,13 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       // 不用 GET_X_LPARAM：它来自 windowsx.h，本文件没有包含该头。
       POINT cursor{static_cast<short>(LOWORD(lparam)),
                    static_cast<short>(HIWORD(lparam))};
-      constexpr int kGrip = 6;
-      const bool left = cursor.x < rect.left + kGrip;
-      const bool right = cursor.x >= rect.right - kGrip;
-      const bool top = cursor.y < rect.top + kGrip;
-      const bool bottom = cursor.y >= rect.bottom - kGrip;
+      const int scaled_grip =
+          MulDiv(6, static_cast<int>(QueryDpiForWindow(hwnd)), 96);
+      const int grip = scaled_grip > 4 ? scaled_grip : 4;
+      const bool left = cursor.x < rect.left + grip;
+      const bool right = cursor.x >= rect.right - grip;
+      const bool top = cursor.y < rect.top + grip;
+      const bool bottom = cursor.y >= rect.bottom - grip;
       if (top && left) return HTTOPLEFT;
       if (top && right) return HTTOPRIGHT;
       if (bottom && left) return HTBOTTOMLEFT;
@@ -772,6 +785,31 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
           params->rgrc[0].top += frame_y;
           params->rgrc[0].right -= frame_x;
           params->rgrc[0].bottom -= frame_y;
+
+          APPBARDATA abd = {};
+          abd.cbSize = sizeof(APPBARDATA);
+          if ((::SHAppBarMessage(ABM_GETSTATE, &abd) & ABS_AUTOHIDE) != 0) {
+            constexpr LONG kAutoHideInset = 2;
+            if (::SHAppBarMessage(ABM_GETTASKBARPOS, &abd) != 0) {
+              switch (abd.uEdge) {
+                case ABE_LEFT:
+                  params->rgrc[0].left += kAutoHideInset;
+                  break;
+                case ABE_TOP:
+                  params->rgrc[0].top += kAutoHideInset;
+                  break;
+                case ABE_RIGHT:
+                  params->rgrc[0].right -= kAutoHideInset;
+                  break;
+                case ABE_BOTTOM:
+                default:
+                  params->rgrc[0].bottom -= kAutoHideInset;
+                  break;
+              }
+            } else {
+              params->rgrc[0].bottom -= kAutoHideInset;
+            }
+          }
         }
         return 0;
       }

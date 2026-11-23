@@ -26,6 +26,7 @@ import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/phone_form_factor.dart';
 import 'package:omninest/app/route/app_route_surface.dart';
+import 'package:omninest/app/route/route_surface.dart';
 import 'package:omninest/app/web_initial_location.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/login_page.dart';
@@ -168,8 +169,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
       StatefulShellRoute(
-        builder: (context, state, navigationShell) {
-          return MobileAppShell(navigationShell: navigationShell);
+        pageBuilder: (context, state, navigationShell) {
+          final shell = MobileAppShell(navigationShell: navigationShell);
+          if (_isDesktopRouteContext(context)) {
+            return NoTransitionPage<void>(key: state.pageKey, child: shell);
+          }
+          return buildAppRoutePage(key: state.pageKey, child: shell);
         },
         navigatorContainerBuilder: _buildSemanticsSafeBranchContainer,
         branches: [
@@ -500,7 +505,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             (context, state) => _desktopRoutePage(
               context,
               state,
-              _routeSurface('/admin', const AdminDashboardPage()),
+              routeSurface('/admin', const AdminDashboardPage()),
               pageKey: _adminPageKey,
             ),
       ),
@@ -510,7 +515,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             (context, state) => _desktopRoutePage(
               context,
               state,
-              _routeSurface(
+              routeSurface(
                 '/admin/:section',
                 AdminDashboardPage(
                   initialSectionSegment: state.pathParameters['section'],
@@ -661,7 +666,7 @@ GoRoute _desktopDetailRoute(
         (context, state) => _desktopRoutePage(
           context,
           state,
-          _routeSurface(path, builder(state)),
+          routeSurface(path, builder(state)),
         ),
   );
 }
@@ -676,7 +681,7 @@ GoRoute _readerRoute(
     pageBuilder: (context, state) {
       return NoTransitionPage<void>(
         key: state.pageKey,
-        child: _routeSurface(path, builder(state)),
+        child: routeSurface(path, builder(state)),
       );
     },
   );
@@ -702,7 +707,7 @@ GoRoute _desktopNowPlayingRoute(
   return GoRoute(
     path: path,
     pageBuilder: (context, state) {
-      final child = _routeSurface(path, builder(state));
+      final child = routeSurface(path, builder(state));
       if (!_isDesktopRouteContext(context)) {
         return NoTransitionPage<void>(key: state.pageKey, child: child);
       }
@@ -728,7 +733,10 @@ GoRoute _desktopNowPlayingRoute(
                 begin: const Offset(0, 0.06),
                 end: Offset.zero,
               ).animate(curved),
-              child: child,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.97, end: 1.0).animate(curved),
+                child: child,
+              ),
             ),
           );
         },
@@ -781,7 +789,7 @@ GoRoute _desktopViewerRoute(
         (context, state) => _immersiveTransitionPage(
           context,
           state,
-          _routeSurface(path, builder(state)),
+          routeSurface(path, builder(state)),
           duration: duration,
         ),
   );
@@ -797,40 +805,13 @@ GoRoute _animatedRoute(
         (context, state) => _materialTransition(
           context,
           state,
-          _routeSurface(path, builder(state)),
+          routeSurface(path, builder(state)),
           desktopNoTransition:
               desktopShellModeForPath(state.uri.path) ==
               DesktopShellMode.chrome,
         ),
   );
 }
-
-Widget _routeSurface(String path, Widget child) {
-  if (_shellOwnedPaths.contains(path) || path == '/music/now-playing') {
-    return child;
-  }
-
-  // 移动壳层按全局环境模式继承（媒体 ambient/阅读 focus/其余 utility）；
-  // 桌面端保持原有语义：照片/阅读静态快照、影视与系统页实底
-  // （影视不透明底同时规避 Impeller 合成对角亮缝）。
-  return AppRouteSurface.environmental(
-    owner: 'route:$path',
-    routePath: path,
-    child: child,
-  );
-}
-
-const Set<String> _shellOwnedPaths = <String>{
-  '/portal',
-  '/library',
-  '/files',
-  '/music',
-  '/reader',
-  '/reader/bookshelf',
-  '/reader/stats',
-  '/reader/admin',
-  '/search',
-};
 
 /// 解析 `/search?scope=` 的内容档；未知取值回落「全部」而不是报错。
 ScopedSearchId? _searchScopeFromQuery(String? raw) {

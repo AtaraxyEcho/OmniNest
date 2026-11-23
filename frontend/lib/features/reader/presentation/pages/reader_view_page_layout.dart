@@ -105,28 +105,10 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
                       : BoxDecoration(color: _settings.surfaceColor),
               child: FontScaleScope.withSystemScaleOnly(
                 context: context,
-                child: TweenAnimationBuilder<double>(
-                  key: ValueKey<String>(
-                    'mode-${_settings.readingMode}-${_settings.pageTurnMode}',
-                  ),
-                  tween: Tween<double>(
-                    begin: animationsDisabled ? 1.0 : 0.0,
-                    end: 1.0,
-                  ),
-                  duration:
-                      animationsDisabled
-                          ? Duration.zero
-                          : const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  builder:
-                      (context, t, child) => Opacity(
-                        opacity: t,
-                        alwaysIncludeSemantics: true,
-                        child: Transform.scale(
-                          scale: 0.988 + 0.012 * t,
-                          child: child,
-                        ),
-                      ),
+                child: _ReaderModeTransition(
+                  modeKey:
+                      'mode-${_settings.readingMode}-${_settings.pageTurnMode}',
+                  animationsDisabled: animationsDisabled,
                   child: _buildContent(content, detail),
                 ),
               ),
@@ -190,12 +172,14 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
                   ),
             ),
           ),
-        // 进度恢复加载遮罩：定位完成后自动消失
+        // 进度恢复加载遮罩：常驻并在定位完成后 160ms 柔和淡出，消除硬切卸载闪烁
         // 内容未加载时 skeleton 已有加载指示器，不重复显示
-        if (_isRestoringProgress && _cachedContent != null)
-          Positioned.fill(
-            child: ReaderDeferredRestoreOverlay(settings: _settings),
+        Positioned.fill(
+          child: ReaderDeferredRestoreOverlay(
+            settings: _settings,
+            visible: _isRestoringProgress && _cachedContent != null,
           ),
+        ),
         // 滚动模式对齐样例 ReaderView.tsx:419：不再在左右边距叠加 SideTapZone，
         // 全视口交由 ListView 响应滚轮与触控，仅中央 30%-70% 单击切换控制栏。
         // 顶栏和底栏只占自己的几何范围。正文必须一直保留指针命中，才能在
@@ -538,6 +522,73 @@ List<ReaderChapter> readerChapterSource({
     return manifest;
   }
   return fromDetail;
+}
+
+/// 阅读/翻页模式切换柔化过渡：首次挂载直接以 `1.0` 显示避免与路由入场叠跑，
+/// 仅在运行期 `readingMode` / `pageTurnMode` 变更时触发 220ms 缩放淡入。
+class _ReaderModeTransition extends StatefulWidget {
+  const _ReaderModeTransition({
+    required this.modeKey,
+    required this.animationsDisabled,
+    required this.child,
+  });
+
+  final String modeKey;
+  final bool animationsDisabled;
+  final Widget child;
+
+  @override
+  State<_ReaderModeTransition> createState() => _ReaderModeTransitionState();
+}
+
+class _ReaderModeTransitionState extends State<_ReaderModeTransition>
+    with SingleTickerProviderStateMixin {
+  // 220ms 与原型 `.pg` 模式切换节奏一致；走 token 以便系统开启减少动效时直接落终态。
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: MotionToken.resolveForPlatform(MotionToken.pageSwitch),
+    value: 1.0,
+  );
+  late final CurvedAnimation _curved = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+  );
+
+  @override
+  void didUpdateWidget(covariant _ReaderModeTransition oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.modeKey == widget.modeKey) {
+      return;
+    }
+    if (widget.animationsDisabled) {
+      _controller.value = 1.0;
+      return;
+    }
+    _controller.forward(from: 0.0);
+  }
+
+  @override
+  void dispose() {
+    _curved.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _curved,
+      builder: (context, child) {
+        final t = _curved.value;
+        return Opacity(
+          opacity: t,
+          alwaysIncludeSemantics: true,
+          child: Transform.scale(scale: 0.988 + 0.012 * t, child: child),
+        );
+      },
+      child: widget.child,
+    );
+  }
 }
 
 /// Book 模式左右悬浮圆形翻页按钮（对齐样例 `.bk-arrow`：48×48 圆形半透明，悬停放大 1.1x）。

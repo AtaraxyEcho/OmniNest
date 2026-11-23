@@ -83,7 +83,6 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
   @override
   void initState() {
     super.initState();
-    _spin.repeat();
     unawaited(ref.read(desktopNpStyleProvider.notifier).load());
     unawaited(_loadBilingualPref());
   }
@@ -181,14 +180,30 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
     );
     final darkSkin = DesktopSkin.resolve(isDark: true, accent: accent);
 
-    final state = ref.watch(musicCenterControllerProvider).asData?.value;
-    final playMode = state?.playMode ?? MusicPlayMode.sequential;
+    // 细粒度 .select 订阅，并将时间轴监听下沉到局部 Consumer，消除 60Hz 全页重建。
+    final item = ref.watch(
+      musicCenterControllerProvider.select(
+        (async) => async.asData?.value.currentItem,
+      ),
+    );
+    final playing = ref.watch(
+      musicCenterControllerProvider.select(
+        (async) => async.asData?.value.isPlaying ?? false,
+      ),
+    );
+    final playMode = ref.watch(
+      musicCenterControllerProvider.select(
+        (async) => async.asData?.value.playMode ?? MusicPlayMode.sequential,
+      ),
+    );
+    final queue = ref.watch(
+      musicCenterControllerProvider.select(
+        (async) =>
+            async.asData?.value.playbackItems ?? const <MusicPlayableItem>[],
+      ),
+    );
     final actions = ref.watch(musicPortalActionsProvider);
-    final timeline = ref.watch(musicPortalPlaybackTimelineProvider);
-    final item = state?.currentItem;
     final track = item?.track;
-    final playing = state?.isPlaying ?? false;
-    final queue = state?.playbackItems ?? const <MusicPlayableItem>[];
     final engine = track == null ? null : ref.watch(musicAudioPlaybackProvider);
     final initialVolume = engine?.state.volume ?? _lastAudibleVolume;
     if (initialVolume > 0) {
@@ -240,6 +255,7 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
 
     void seekBy(Duration delta) {
       if (track == null || duration <= Duration.zero) return;
+      final timeline = ref.read(musicPortalPlaybackTimelineProvider);
       final baseMs =
           _dragging && _dragValue != null
               ? _dragValue!.round()
@@ -387,101 +403,124 @@ class _DesktopNowPlayingPageState extends ConsumerState<DesktopNowPlayingPage>
                                   ),
                                   Expanded(
                                     flex: 100,
-                                    child: _SidePanel(
-                                      track: track,
-                                      title: track.title,
-                                      artist: track.artistName,
-                                      album: track.albumTitle,
-                                      duration: duration,
-                                      format: track.format,
-                                      bitrate: track.bitrate,
-                                      sampleRate: track.sampleRate,
-                                      fileSize: track.fileSize,
-                                      position: timeline.position,
-                                      positionStream: timeline.positionStream,
-                                      playing: playing,
-                                      hueColor: hueColor,
-                                      tab: _tab,
-                                      onTab:
-                                          (value) =>
-                                              setState(() => _tab = value),
-                                      showTranslation: _showTranslation,
-                                      onToggleTranslation:
-                                          () => unawaited(_toggleTranslation()),
-                                      onSeek:
-                                          (value) =>
-                                              unawaited(timeline.seek(value)),
-                                      queue: queue,
-                                      currentKey: item?.playableKey,
-                                      onPickQueue:
-                                          (index) => unawaited(
-                                            actions.playQueueAt(index),
-                                          ),
-                                      onToggleFavorite: () {
-                                        _toggleFavorite(
-                                          item: item,
+                                    child: Consumer(
+                                      builder: (context, panelRef, _) {
+                                        final timeline = panelRef.watch(
+                                          musicPortalPlaybackTimelineProvider,
+                                        );
+                                        return _SidePanel(
                                           track: track,
-                                          canManageOwnActivity:
-                                              canManageOwnActivity,
-                                          isZh: isZh,
+                                          title: track.title,
+                                          artist: track.artistName,
+                                          album: track.albumTitle,
+                                          duration: duration,
+                                          format: track.format,
+                                          bitrate: track.bitrate,
+                                          sampleRate: track.sampleRate,
+                                          fileSize: track.fileSize,
+                                          position: timeline.position,
+                                          positionStream:
+                                              timeline.positionStream,
+                                          playing: playing,
+                                          hueColor: hueColor,
+                                          tab: _tab,
+                                          onTab:
+                                              (value) =>
+                                                  setState(() => _tab = value),
+                                          showTranslation: _showTranslation,
+                                          onToggleTranslation:
+                                              () => unawaited(
+                                                _toggleTranslation(),
+                                              ),
+                                          onSeek:
+                                              (value) => unawaited(
+                                                timeline.seek(value),
+                                              ),
+                                          queue: queue,
+                                          currentKey: item?.playableKey,
+                                          onPickQueue:
+                                              (index) => unawaited(
+                                                actions.playQueueAt(index),
+                                              ),
+                                          onToggleFavorite: () {
+                                            _toggleFavorite(
+                                              item: item,
+                                              track: track,
+                                              canManageOwnActivity:
+                                                  canManageOwnActivity,
+                                              isZh: isZh,
+                                            );
+                                          },
+                                          onBrowseMusic: _browseMusic,
+                                          onEdit:
+                                              () => unawaited(
+                                                _editMetadata(track),
+                                              ),
                                         );
                                       },
-                                      onBrowseMusic: _browseMusic,
-                                      onEdit:
-                                          () => unawaited(_editMetadata(track)),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
                             const SizedBox(height: 18),
-                            _Transport(
-                              trackId: track.id,
-                              playing: playing,
-                              hueColor: hueColor,
-                              playMode: playMode,
-                              queueLength: queue.length,
-                              queueIndex: queueIndex,
-                              queueActive: _tab == 1,
-                              position: timeline.position,
-                              positionStream: timeline.positionStream,
-                              duration: duration,
-                              dragging: _dragging,
-                              dragValue: _dragValue,
-                              volumeStream:
-                                  engine?.stream.volume ??
-                                  const Stream<double>.empty(),
-                              initialVolume: initialVolume,
-                              onSeek:
-                                  (value) => unawaited(timeline.seek(value)),
-                              onDragStart:
-                                  () => setState(() => _dragging = true),
-                              onDragUpdate:
-                                  (value) => setState(() => _dragValue = value),
-                              onDragEnd: () {
-                                setState(() {
-                                  _dragging = false;
-                                  _dragValue = null;
-                                });
+                            Consumer(
+                              builder: (context, transportRef, _) {
+                                final timeline = transportRef.watch(
+                                  musicPortalPlaybackTimelineProvider,
+                                );
+                                return _Transport(
+                                  trackId: track.id,
+                                  playing: playing,
+                                  hueColor: hueColor,
+                                  playMode: playMode,
+                                  queueLength: queue.length,
+                                  queueIndex: queueIndex,
+                                  queueActive: _tab == 1,
+                                  position: timeline.position,
+                                  positionStream: timeline.positionStream,
+                                  duration: duration,
+                                  dragging: _dragging,
+                                  dragValue: _dragValue,
+                                  volumeStream:
+                                      engine?.stream.volume ??
+                                      const Stream<double>.empty(),
+                                  initialVolume: initialVolume,
+                                  onSeek:
+                                      (value) =>
+                                          unawaited(timeline.seek(value)),
+                                  onDragStart:
+                                      () => setState(() => _dragging = true),
+                                  onDragUpdate:
+                                      (value) =>
+                                          setState(() => _dragValue = value),
+                                  onDragEnd: () {
+                                    setState(() {
+                                      _dragging = false;
+                                      _dragValue = null;
+                                    });
+                                  },
+                                  onCyclePlayMode:
+                                      () =>
+                                          ref
+                                              .read(
+                                                musicCenterControllerProvider
+                                                    .notifier,
+                                              )
+                                              .cyclePlayMode(),
+                                  onPrevious:
+                                      () => unawaited(actions.previousTrack()),
+                                  onToggle:
+                                      () => unawaited(actions.togglePlayback()),
+                                  onNext: () => unawaited(actions.nextTrack()),
+                                  onToggleQueue:
+                                      () => setState(
+                                        () => _tab = _tab == 1 ? 0 : 1,
+                                      ),
+                                  onToggleMute: toggleMute,
+                                  onVolumeChanged: setEngineVolume,
+                                );
                               },
-                              onCyclePlayMode:
-                                  () =>
-                                      ref
-                                          .read(
-                                            musicCenterControllerProvider
-                                                .notifier,
-                                          )
-                                          .cyclePlayMode(),
-                              onPrevious:
-                                  () => unawaited(actions.previousTrack()),
-                              onToggle:
-                                  () => unawaited(actions.togglePlayback()),
-                              onNext: () => unawaited(actions.nextTrack()),
-                              onToggleQueue:
-                                  () =>
-                                      setState(() => _tab = _tab == 1 ? 0 : 1),
-                              onToggleMute: toggleMute,
-                              onVolumeChanged: setEngineVolume,
                             ),
                           ],
                         ),
