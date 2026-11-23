@@ -406,7 +406,7 @@ class _DesktopBookDetailTabsState extends ConsumerState<DesktopBookDetailTabs> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                _weekday(day.date),
+                                _weekday(context, day.date),
                                 style: DesktopType.nano(skin.text3),
                               ),
                             ],
@@ -694,7 +694,9 @@ String _shortDate(DateTime value) {
   return '${local.year}-${two(local.month)}-${two(local.day)}';
 }
 
-String _weekday(DateTime value) {
-  const names = ['一', '二', '三', '四', '五', '六', '日'];
-  return names[(value.weekday - 1).clamp(0, 6)];
+String _weekday(BuildContext context, DateTime value) {
+  final isZh = Localizations.localeOf(context).languageCode == 'zh';
+  const zhNames = ['一', '二', '三', '四', '五', '六', '日'];
+  const enNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  return (isZh ? zhNames : enNames)[(value.weekday - 1).clamp(0, 6)];
 }

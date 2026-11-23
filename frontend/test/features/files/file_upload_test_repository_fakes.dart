@@ -88,12 +88,14 @@ class _FakeFileRepository
   Future<List<FileNode>> listFiles({
     String? parentId,
     String? category,
+    bool onlyFolders = false,
   }) async => const [];
 
   @override
   Future<FileNodePage> listFilesPage({
     String? parentId,
     String? category,
+    bool onlyFolders = false,
     int page = 0,
     int size = 10,
   }) async {
@@ -567,7 +569,12 @@ class _FakeFileRepository
 
   // 共享空间相关方法
   @override
-  Future<List<FileNode>> listSharedSpaceFiles({String? parentId}) async {
+  Future<List<FileNode>> listSharedSpaceFiles({
+    String? parentId,
+    bool onlyFolders = false,
+    bool uploadedByMe = false,
+    String? sort,
+  }) async {
     sharedParentRequests.add(parentId);
     return sharedFilesByParent[parentId] ?? const [];
   }
@@ -575,6 +582,9 @@ class _FakeFileRepository
   @override
   Future<FileNodePage> listSharedSpaceFilesPage({
     String? parentId,
+    bool onlyFolders = false,
+    bool uploadedByMe = false,
+    String? sort,
     int page = 0,
     int size = 10,
   }) async {

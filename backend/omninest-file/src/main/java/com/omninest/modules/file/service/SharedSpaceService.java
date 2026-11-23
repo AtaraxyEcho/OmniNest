@@ -124,18 +124,82 @@ public class SharedSpaceService implements SharedSpaceAccessQuery {
      */
     @Transactional(readOnly = true)
     public Page<FileNode> listSharedSpaceFilesPage(UUID parentId, UUID operatorId, int page, int size) {
+        return listSharedSpaceFilesPage(parentId, operatorId, false, false, null, page, size);
+    }
+
+    /**
+     * 分页浏览共享空间目录，支持仅目录、仅我上传与排序（如 {@code updatedAt,desc}）。
+     */
+    @Transactional(readOnly = true)
+    public Page<FileNode> listSharedSpaceFilesPage(
+            UUID parentId,
+            UUID operatorId,
+            boolean onlyFolders,
+            boolean uploadedByMe,
+            String sortExpression,
+            int page,
+            int size) {
         ensureSharedSpaceEnabled();
         validatePermission(operatorId, Action.CAN_BROWSE);
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 200);
-        Pageable pageable = PageRequest.of(
-                safePage,
-                safeSize,
-                Sort.by(Sort.Order.desc("nodeType"), Sort.Order.asc("name").ignoreCase()));
+        Sort sort = resolveSharedSpaceSort(sortExpression);
+        Pageable pageable = PageRequest.of(safePage, safeSize, sort);
+        if (uploadedByMe) {
+            return fileNodeRepository.findVisibleSharedFiltered(
+                    SpaceType.SHARED,
+                    parentId,
+                    onlyFolders,
+                    !onlyFolders,
+                    operatorId,
+                    pageable
+            );
+        }
+        if (parentId == null && !onlyFolders && isRecentUpdatedSort(sortExpression)) {
+            return fileNodeRepository.findVisibleSharedFiltered(
+                    SpaceType.SHARED,
+                    null,
+                    false,
+                    true,
+                    null,
+                    pageable
+            );
+        }
+        if (onlyFolders) {
+            return parentId == null
+                    ? fileNodeRepository.findVisibleSharedRootFolders(SpaceType.SHARED, pageable)
+                    : fileNodeRepository.findVisibleSharedChildFolders(SpaceType.SHARED, parentId, pageable);
+        }
         if (parentId == null) {
             return fileNodeRepository.findVisibleSharedRoot(SpaceType.SHARED, pageable);
         }
         return fileNodeRepository.findVisibleSharedChildren(SpaceType.SHARED, parentId, pageable);
+    }
+
+    private Sort resolveSharedSpaceSort(String sortExpression) {
+        if (sortExpression == null || sortExpression.isBlank()) {
+            return Sort.by(Sort.Order.desc("nodeType"), Sort.Order.asc("name").ignoreCase());
+        }
+        String[] parts = sortExpression.trim().split(",", 2);
+        String field = parts[0].trim();
+        Sort.Direction direction = parts.length > 1 && "asc".equalsIgnoreCase(parts[1].trim())
+                ? Sort.Direction.ASC
+                : Sort.Direction.DESC;
+        return switch (field) {
+            case "updatedAt" -> Sort.by(new Sort.Order(direction, "updatedAt"), Sort.Order.desc("id"));
+            case "createdAt" -> Sort.by(new Sort.Order(direction, "createdAt"), Sort.Order.desc("id"));
+            case "sizeBytes" -> Sort.by(new Sort.Order(direction, "sizeBytes"), Sort.Order.asc("name").ignoreCase());
+            case "name" -> Sort.by(Sort.Order.desc("nodeType"), new Sort.Order(direction, "name").ignoreCase());
+            default -> Sort.by(Sort.Order.desc("nodeType"), Sort.Order.asc("name").ignoreCase());
+        };
+    }
+
+    private boolean isRecentUpdatedSort(String sortExpression) {
+        if (sortExpression == null || sortExpression.isBlank()) {
+            return false;
+        }
+        String field = sortExpression.trim().split(",", 2)[0].trim();
+        return "updatedAt".equals(field);
     }
 
     /**

@@ -55,8 +55,28 @@ public class LocalMediaLibraryClassifier {
     private static final Pattern STANDALONE_NUMBER = Pattern.compile("(?<!\\d)(\\d{1,4})(?!\\d)");
     private static final Pattern BRACKETED_TAG = Pattern.compile("\\[[^]]*]|【[^】]*】");
     private static final Pattern YEAR = Pattern.compile("^(?:19|20)\\d{2}$");
+
+    private static final Set<String> ANIME_DIRECTORY_ALIASES = Set.of(
+            "anime", "animes", "animation", "cartoon", "cartoons",
+            "动画", "动漫", "番剧", "国漫", "日漫", "新番", "日本动漫", "国产动漫"
+    );
+    private static final Set<String> TV_DIRECTORY_ALIASES = Set.of(
+            "tv", "tvs", "tv series", "tv show", "tv shows", "tvshow", "tvshows",
+            "series", "show", "shows", "drama", "dramas",
+            "剧集", "电视剧", "连续剧", "美剧", "日剧", "韩剧", "英剧", "国产剧", "综艺"
+    );
+    private static final Set<String> MOVIE_DIRECTORY_ALIASES = Set.of(
+            "movie", "movies", "film", "films", "cinema", "电影", "影片"
+    );
     private static final Set<String> GENERIC_DIRECTORIES = Set.of(
-            "media", "media library", "movie", "movies", "tv", "tv series", "anime", "season", "specials"
+            "media", "media library", "video", "videos",
+            "movie", "movies", "film", "films", "cinema", "电影", "影片",
+            "tv", "tvs", "tv series", "tv show", "tv shows", "tvshow", "tvshows",
+            "series", "show", "shows", "drama", "dramas",
+            "剧集", "电视剧", "连续剧", "美剧", "日剧", "韩剧", "英剧", "国产剧", "综艺",
+            "anime", "animes", "animation", "cartoon", "cartoons",
+            "动画", "动漫", "番剧", "国漫", "日漫", "新番", "日本动漫", "国产动漫",
+            "season", "specials"
     );
 
     private final SimpleFileNameParser fileNameParser;
@@ -75,9 +95,21 @@ public class LocalMediaLibraryClassifier {
      * @return 候选媒体身份
      */
     public PreviewIdentity preview(VideoLibrarySource source, String relativePath, String fileName) {
-        MediaLibraryType libraryType = effectiveLibraryType(source, relativePath);
+        MediaLibraryType configured = MediaLibraryType.valueOf(source.getLibraryType());
+        MediaLibraryType libraryType = effectiveLibraryType(source, relativePath, fileName);
         if (libraryType == MediaLibraryType.MOVIE) {
             FileNameGuess guess = movieGuess(source, relativePath, fileName);
+            if (configured == MediaLibraryType.MOVIE
+                    && hasStrongEpisodeStructure(source, relativePath, fileName)) {
+                return new PreviewIdentity(
+                        "MOVIE",
+                        guess.title(),
+                        null,
+                        null,
+                        "AMBIGUOUS",
+                        "EPISODE_IN_MOVIE_SOURCE"
+                );
+            }
             return new PreviewIdentity("MOVIE", guess.title(), null, null, "NEW", null);
         }
         EpisodeIdentity identity = episodeIdentity(source, relativePath, fileName);
@@ -115,7 +147,7 @@ public class LocalMediaLibraryClassifier {
             VideoLibrarySource source,
             LocalMediaScanEntry entry
     ) {
-        MediaLibraryType libraryType = effectiveLibraryType(source, entry.relativePath());
+        MediaLibraryType libraryType = effectiveLibraryType(source, entry.relativePath(), entry.fileName());
         return switch (libraryType) {
             case MOVIE, ROOT -> classifyMovie(ownerUserId, source, entry);
             case TV_SERIES, ANIME -> classifyEpisode(ownerUserId, source, entry, libraryType);
@@ -240,21 +272,28 @@ public class LocalMediaLibraryClassifier {
             String title,
             MediaLibraryType libraryType
     ) {
-        return seriesRepository
+        String desiredSeriesType = libraryType == MediaLibraryType.ANIME
+                ? SeriesType.ANIME.getValue()
+                : SeriesType.TV.getValue();
+        MediaTvSeries existing = seriesRepository
                 .findFirstByOwnerUserIdAndLibrarySourceIdAndTitleIgnoreCaseOrderByCreatedAtAsc(
                         ownerUserId, sourceId, title)
-                .orElseGet(() -> {
-                    MediaTvSeries series = new MediaTvSeries();
-                    series.setOwnerUserId(ownerUserId);
-                    series.setLibrarySourceId(sourceId);
-                    series.setTitle(title);
-                    series.setSortTitle(title);
-                    series.setSeriesType(libraryType == MediaLibraryType.ANIME
-                            ? SeriesType.ANIME.getValue()
-                            : SeriesType.TV.getValue());
-                    series.setMetadataStatus(MetadataStatus.PENDING.getValue());
-                    return seriesRepository.save(series);
-                });
+                .orElse(null);
+        if (existing != null) {
+            if (!desiredSeriesType.equals(existing.getSeriesType())) {
+                existing.setSeriesType(desiredSeriesType);
+                return seriesRepository.save(existing);
+            }
+            return existing;
+        }
+        MediaTvSeries series = new MediaTvSeries();
+        series.setOwnerUserId(ownerUserId);
+        series.setLibrarySourceId(sourceId);
+        series.setTitle(title);
+        series.setSortTitle(title);
+        series.setSeriesType(desiredSeriesType);
+        series.setMetadataStatus(MetadataStatus.PENDING.getValue());
+        return seriesRepository.save(series);
     }
 
     private MediaTvSeason findOrCreateSeason(UUID ownerUserId, UUID seriesId, int seasonNumber) {
@@ -324,32 +363,60 @@ public class LocalMediaLibraryClassifier {
     }
 
     /**
-     * 混合根来源按安全相对路径的第一级目录选择分类器。未知目录默认按电影处理，
-     * 保留单类型来源的既有行为并避免把一整个根目录误判为剧集。
+     * 混合根来源遍历所有父目录段并按规范化别名表选择分类器；
+     * 若目录未命中任何分类别名，再根据季目录或集号特征兜底归入剧集。
      */
-    private MediaLibraryType effectiveLibraryType(VideoLibrarySource source, String relativePath) {
+    private MediaLibraryType effectiveLibraryType(
+            VideoLibrarySource source,
+            String relativePath,
+            String fileName
+    ) {
         MediaLibraryType configured = MediaLibraryType.valueOf(source.getLibraryType());
         if (configured != MediaLibraryType.ROOT) {
             return configured;
         }
-        String path = relativePath == null ? "" : relativePath.replace('\\', '/');
-        String root = source.getRelativeRoot() == null
-                ? "."
-                : source.getRelativeRoot().replace('\\', '/');
-        if (!".".equals(root) && path.startsWith(root + "/")) {
-            path = path.substring(root.length() + 1);
+        List<String> directories = relativeDirectories(source, relativePath);
+        for (String segment : directories) {
+            String normalized = normalizeDirectorySegment(segment);
+            if (ANIME_DIRECTORY_ALIASES.contains(normalized)) {
+                return MediaLibraryType.ANIME;
+            }
+            if (TV_DIRECTORY_ALIASES.contains(normalized)) {
+                return MediaLibraryType.TV_SERIES;
+            }
+            if (MOVIE_DIRECTORY_ALIASES.contains(normalized)) {
+                return MediaLibraryType.MOVIE;
+            }
         }
-        int separator = path.indexOf('/');
-        if (separator < 0) {
-            return MediaLibraryType.MOVIE;
+        if (hasStrongEpisodeStructure(source, relativePath, fileName)) {
+            return MediaLibraryType.TV_SERIES;
         }
-        String category = path.substring(0, separator).trim().toLowerCase(Locale.ROOT);
-        return switch (category) {
-            case "anime", "动画", "动漫" -> MediaLibraryType.ANIME;
-            case "tv", "tv series", "tv-series", "series", "剧集" -> MediaLibraryType.TV_SERIES;
-            case "movie", "movies", "电影" -> MediaLibraryType.MOVIE;
-            default -> MediaLibraryType.MOVIE;
-        };
+        return MediaLibraryType.MOVIE;
+    }
+
+    private boolean hasStrongEpisodeStructure(
+            VideoLibrarySource source,
+            String relativePath,
+            String fileName
+    ) {
+        List<String> directories = relativeDirectories(source, relativePath);
+        for (String directory : directories) {
+            if (seasonNumber(directory) != null) {
+                return true;
+            }
+            DirectoryIdentity identity = directoryIdentity(directory);
+            if (identity.seasonNumber() != null) {
+                return true;
+            }
+        }
+        if (fileName == null || fileName.isBlank()) {
+            return false;
+        }
+        if (specialEpisodeNumber(fileName) != null) {
+            return true;
+        }
+        FileNameGuess guess = fileNameParser.parse(fileName);
+        return guess.seasonNumber() != null || guess.episodeNumber() != null;
     }
 
     private EpisodeIdentity episodeIdentity(VideoLibrarySource source, String relativePath, String fileName) {
@@ -416,8 +483,13 @@ public class LocalMediaLibraryClassifier {
     }
 
     private List<String> relativeDirectories(VideoLibrarySource source, String relativePath) {
+        if (relativePath == null || relativePath.isBlank()) {
+            return List.of();
+        }
         String path = relativePath.replace('\\', '/');
-        String root = source.getRelativeRoot().replace('\\', '/');
+        String root = source.getRelativeRoot() == null
+                ? "."
+                : source.getRelativeRoot().replace('\\', '/');
         if (!".".equals(root) && path.startsWith(root + "/")) {
             path = path.substring(root.length() + 1);
         }
@@ -480,8 +552,19 @@ public class LocalMediaLibraryClassifier {
         return title.isBlank() ? fileGuess.title() : title;
     }
 
+    private String normalizeDirectorySegment(String directory) {
+        if (directory == null) {
+            return "";
+        }
+        return directory.trim()
+                .toLowerCase(Locale.ROOT)
+                .replace('_', ' ')
+                .replace('-', ' ')
+                .replaceAll("\\s+", " ");
+    }
+
     private boolean isGenericDirectory(String directory) {
-        return GENERIC_DIRECTORIES.contains(directory.trim().toLowerCase(Locale.ROOT));
+        return GENERIC_DIRECTORIES.contains(normalizeDirectorySegment(directory));
     }
 
     private boolean isResolution(String value) {

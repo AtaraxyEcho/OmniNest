@@ -149,8 +149,12 @@ class DesktopSkin extends ThemeExtension<DesktopSkin> {
   Color onStageWash(double alpha) =>
       DesktopPalette.onStage.withValues(alpha: alpha);
 
+  static DesktopSkin? maybeOf(BuildContext context) {
+    return Theme.of(context).extension<DesktopSkin>();
+  }
+
   static DesktopSkin of(BuildContext context) {
-    return Theme.of(context).extension<DesktopSkin>() ??
+    return maybeOf(context) ??
         DesktopSkin.resolve(isDark: true, accent: DesktopAccent.sage);
   }
 

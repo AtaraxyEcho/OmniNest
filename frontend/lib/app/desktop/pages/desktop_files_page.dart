@@ -40,10 +40,10 @@ import 'package:omninest/platform/file_pick.dart';
 import 'package:omninest/platform/platform_capabilities.dart';
 
 part 'desktop_files_actions.dart';
-part 'desktop_files_inspector.dart';
 part 'desktop_files_dialogs.dart';
 part 'desktop_files_rail.dart';
 part 'desktop_files_rail_tree.dart';
+part 'desktop_files_rail_storage.dart';
 part 'desktop_files_grid.dart';
 part 'desktop_files_rows.dart';
 part 'desktop_files_rows_drag.dart';
@@ -65,6 +65,8 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
   final TextEditingController _search = TextEditingController();
   final FocusNode _pageFocus = FocusNode(debugLabel: 'desktop-files');
 
+  static const double _defaultRailWidth = 244.0;
+  double _railWidth = _defaultRailWidth;
   FileManagerSection? _appliedSection;
   String? _selectionAnchorId;
   bool _dragging = false;
@@ -217,6 +219,9 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
           parentId: value.parentId,
           breadcrumbs: value.breadcrumbs,
           sharedSpaceBreadcrumbs: value.sharedSpaceBreadcrumbs,
+          sharedSpaceUsage: value.sharedSpaceUsage,
+          sharedUploadedByMe: value.sharedUploadedByMe,
+          sharedSort: value.sharedSort,
           totalCount: _totalCount(value, value.section),
           currentPage: _currentPage(value, value.section),
           pageSize: _pageSize(value, value.section),
@@ -617,30 +622,37 @@ class _DesktopFilesPageState extends ConsumerState<DesktopFilesPage> {
             children: [
               if (showTree) ...[
                 SizedBox(
-                  width: 244,
-                  child: SingleChildScrollView(
-                    child: _FilesRail(
-                      state: state,
-                      section: section,
-                      stats: state?.storageStats ?? stats,
-                      onSection: (value) => _goSection(controller, value),
-                      onSharedRoot:
-                          () => unawaited(controller.goToSharedSpaceRoot()),
-                      onSpaceChanged:
-                          (spaceType) => _switchSpace(controller, spaceType),
-                      onOpenFolder:
-                          (folder, path) => _openFolder(
-                            controller,
-                            folder,
-                            shared: spaceType == 'SHARED',
-                            breadcrumbs: path,
-                          ),
-                      onMoveFiles:
-                          (ids, target) => controller.moveFilesTo(ids, target),
-                    ),
+                  width: _railWidth,
+                  child: _FilesRail(
+                    state: state,
+                    section: section,
+                    stats: state?.storageStats ?? stats,
+                    onSection: (value) => _goSection(controller, value),
+                    onSharedRoot:
+                        () => unawaited(controller.goToSharedSpaceRoot()),
+                    onSharedRecent:
+                        () => unawaited(controller.showSharedRecent()),
+                    onSharedUploadedByMe:
+                        () => unawaited(controller.showSharedUploadedByMe()),
+                    onNewFolder: () => _beginNewFolder(controller, state),
+                    onSpaceChanged:
+                        (spaceType) => _switchSpace(controller, spaceType),
+                    onOpenFolder:
+                        (folder, path) => _openFolder(
+                          controller,
+                          folder,
+                          shared: spaceType == 'SHARED',
+                          breadcrumbs: path,
+                        ),
+                    onMoveFiles:
+                        (ids, target) => controller.moveFilesTo(ids, target),
                   ),
                 ),
-                const SizedBox(width: 22),
+                _RailResizeHandle(
+                  width: _railWidth,
+                  onChanged: (next) => setState(() => _railWidth = next),
+                  onReset: () => setState(() => _railWidth = _defaultRailWidth),
+                ),
               ],
               Expanded(
                 child: LayoutBuilder(

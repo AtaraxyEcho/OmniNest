@@ -29,7 +29,11 @@ class _TreeRepository implements FileRepository {
   final List<String?> listedParents = <String?>[];
 
   @override
-  Future<List<FileNode>> listFiles({String? parentId, String? category}) async {
+  Future<List<FileNode>> listFiles({
+    String? parentId,
+    String? category,
+    bool onlyFolders = false,
+  }) async {
     listedParents.add(parentId);
     return parentId == null ? root : children[parentId] ?? const <FileNode>[];
   }
@@ -38,6 +42,7 @@ class _TreeRepository implements FileRepository {
   Future<FileNodePage> listFilesPage({
     String? parentId,
     String? category,
+    bool onlyFolders = false,
     int page = 0,
     int size = 10,
   }) async {

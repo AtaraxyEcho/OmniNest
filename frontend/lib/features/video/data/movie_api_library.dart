@@ -214,9 +214,23 @@ mixin MovieApiLibrary on MovieApiBase {
     return MediaScanRun.fromJson(parseData(response.data));
   }
 
+  Future<Map<String, dynamic>> reclassifyLibrarySource({
+    required String sourceId,
+    required VideoLibraryType libraryType,
+  }) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/video/library-sources/${Uri.encodeComponent(sourceId)}/reclassify',
+      data: {'libraryType': libraryType.apiValue},
+    );
+    final envelope = parseEnvelope(response.data);
+    final data = envelope['data'];
+    return data is Map<String, dynamic> ? data : const <String, dynamic>{};
+  }
+
   Future<MediaPage<MediaScanTreeNode>> mediaScanTree({
     required String runId,
     String? parentNodeId,
+    String scope = 'PENDING',
     int page = 0,
     int size = 100,
   }) async {
@@ -224,6 +238,7 @@ mixin MovieApiLibrary on MovieApiBase {
       '/video/scan-runs/${Uri.encodeComponent(runId)}/tree',
       queryParameters: {
         if (parentNodeId != null) 'parentNodeId': parentNodeId,
+        'scope': scope,
         'page': page,
         'size': size,
       },

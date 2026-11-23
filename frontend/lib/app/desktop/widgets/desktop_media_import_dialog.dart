@@ -418,9 +418,12 @@ class _DesktopMediaImportDialogState
       }
     });
     if (filtered.duplicateCount > 0 && mounted) {
+      final isZh = Localizations.localeOf(context).languageCode == 'zh';
       showDesktopToast(
         context,
-        '已跳过 ${filtered.duplicateCount} 个重复文件',
+        isZh
+            ? '已跳过 ${filtered.duplicateCount} 个重复文件'
+            : 'Skipped ${filtered.duplicateCount} duplicate files',
         kind: DesktopToastKind.info,
         icon: DesktopIcons.info,
       );
@@ -566,6 +569,7 @@ class _DesktopMediaImportDialogState
   }
 
   Widget _dropZone(AppLocalizations l10n, DesktopSkin skin) {
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
     final borderColor =
         _dragOver ? skin.accent : skin.line2.withValues(alpha: 0.9);
     final fillColor =
@@ -599,12 +603,18 @@ class _DesktopMediaImportDialogState
               ),
               const SizedBox(height: 10),
               Text(
-                _scanningDrop ? '正在扫描拖入的文件与文件夹…' : '拖拽文件或文件夹到此处',
+                _scanningDrop
+                    ? (isZh
+                        ? '正在扫描拖入的文件与文件夹…'
+                        : 'Scanning dropped files and folders…')
+                    : (isZh ? '拖拽文件或文件夹到此处' : 'Drop files or folders here'),
                 style: DesktopType.denseStrong(skin.text),
               ),
               const SizedBox(height: 4),
               Text(
-                '支持递归扫描子文件夹 · 格式：$_supportedTypesSummary',
+                isZh
+                    ? '支持递归扫描子文件夹 · 格式：$_supportedTypesSummary'
+                    : 'Scans subfolders recursively · Formats: $_supportedTypesSummary',
                 textAlign: TextAlign.center,
                 style: DesktopType.caption(skin.text3),
               ),
@@ -622,7 +632,7 @@ class _DesktopMediaImportDialogState
                         _scanningDrop ? null : () => _chooseDeviceFiles(l10n),
                   ),
                   DesktopButton(
-                    label: '选择文件夹',
+                    label: isZh ? '选择文件夹' : 'Choose folder',
                     icon: DesktopIcons.folder,
                     variant: DesktopButtonVariant.ghost,
                     onPressed: _scanningDrop ? null : _chooseDeviceFolder,
@@ -652,83 +662,7 @@ class _DesktopMediaImportDialogState
     );
   }
 
-  Widget _rejectedReportCard(DesktopSkin skin) {
-    if (_rejectedItems.isEmpty) return const SizedBox.shrink();
-    final preview = _rejectedItems.take(6).toList(growable: false);
-    final overflow = _rejectedItems.length - preview.length;
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
-        decoration: BoxDecoration(
-          color: skin.bad.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: skin.bad.withValues(alpha: 0.30)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Icon(DesktopIcons.info, size: 14, color: skin.bad),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    '已过滤 ${_rejectedItems.length} 个未添加项目',
-                    style: DesktopType.denseStrong(skin.bad),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => setState(() => _rejectedItems.clear()),
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(
-                      DesktopIcons.close,
-                      size: 13,
-                      color: skin.text2,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            for (final item in preview)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        item.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: DesktopType.caption(skin.text2),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      item.reason == ImportRejectReason.emptyFile
-                          ? '空文件 (0 B)'
-                          : '不支持的格式 .${item.extension.isEmpty ? '?' : item.extension}',
-                      style: DesktopType.caption(skin.bad),
-                    ),
-                  ],
-                ),
-              ),
-            if (overflow > 0)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  '另有 $overflow 项未显示',
-                  style: DesktopType.caption(skin.text3),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+  void _clearRejectedItems() => setState(() => _rejectedItems.clear());
 
   @override
   Widget build(BuildContext context) {
@@ -791,48 +725,5 @@ class _DesktopMediaImportDialogState
         ),
       ],
     );
-  }
-}
-
-class _DashedRectPainter extends CustomPainter {
-  const _DashedRectPainter({
-    required this.color,
-    required this.radius,
-    required this.strokeWidth,
-  });
-
-  final Color color;
-  final double radius;
-  final double strokeWidth;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..color = color
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = strokeWidth;
-    final rrect = RRect.fromRectAndRadius(
-      Offset.zero & size,
-      Radius.circular(radius),
-    );
-    final path = Path()..addRRect(rrect);
-    const dashLength = 6.0;
-    const gapLength = 4.0;
-    for (final PathMetric metric in path.computeMetrics()) {
-      var distance = 0.0;
-      while (distance < metric.length) {
-        final end = (distance + dashLength).clamp(0.0, metric.length);
-        canvas.drawPath(metric.extractPath(distance, end), paint);
-        distance += dashLength + gapLength;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedRectPainter oldDelegate) {
-    return oldDelegate.color != color ||
-        oldDelegate.radius != radius ||
-        oldDelegate.strokeWidth != strokeWidth;
   }
 }

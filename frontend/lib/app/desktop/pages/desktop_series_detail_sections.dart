@@ -1,5 +1,109 @@
 part of 'desktop_series_detail_page.dart';
 
+class _SeriesMetaStrip extends StatelessWidget {
+  const _SeriesMetaStrip({required this.series, required this.seasons});
+
+  final MovieSeries series;
+  final List<MovieSeason> seasons;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final skin = DesktopSkin.of(context);
+    final episodeCount = seasons.fold<int>(
+      0,
+      (sum, season) => sum + (season.episodeCount ?? 0),
+    );
+    final hasEpisodeCount = seasons.any(
+      (season) => season.episodeCount != null,
+    );
+    final cells = <(String, String, String)>[
+      (l10n.videoRating, series.rating?.toStringAsFixed(1) ?? '—', 'TMDB'),
+      (
+        l10n.videoYear,
+        series.firstAirDate?.year.toString() ?? '—',
+        series.seriesType,
+      ),
+      (
+        l10n.desktopSeriesEpisodes,
+        hasEpisodeCount ? '$episodeCount' : '—',
+        l10n.desktopSeriesSeasonCount(seasons.length),
+      ),
+      (
+        l10n.videoGenre,
+        series.genres.isEmpty ? '—' : series.genres.take(2).join(' · '),
+        '',
+      ),
+      (
+        l10n.videoContentRating,
+        series.contentRating?.isNotEmpty == true ? series.contentRating! : '—',
+        '',
+      ),
+    ];
+    final radius = BorderRadius.circular(16);
+    return DesktopGlassSurface(
+      borderRadius: radius,
+      child: Container(
+        decoration: BoxDecoration(
+          color: skin.panel,
+          borderRadius: radius,
+          border: Border.all(color: skin.line),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Row(
+          children: [
+            for (var index = 0; index < cells.length; index++)
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    border:
+                        index == 0
+                            ? null
+                            : Border(left: BorderSide(color: skin.line)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        cells[index].$1.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.eyebrow(skin.text3),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        cells[index].$2,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.sectionTitle(
+                          skin.text,
+                        ).copyWith(letterSpacing: -24 * 0.01),
+                      ),
+                      if (cells[index].$3.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          cells[index].$3,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: DesktopType.caption(skin.text3),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _OverviewTab extends StatelessWidget {
   const _OverviewTab({required this.detail});
 
@@ -48,7 +152,21 @@ class _OverviewTab extends StatelessWidget {
         ],
         if (detail.writable) ...[
           const SizedBox(height: 22),
-          _SeriesOverviewActions(series: series, cast: detail.cast),
+          DesktopSeriesOverviewActions(
+            series: series,
+            onEdit:
+                () => unawaited(
+                  showDesktopDrawer<void>(
+                    context,
+                    width: 520,
+                    builder:
+                        (_) => _SeriesEditDialog(
+                          series: series,
+                          cast: detail.cast,
+                        ),
+                  ),
+                ),
+          ),
         ],
       ],
     );
@@ -188,39 +306,6 @@ class _SeriesFactsCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _SeriesOverviewActions extends StatelessWidget {
-  const _SeriesOverviewActions({required this.series, required this.cast});
-
-  final MovieSeries series;
-  final List<MovieCastMember> cast;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        DesktopButton(
-          label: l10n.desktopMoviesEditDetails,
-          icon: DesktopIcons.edit,
-          variant: DesktopButtonVariant.soft,
-          onPressed: () {
-            unawaited(
-              showDesktopDrawer<void>(
-                context,
-                width: 520,
-                barrierDismissible: false,
-                builder: (_) => _SeriesEditDialog(series: series, cast: cast),
-              ),
-            );
-          },
-        ),
-      ],
     );
   }
 }

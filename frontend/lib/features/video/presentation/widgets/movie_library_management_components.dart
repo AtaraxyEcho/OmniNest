@@ -330,19 +330,37 @@ class _VideoLibrarySourceDialogState
     final mountKey =
         _mountKey ??
         mounts.where((mount) => mount.available).firstOrNull?.mountKey;
-    final selected = await showWorkstationDialog<String>(
-      context: context,
-      builder:
-          (context) => _VideoStorageDirectoryDialog(
-            locationId: _locationId,
-            mountKey: mountMode ? mountKey : null,
-            initialPath: _pathController.text,
-          ),
-    );
+    final isDesktop = DesktopSkin.maybeOf(context) != null;
+    final selected =
+        isDesktop
+            ? await showDesktopDialog<String>(
+              context,
+              builder:
+                  (context) => _DesktopStorageDirectoryDialog(
+                    locationId: _locationId,
+                    mountKey: mountMode ? mountKey : null,
+                    initialPath: _pathController.text,
+                  ),
+            )
+            : await showWorkstationDialog<String>(
+              context: context,
+              builder:
+                  (context) => _VideoStorageDirectoryDialog(
+                    locationId: _locationId,
+                    mountKey: mountMode ? mountKey : null,
+                    initialPath: _pathController.text,
+                  ),
+            );
     if (!mounted || selected == null) {
       return;
     }
     _pathController.text = selected;
+    if (widget.source == null) {
+      final inferred = _inferLibraryTypeFromPath(selected);
+      if (inferred != null) {
+        setState(() => _libraryType = inferred);
+      }
+    }
     if (_nameController.text.trim().isEmpty) {
       final String? name;
       if (mountMode) {

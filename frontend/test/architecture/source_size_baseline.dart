@@ -3,9 +3,6 @@
 /// 只允许下调：文件继续变大时先按职责拆分，拆分后删除或收紧对应条目。
 /// 新增超过 800 行的生产源码必须在此登记，登记即锁定当前行数。
 const sourceLineCaps = <String, int>{
-  'lib/app/desktop/desktop_ambient.dart': 863,
-  'lib/app/desktop/desktop_np_style.dart': 804,
-  'lib/app/desktop/pages/desktop_files_actions.dart': 886,
   'lib/app/desktop/pages/desktop_files_dialogs.dart': 860,
   'lib/app/desktop/pages/desktop_files_table.dart': 923,
   'lib/app/desktop/pages/desktop_home_page.dart': 858,
@@ -15,12 +12,9 @@ const sourceLineCaps = <String, int>{
   'lib/app/desktop/pages/desktop_now_playing_deck.dart': 889,
   'lib/app/desktop/pages/desktop_now_playing_page.dart': 832,
   'lib/app/desktop/pages/desktop_photo_viewer_page.dart': 1038,
-  'lib/app/desktop/pages/desktop_photos_justified.dart': 1193,
-  'lib/app/desktop/pages/desktop_photos_page.dart': 850,
   'lib/app/desktop/pages/desktop_reader_page.dart': 855,
   'lib/app/desktop/pages/desktop_series_detail_sections.dart': 809,
   'lib/app/desktop/pages/desktop_setup_page.dart': 997,
-  'lib/app/desktop/widgets/desktop_media_import_dialog.dart': 838,
   'lib/app/desktop/widgets/desktop_places_globe.dart': 990,
   'lib/app/desktop/widgets/desktop_surfaces.dart': 950,
   'lib/app/router.dart': 944,
@@ -39,7 +33,7 @@ const sourceLineCaps = <String, int>{
   'lib/features/files/application/file_browser_controller.dart': 963,
   'lib/features/library/presentation/widgets/library_space_widgets.dart': 863,
   'lib/features/music/application/music_platform_library_controller.dart': 938,
-  'lib/features/music/application/music_playback_session.dart': 872,
+  'lib/features/music/application/music_playback_session.dart': 851,
   'lib/features/music/data/music_api.dart': 814,
   'lib/features/music/presentation/deck/music_deck_shell.dart': 929,
   'lib/features/music/presentation/player/music_immersive_controls.dart': 823,
@@ -70,7 +64,6 @@ const sourceLineCaps = <String, int>{
       829,
   'lib/features/reader/presentation/widgets/reader_pagination_engine.dart': 904,
   'lib/features/reader/presentation/widgets/reader_view_page_mixin.dart': 807,
-  'lib/features/video/presentation/pages/movie_player_page.dart': 822,
   'lib/features/video/presentation/widgets/movie_player_sheets.dart': 889,
 };
 

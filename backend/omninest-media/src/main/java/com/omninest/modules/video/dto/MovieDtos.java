@@ -154,8 +154,26 @@ public final class MovieDtos {
             String mediaType,
             UUID seriesId,
             Integer seasonNumber,
-            Integer episodeNumber
+            Integer episodeNumber,
+            UUID movieId
     ) {
+        public MovieContinueWatchingDto(
+                UUID id,
+                String title,
+                UUID posterFileId,
+                String posterUrl,
+                long positionSeconds,
+                long durationSeconds,
+                double progressPercent,
+                Instant updatedAt,
+                String mediaType,
+                UUID seriesId,
+                Integer seasonNumber,
+                Integer episodeNumber
+        ) {
+            this(id, title, posterFileId, posterUrl, positionSeconds, durationSeconds,
+                    progressPercent, updatedAt, mediaType, seriesId, seasonNumber, episodeNumber, null);
+        }
     }
 
     public record MovieSeriesDto(
@@ -453,6 +471,16 @@ public final class MovieDtos {
      */
     public record ScrapeRequest(
             UUID fileNodeId,
+            boolean force,
+            String provider,
+            String externalId
+    ) {
+    }
+
+    /**
+     * 系列级刮削任务请求。
+     */
+    public record SeriesScrapeRequest(
             boolean force,
             String provider,
             String externalId

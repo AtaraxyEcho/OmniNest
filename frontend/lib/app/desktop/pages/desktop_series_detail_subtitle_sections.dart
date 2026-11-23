@@ -125,16 +125,22 @@ class _SubtitlesTabState extends ConsumerState<_SubtitlesTab> {
             ordered.any((item) => item.id == _selectedEpisodeId)
                 ? _selectedEpisodeId!
                 : ordered.first.id;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                SizedBox(
-                  width: 360,
+        final subtitles = ref.watch(movieSubtitlesProvider(selected));
+        return subtitles.when(
+          loading: () => const DesktopSkeletonRows(count: 2, avatar: false),
+          error:
+              (error, _) => Text(
+                failureToast(l10n, l10n.desktopSeriesSubtitles, error),
+                style: DesktopType.caption(DesktopSkin.of(context).bad),
+              ),
+          data:
+              (tracks) => DesktopSubtitlePanel(
+                tracks: tracks,
+                uploading: _uploading,
+                deletingTrackId: _deletingTrackId,
+                emptyMessage: l10n.desktopSeriesNoSubtitles,
+                leading: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 400),
                   child: DesktopSelect<String>(
                     options: [
                       for (final item in ordered)
@@ -154,164 +160,11 @@ class _SubtitlesTabState extends ConsumerState<_SubtitlesTab> {
                     icon: DesktopIcons.film,
                   ),
                 ),
-                DesktopButton(
-                  label: l10n.videoDetailUploadSubtitle,
-                  icon: DesktopIcons.upload,
-                  variant: DesktopButtonVariant.soft,
-                  busy: _uploading,
-                  onPressed:
-                      _uploading
-                          ? null
-                          : () => unawaited(_pickAndUploadSubtitle(selected)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            _EpisodeSubtitles(
-              videoItemId: selected,
-              deletingTrackId: _deletingTrackId,
-              onDelete: (track) => unawaited(_deleteSubtitle(selected, track)),
-            ),
-          ],
+                onUpload: () => unawaited(_pickAndUploadSubtitle(selected)),
+                onDelete: (track) => _deleteSubtitle(selected, track),
+              ),
         );
       },
-    );
-  }
-}
-
-class _EpisodeSubtitles extends ConsumerWidget {
-  const _EpisodeSubtitles({
-    required this.videoItemId,
-    required this.deletingTrackId,
-    required this.onDelete,
-  });
-
-  final String videoItemId;
-  final String? deletingTrackId;
-  final ValueChanged<SubtitleTrack> onDelete;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final skin = DesktopSkin.of(context);
-    final subtitles = ref.watch(movieSubtitlesProvider(videoItemId));
-    return subtitles.when(
-      loading: () => const DesktopSkeletonRows(count: 2, avatar: false),
-      error:
-          (error, _) => Text(
-            failureToast(l10n, l10n.desktopSeriesSubtitles, error),
-            style: DesktopType.caption(skin.bad),
-          ),
-      data: (tracks) {
-        if (tracks.isEmpty) {
-          return DesktopEmpty(
-            icon: DesktopIcons.captions,
-            message: l10n.desktopSeriesNoSubtitles,
-            actionLabel: null,
-          );
-        }
-        return Column(
-          children: [
-            for (var index = 0; index < tracks.length; index++)
-              _SubtitleTrackRow(
-                track: tracks[index],
-                index: index,
-                count: tracks.length,
-                deleting: deletingTrackId == tracks[index].id,
-                anyDeleting: deletingTrackId != null,
-                onDelete: () => onDelete(tracks[index]),
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _SubtitleTrackRow extends StatelessWidget {
-  const _SubtitleTrackRow({
-    required this.track,
-    required this.index,
-    required this.count,
-    required this.deleting,
-    required this.anyDeleting,
-    required this.onDelete,
-  });
-
-  final SubtitleTrack track;
-  final int index;
-  final int count;
-  final bool deleting;
-  final bool anyDeleting;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final skin = DesktopSkin.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: skin.panel,
-        border: Border(
-          top: BorderSide(color: skin.line),
-          left: BorderSide(color: skin.line),
-          right: BorderSide(color: skin.line),
-          bottom:
-              index == count - 1
-                  ? BorderSide(color: skin.line)
-                  : BorderSide.none,
-        ),
-        borderRadius: BorderRadius.vertical(
-          top:
-              index == 0
-                  ? const Radius.circular(DesktopMetrics.radiusSmall)
-                  : Radius.zero,
-          bottom:
-              index == count - 1
-                  ? const Radius.circular(DesktopMetrics.radiusSmall)
-                  : Radius.zero,
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(DesktopIcons.captions, color: skin.text2),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(track.label, style: DesktopType.rowTitle(skin.text)),
-                Text(track.language, style: DesktopType.caption(skin.text3)),
-              ],
-            ),
-          ),
-          Text(
-            track.embedded
-                ? l10n.videoSubtitleEmbedded
-                : l10n.videoSubtitleExternal,
-            style: DesktopType.caption(skin.text3),
-          ),
-          if (!track.embedded) ...[
-            const SizedBox(width: 8),
-            if (deleting)
-              const SizedBox(
-                width: 36,
-                height: 36,
-                child: Padding(
-                  padding: EdgeInsets.all(10),
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
-            else
-              DesktopIconButton(
-                icon: DesktopIcons.trash,
-                tooltip: l10n.videoDeleteSubtitleTooltip,
-                onPressed: anyDeleting ? null : onDelete,
-              ),
-          ],
-        ],
-      ),
     );
   }
 }
@@ -325,3 +178,148 @@ String _subtitleMime(String? extension) => switch (extension?.toLowerCase()) {
   'srt' => 'application/x-subrip',
   _ => 'text/plain',
 };
+
+class _SeriesFileRow extends StatelessWidget {
+  const _SeriesFileRow({
+    required this.episode,
+    required this.busy,
+    required this.anyBusy,
+    required this.isZh,
+    required this.onProbe,
+    required this.onExportNfo,
+  });
+
+  final MovieVideoItem episode;
+  final bool busy;
+  final bool anyBusy;
+  final bool isZh;
+  final VoidCallback onProbe;
+  final VoidCallback onExportNfo;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final skin = DesktopSkin.of(context);
+    final meta = [
+      if (episode.versionLabel?.isNotEmpty == true) episode.versionLabel!,
+      if (episode.containerFormat?.isNotEmpty == true)
+        episode.containerFormat!.toUpperCase(),
+      if (episode.videoCodec?.isNotEmpty == true)
+        episode.videoCodec!.toUpperCase(),
+    ].join(' · ').ifEmpty(l10n.desktopSeriesFileDetailsUnavailable);
+
+    return DesktopHover(
+      cursor: SystemMouseCursors.basic,
+      builder:
+          (context, hovered) => AnimatedContainer(
+            duration: DesktopMotion.of(
+              context,
+              const Duration(milliseconds: 140),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              color: hovered ? skin.raise : skin.panel,
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: hovered ? skin.line2 : skin.line),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color:
+                        episode.available
+                            ? skin.raise2
+                            : skin.bad.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    DesktopIcons.film,
+                    size: 16,
+                    color: episode.available ? skin.text2 : skin.bad,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            l10n.videoEpisodeShortLabel(
+                              episode.seasonNumber ?? 0,
+                              episode.episodeNumber ?? 0,
+                            ),
+                            style: DesktopType.mono(skin.text3),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              episode.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: DesktopType.rowTitle(skin.text),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        meta,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.caption(skin.text3),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: (episode.available ? skin.ok : skin.bad).withValues(
+                      alpha: 0.12,
+                    ),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    episode.available
+                        ? l10n.videoEpisodeAvailable
+                        : l10n.videoEpisodeSourceUnavailable,
+                    style: DesktopType.micro(
+                      episode.available ? skin.ok : skin.bad,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (busy)
+                  const SizedBox.square(
+                    dimension: 24,
+                    child: Padding(
+                      padding: EdgeInsets.all(4),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                else ...[
+                  DesktopIconButton(
+                    icon: DesktopIcons.retry,
+                    tooltip: l10n.desktopMoviesReprobe,
+                    onPressed: anyBusy ? null : onProbe,
+                  ),
+                  DesktopIconButton(
+                    icon: DesktopIcons.download,
+                    tooltip: isZh ? '导出单集 NFO' : 'Export episode NFO',
+                    onPressed: anyBusy ? null : onExportNfo,
+                  ),
+                ],
+              ],
+            ),
+          ),
+    );
+  }
+}

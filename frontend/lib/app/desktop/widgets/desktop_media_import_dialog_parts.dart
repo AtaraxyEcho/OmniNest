@@ -512,4 +512,130 @@ extension _DesktopMediaImportDialogUI on _DesktopMediaImportDialogState {
     if (bytes >= 1000000) return '${(bytes / 1000000).toStringAsFixed(1)} MB';
     return '${(bytes / 1000).round().clamp(1, 999)} KB';
   }
+
+  Widget _rejectedReportCard(DesktopSkin skin) {
+    if (_rejectedItems.isEmpty) return const SizedBox.shrink();
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
+    final preview = _rejectedItems.take(6).toList(growable: false);
+    final overflow = _rejectedItems.length - preview.length;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+        decoration: BoxDecoration(
+          color: skin.bad.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: skin.bad.withValues(alpha: 0.30)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(DesktopIcons.info, size: 14, color: skin.bad),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    isZh
+                        ? '已过滤 ${_rejectedItems.length} 个未添加项目'
+                        : 'Filtered out ${_rejectedItems.length} unsupported items',
+                    style: DesktopType.denseStrong(skin.bad),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: _clearRejectedItems,
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      DesktopIcons.close,
+                      size: 13,
+                      color: skin.text2,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            for (final item in preview)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DesktopType.caption(skin.text2),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      item.reason == ImportRejectReason.emptyFile
+                          ? (isZh ? '空文件 (0 B)' : 'Empty file (0 B)')
+                          : (isZh
+                              ? '不支持的格式 .${item.extension.isEmpty ? '?' : item.extension}'
+                              : 'Unsupported format .${item.extension.isEmpty ? '?' : item.extension}'),
+                      style: DesktopType.caption(skin.bad),
+                    ),
+                  ],
+                ),
+              ),
+            if (overflow > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  isZh ? '另有 $overflow 项未显示' : '$overflow more items not shown',
+                  style: DesktopType.caption(skin.text3),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DashedRectPainter extends CustomPainter {
+  const _DashedRectPainter({
+    required this.color,
+    required this.radius,
+    required this.strokeWidth,
+  });
+
+  final Color color;
+  final double radius;
+  final double strokeWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth;
+    final rrect = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      Radius.circular(radius),
+    );
+    final path = Path()..addRRect(rrect);
+    const dashLength = 6.0;
+    const gapLength = 4.0;
+    for (final PathMetric metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final end = (distance + dashLength).clamp(0.0, metric.length);
+        canvas.drawPath(metric.extractPath(distance, end), paint);
+        distance += dashLength + gapLength;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedRectPainter oldDelegate) {
+    return oldDelegate.color != color ||
+        oldDelegate.radius != radius ||
+        oldDelegate.strokeWidth != strokeWidth;
+  }
 }

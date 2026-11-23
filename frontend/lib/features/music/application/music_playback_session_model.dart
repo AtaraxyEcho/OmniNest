@@ -22,3 +22,14 @@ class MusicPlaybackSession {
 }
 
 const Object _noChange = Object();
+
+/// 当前平台使用的音乐播放适配器。
+final musicAudioPlaybackProvider = Provider.autoDispose<MusicAudioPlayback>((
+  ref,
+) {
+  final player = createMusicAudioPlayer();
+  ref.onDispose(() => unawaited(player.dispose()));
+  return player;
+});
+
+/// 切歌加载中记下的一次跳转目标。

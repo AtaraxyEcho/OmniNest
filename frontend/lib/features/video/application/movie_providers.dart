@@ -110,7 +110,8 @@ final handledCompletedScanRunIdsProvider = Provider<Set<String>>(
   (ref) => <String>{},
 );
 
-typedef MediaTreeKey = ({String runId, String? parentNodeId, int page});
+typedef MediaTreeKey =
+    ({String runId, String? parentNodeId, int page, String scope});
 
 final mediaScanTreeProvider = FutureProvider.autoDispose
     .family<MediaPage<MediaScanTreeNode>, MediaTreeKey>((ref, key) {
@@ -120,6 +121,7 @@ final mediaScanTreeProvider = FutureProvider.autoDispose
           .mediaScanTree(
             runId: key.runId,
             parentNodeId: key.parentNodeId,
+            scope: key.scope,
             page: key.page,
           );
     });
@@ -285,3 +287,18 @@ final seriesFavoriteProvider = FutureProvider.autoDispose.family<bool, String>((
 ) {
   return ref.watch(movieApiProvider).seriesFavoriteStatus(seriesId);
 });
+
+final movieSeriesHistoryProvider = FutureProvider.autoDispose
+    .family<List<MovieWatchHistory>, String>((ref, seriesId) async {
+      try {
+        return await ref.watch(movieApiProvider).seriesHistory(seriesId);
+      } on Exception {
+        return const <MovieWatchHistory>[];
+      }
+    });
+
+/// 系列级刮削候选：按 seriesId 获取提供器候选列表。
+final seriesScrapeCandidatesProvider = FutureProvider.autoDispose
+    .family<List<VideoScrapeCandidate>, String>((ref, seriesId) {
+      return ref.watch(movieApiProvider).seriesScrapeCandidates(seriesId);
+    });

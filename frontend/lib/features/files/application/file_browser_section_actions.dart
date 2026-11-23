@@ -219,6 +219,8 @@ extension FileBrowserSectionActions on FileBrowserController {
           parentId: folder.id,
           sharedSpaceBreadcrumbs:
               breadcrumbs ?? [...currentBreadcrumbs, folder],
+          sharedUploadedByMe: false,
+          sharedSort: null,
           section:
               current?.section == FileManagerSection.sharedSpace
                   ? FileManagerSection.sharedSpace
@@ -248,6 +250,8 @@ extension FileBrowserSectionActions on FileBrowserController {
           files: page.items,
           parentId: null,
           sharedSpaceBreadcrumbs: const [],
+          sharedUploadedByMe: false,
+          sharedSort: null,
           section:
               current?.section == FileManagerSection.sharedSpace
                   ? FileManagerSection.sharedSpace
@@ -280,6 +284,8 @@ extension FileBrowserSectionActions on FileBrowserController {
           files: page.items,
           parentId: target.id,
           sharedSpaceBreadcrumbs: breadcrumbs.take(index + 1).toList(),
+          sharedUploadedByMe: false,
+          sharedSort: null,
           section:
               current?.section == FileManagerSection.sharedSpace
                   ? FileManagerSection.sharedSpace
@@ -388,6 +394,66 @@ extension FileBrowserSectionActions on FileBrowserController {
     });
   }
 
+  /// 共享空间快捷视图：最近更新（按 updatedAt,desc）。
+  Future<void> showSharedRecent() async {
+    _clearSelection();
+    _clearInspection();
+    await _runAction(FileOperation.loadSharedSpace, () async {
+      final current = _currentState;
+      final page = await _repository.listSharedSpaceFilesPage(
+        sort: 'updatedAt,desc',
+        page: 0,
+        size: current?.filePageSize ?? 10,
+      );
+      _emitState(
+        _liveOr(current).copyWith(
+          files: page.items,
+          parentId: null,
+          sharedSpaceBreadcrumbs: const [],
+          spaceType: 'SHARED',
+          section: FileManagerSection.allFiles,
+          sharedUploadedByMe: false,
+          sharedSort: 'updatedAt,desc',
+          searchQuery: '',
+          filePage: page.page,
+          filePageSize: page.size,
+          fileTotalElements: page.totalElements,
+          fileTotalPages: page.totalPages,
+        ),
+      );
+    });
+  }
+
+  /// 共享空间快捷视图：我上传的（uploadedByMe=true）。
+  Future<void> showSharedUploadedByMe() async {
+    _clearSelection();
+    _clearInspection();
+    await _runAction(FileOperation.loadSharedSpace, () async {
+      final current = _currentState;
+      final page = await _repository.listSharedSpaceFilesPage(
+        uploadedByMe: true,
+        page: 0,
+        size: current?.filePageSize ?? 10,
+      );
+      _emitState(
+        _liveOr(current).copyWith(
+          files: page.items,
+          parentId: null,
+          sharedSpaceBreadcrumbs: const [],
+          spaceType: 'SHARED',
+          section: FileManagerSection.allFiles,
+          sharedUploadedByMe: true,
+          sharedSort: null,
+          searchQuery: '',
+          filePage: page.page,
+          filePageSize: page.size,
+          fileTotalElements: page.totalElements,
+          fileTotalPages: page.totalPages,
+        ),
+      );
+    });
+  }
+
   Future<FileNodePage> _listFilePageForSpace({
     required String spaceType,
     required FileBrowserFileCategory category,
@@ -396,8 +462,11 @@ extension FileBrowserSectionActions on FileBrowserController {
     int size = 10,
   }) {
     if (spaceType == 'SHARED') {
+      final current = _currentState;
       return _repository.listSharedSpaceFilesPage(
         parentId: parentId,
+        uploadedByMe: current?.sharedUploadedByMe ?? false,
+        sort: current?.sharedSort,
         page: page,
         size: size,
       );
@@ -408,5 +477,169 @@ extension FileBrowserSectionActions on FileBrowserController {
       page: page,
       size: size,
     );
+  }
+
+  /// 桌面端独立跳页：按目标页码与每页条数替换当前页数据并同步分页元数据，
+  /// 不影响移动端既有的 `loadMore*` 滚动续载行为。
+  Future<void> goToPage(
+    FileManagerSection section, {
+    required int page,
+    int? size,
+  }) async {
+    final current = _currentState;
+    if (current == null || current.isBusy) {
+      return;
+    }
+    final targetPage = page < 0 ? 0 : page;
+    _clearSelection();
+    final navigation = _beginNavigation();
+    switch (section) {
+      case FileManagerSection.allFiles:
+        final targetSize = size ?? current.filePageSize;
+        await _runAction(FileOperation.refresh, () async {
+          final result = await _fetchSectionPage(
+            (p, s) => _listFilePageForSpace(
+              spaceType: current.spaceType,
+              parentId: current.parentId,
+              category: current.fileCategory,
+              page: p,
+              size: s,
+            ),
+            page: targetPage,
+            size: targetSize,
+          );
+          if (_isStaleNavigation(navigation)) {
+            return;
+          }
+          _emitState(
+            _liveOr(current).copyWith(
+              files: result.items,
+              filePage: result.page,
+              filePageSize: result.size,
+              fileTotalElements: result.totalElements,
+              fileTotalPages: result.totalPages,
+            ),
+          );
+        });
+      case FileManagerSection.sharedSpace:
+        final targetSize = size ?? current.filePageSize;
+        await _runAction(FileOperation.loadSharedSpace, () async {
+          final result = await _fetchSectionPage(
+            (p, s) => _repository.listSharedSpaceFilesPage(
+              parentId: current.parentId,
+              uploadedByMe: current.sharedUploadedByMe,
+              sort: current.sharedSort,
+              page: p,
+              size: s,
+            ),
+            page: targetPage,
+            size: targetSize,
+          );
+          if (_isStaleNavigation(navigation)) {
+            return;
+          }
+          _emitState(
+            _liveOr(current).copyWith(
+              files: result.items,
+              filePage: result.page,
+              filePageSize: result.size,
+              fileTotalElements: result.totalElements,
+              fileTotalPages: result.totalPages,
+            ),
+          );
+        });
+      case FileManagerSection.recent:
+        final targetSize = size ?? current.recentMeta.size;
+        await _runAction(FileOperation.loadRecent, () async {
+          final result = await _fetchSectionPage(
+            (p, s) => _repository.listRecentFilesPage(page: p, size: s),
+            page: targetPage,
+            size: targetSize,
+          );
+          if (_isStaleNavigation(navigation)) {
+            return;
+          }
+          _emitState(
+            _liveOr(current).copyWith(
+              recentFiles: result.items,
+              recentMeta: _metaOfNodePage(result),
+            ),
+          );
+        });
+      case FileManagerSection.favorites:
+        final targetSize = size ?? current.favoritesMeta.size;
+        await _runAction(FileOperation.loadFavorites, () async {
+          final result = await _fetchSectionPage(
+            (p, s) => _repository.listFavoriteFilesPage(page: p, size: s),
+            page: targetPage,
+            size: targetSize,
+          );
+          if (_isStaleNavigation(navigation)) {
+            return;
+          }
+          _emitState(
+            _liveOr(current).copyWith(
+              favoriteFiles: result.items,
+              favoritesMeta: _metaOfNodePage(result),
+            ),
+          );
+        });
+      case FileManagerSection.recycleBin:
+        final targetSize = size ?? current.recycleMeta.size;
+        final spaceType = current.spaceType;
+        await _runAction(FileOperation.loadRecycleBin, () async {
+          final result = await _fetchSectionPage(
+            (p, s) => _repository.listRecycleBinPage(
+              spaceType: spaceType,
+              page: p,
+              size: s,
+            ),
+            page: targetPage,
+            size: targetSize,
+          );
+          if (_isStaleNavigation(navigation)) {
+            return;
+          }
+          _emitState(
+            _liveOr(current).copyWith(
+              recycleBin: result.items,
+              recycleMeta: _metaOfNodePage(result),
+            ),
+          );
+        });
+      case FileManagerSection.sharedWithMe:
+        final targetSize = size ?? current.sharedWithMeMeta.size;
+        await _runAction(FileOperation.loadShared, () async {
+          var result = await _repository.listSharedWithMePage(
+            page: targetPage,
+            size: targetSize,
+          );
+          if (result.items.isEmpty &&
+              result.page > 0 &&
+              result.page >= result.totalPages) {
+            final lastPage = result.totalPages > 0 ? result.totalPages - 1 : 0;
+            result = await _repository.listSharedWithMePage(
+              page: lastPage,
+              size: targetSize,
+            );
+          }
+          if (_isStaleNavigation(navigation)) {
+            return;
+          }
+          _emitState(
+            _liveOr(current).copyWith(
+              sharedWithMe: result.items,
+              sharedWithMeMeta: FilesSubPageMeta(
+                page: result.page,
+                size: result.size,
+                totalElements: result.totalElements,
+                totalPages: result.totalPages,
+              ),
+            ),
+          );
+        });
+      default:
+        return;
+    }
   }
 }

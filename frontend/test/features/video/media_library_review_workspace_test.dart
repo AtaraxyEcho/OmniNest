@@ -60,6 +60,7 @@ Future<void> _pump(
             runId: run!.id,
             parentNodeId: null,
             page: 0,
+            scope: 'PENDING',
           )).overrideWith((ref) async => treePage),
       ],
       child: MaterialApp(
@@ -192,11 +193,13 @@ void main() {
             runId: 'run-1',
             parentNodeId: null,
             page: 0,
+            scope: 'PENDING',
           )).overrideWith((ref) async => folderPage),
           mediaScanTreeProvider((
             runId: 'run-1',
             parentNodeId: 'folder-1',
             page: 0,
+            scope: 'PENDING',
           )).overrideWith((ref) async => childPage),
         ],
         child: MaterialApp(

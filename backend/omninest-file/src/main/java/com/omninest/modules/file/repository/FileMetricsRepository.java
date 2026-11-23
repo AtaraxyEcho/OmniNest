@@ -161,6 +161,23 @@ public interface FileMetricsRepository extends JpaRepository<FileObject, UUID> {
     );
 
     /**
+     * 按空间类型汇总全空间活跃文件的 MIME 类型分布（用于共享空间分类占比条）。
+     *
+     * @param spaceType 空间类型
+     * @return MIME 类型、文件数和字节数
+     */
+    @Query("""
+            select n.mimeType, count(n), coalesce(sum(n.sizeBytes), 0)
+            from FileNode n
+            where n.spaceType = :spaceType
+              and n.deleted = false
+              and n.nodeType = 'FILE'
+              and (n.sourceType is null or n.sourceType not in ('DERIVED', 'LOCAL_FILESYSTEM'))
+            group by n.mimeType
+            """)
+    List<Object[]> aggregateFileStatsByMimeTypeInSpace(@Param("spaceType") SpaceType spaceType);
+
+    /**
      * 按指定用户汇总个人空间的实际存储用量，口径与配额写入侧一致。
      *
      * <p>写入侧只对用户内容加计配额（上传、转存、复制、背景图原片、照片编辑版本），

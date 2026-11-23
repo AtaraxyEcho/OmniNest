@@ -7,7 +7,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 
-part 'desktop_ambient_art_panel.dart';
+part 'desktop_ambient_editorial.dart';
 
 /// 浅色媒体页（非 Reader）底色。
 const Color desktopAmbientLightBaseColor = Color(0xFFF4F6F2);
@@ -538,4 +538,70 @@ class _DesktopAmbientMeshSurfaceState extends State<DesktopAmbientMeshSurface> {
       children: [mesh, ColoredBox(color: wash.withValues(alpha: washAlpha))],
     );
   }
+}
+
+/// 环境光场景资源解析：按路由与极性按需采样 4×3 色网并预解码艺术图（默认 220ms 软超时）。
+///
+/// 浅色非 Reader 路由传入 `skipMeshSampling: true`，完全跳过 4×3 色网采样；
+/// 任何解码超时或异常一律静默降级，由绘制层的 errorBuilder 与纸色兜底。
+Future<AmbientMeshGrid?> resolveAmbientSceneAssets({
+  required BuildContext context,
+  required String source,
+  required bool showArt,
+  required EditorialArtPreset artPreset,
+  ImageProvider<Object>? imageProvider,
+  AmbientMeshGrid? cachedGrid,
+  bool skipMeshSampling = false,
+  bool Function()? isCancelled,
+  Duration softTimeout = const Duration(milliseconds: 220),
+}) async {
+  if (isCancelled?.call() ?? false) {
+    return cachedGrid;
+  }
+  AmbientMeshGrid? resolvedGrid = cachedGrid;
+  final tasks = <Future<void>>[];
+
+  if (!skipMeshSampling && resolvedGrid == null) {
+    tasks.add(
+      DesktopAmbientMeshCache.instance
+          .sample(source, imageProvider: imageProvider)
+          .then((grid) {
+            if (isCancelled?.call() ?? false) return;
+            resolvedGrid = grid;
+          }),
+    );
+  }
+
+  if (showArt && context.mounted && !(isCancelled?.call() ?? false)) {
+    final ImageProvider<Object> baseProvider =
+        imageProvider ??
+        (source.startsWith('assets/')
+            ? AssetImage(source)
+            : NetworkImage(source));
+    final resized = ResizeImage(
+      baseProvider,
+      width: artPreset.decodeWidth,
+      policy: ResizeImagePolicy.fit,
+    );
+    tasks.add(
+      precacheImage(
+        resized,
+        context,
+        onError: (Object error, StackTrace? stackTrace) {
+          // 预解码失败静默降级，由 Image errorBuilder 兜底。
+        },
+      ).catchError((Object _) {}),
+    );
+  }
+
+  if (tasks.isNotEmpty) {
+    try {
+      await Future.wait<void>(tasks).timeout(softTimeout);
+    } on TimeoutException {
+      // 超过软超时即先行切换，避免慢网阻塞页面转场。
+    } on Object {
+      // 忽略偶发解码异常。
+    }
+  }
+  return resolvedGrid;
 }

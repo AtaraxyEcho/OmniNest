@@ -10,13 +10,14 @@ import 'package:flutter_test/flutter_test.dart';
 /// `ui::AXTree` 断链崩溃（"will not be in the tree and is not the new root"）。
 ///
 /// 本守卫扫描 `frontend/lib/` 下所有源码，要求：
-/// 1. 所有 `Opacity(`、`AnimatedOpacity(` 与 `FadeTransition(` 均显式设置
-///    `alwaysIncludeSemantics: true`，或处于 `ExcludeSemantics(` 子树内；
-/// 2. 所有 `AnimatedSwitcher(` 均使用 `excludeExitingSemanticsStack`，
-///    或处于 `ExcludeSemantics(` 子树内。
+/// 1. 所有 `Opacity(`、`AnimatedOpacity(`、`FadeTransition(`、`SliverOpacity(`
+///    与 `SliverFadeTransition(` 均显式设置 `alwaysIncludeSemantics: true`，
+///    或处于恒为 `excluding: true` 的 `ExcludeSemantics(` 子树内；
+/// 2. 所有 `AnimatedSwitcher(` 均在顶层参数使用 `excludeExitingSemanticsStack`，
+///    或处于恒为 `excluding: true` 的 `ExcludeSemantics(` 子树内。
 void main() {
   test(
-    'Opacity、AnimatedOpacity 与 FadeTransition 必须具备 alwaysIncludeSemantics: true 或位于 ExcludeSemantics 内',
+    'Opacity、AnimatedOpacity、FadeTransition、SliverOpacity 与 SliverFadeTransition 必须具备 alwaysIncludeSemantics: true 或位于静态 ExcludeSemantics 内',
     () {
       final offenders = _scanOpacityAndFadeOffenders();
       expect(
@@ -24,7 +25,7 @@ void main() {
         isEmpty,
         reason:
             '发现未开启 alwaysIncludeSemantics: true（且未包 ExcludeSemantics）的 '
-            'Opacity / AnimatedOpacity / FadeTransition，请补齐以防 Windows ui::AXTree 断链：\n'
+            'Opacity / AnimatedOpacity / FadeTransition / SliverOpacity / SliverFadeTransition，请补齐以防 Windows ui::AXTree 断链：\n'
             '${offenders.join('\n')}',
       );
     },
@@ -53,7 +54,7 @@ List<String> _scanOpacityAndFadeOffenders() {
   }
   final offenders = <String>[];
   final widgetPattern = RegExp(
-    r'(?<![A-Za-z0-9_\.])(Opacity|AnimatedOpacity|FadeTransition)\s*\(',
+    r'(?<![A-Za-z0-9_\.])(Opacity|AnimatedOpacity|FadeTransition|SliverOpacity|SliverFadeTransition)\s*\(',
   );
   final alwaysIncludePattern = RegExp(r'alwaysIncludeSemantics\s*:\s*true\b');
 
@@ -61,7 +62,7 @@ List<String> _scanOpacityAndFadeOffenders() {
     final path = file.path.replaceAll(r'\', '/');
     final raw = file.readAsStringSync();
     final masked = _maskCommentsAndStrings(raw);
-    final excludeSpans = _findCallSpans(masked, 'ExcludeSemantics');
+    final excludeSpans = _findSafeExcludeSemanticsSpans(masked);
 
     for (final match in widgetPattern.allMatches(masked)) {
       final widgetName = match.group(1)!;
@@ -95,7 +96,7 @@ List<String> _scanAnimatedSwitcherOffenders() {
     final path = file.path.replaceAll(r'\', '/');
     final raw = file.readAsStringSync();
     final masked = _maskCommentsAndStrings(raw);
-    final excludeSpans = _findCallSpans(masked, 'ExcludeSemantics');
+    final excludeSpans = _findSafeExcludeSemanticsSpans(masked);
 
     for (final match in switcherPattern.allMatches(masked)) {
       final openParen = match.end - 1;
@@ -106,8 +107,8 @@ List<String> _scanAnimatedSwitcherOffenders() {
         continue;
       }
 
-      final argsSlice = masked.substring(openParen, closeParen + 1);
-      if (!argsSlice.contains('excludeExitingSemanticsStack')) {
+      final topLevelArgs = _extractTopLevelArgs(masked, openParen, closeParen);
+      if (!topLevelArgs.contains('excludeExitingSemanticsStack')) {
         final line = _lineNumberAt(raw, match.start);
         offenders.add('$path:$line (AnimatedSwitcher)');
       }
@@ -222,13 +223,22 @@ String _maskCommentsAndStrings(String source) {
   return String.fromCharCodes(out);
 }
 
-List<(int, int)> _findCallSpans(String masked, String symbol) {
-  final pattern = RegExp('(?<![A-Za-z0-9_])$symbol\\s*\\(');
+/// 仅当 `ExcludeSemantics` 顶层参数不含 `excluding:` 或为常量 `excluding: true` 时，
+/// 才视为安全豁免区（避免 `excluding: someCondition` 在条件为 false 时放行漏检）。
+List<(int, int)> _findSafeExcludeSemanticsSpans(String masked) {
+  final pattern = RegExp(r'(?<![A-Za-z0-9_])ExcludeSemantics\s*\(');
+  final excludingParam = RegExp(r'(?<![A-Za-z0-9_])excluding\s*:');
+  final excludingTrueConst = RegExp(
+    r'(?<![A-Za-z0-9_])excluding\s*:\s*true\s*(?:,|$)',
+  );
   final spans = <(int, int)>[];
   for (final match in pattern.allMatches(masked)) {
     final openParen = match.end - 1;
     final closeParen = _findMatchingParen(masked, openParen);
-    if (closeParen != -1) {
+    if (closeParen == -1) continue;
+    final topLevelArgs = _extractTopLevelArgs(masked, openParen, closeParen);
+    if (!excludingParam.hasMatch(topLevelArgs) ||
+        excludingTrueConst.hasMatch(topLevelArgs)) {
       spans.add((openParen, closeParen));
     }
   }

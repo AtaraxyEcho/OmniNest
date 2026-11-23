@@ -54,10 +54,16 @@ public class SharedSpaceController {
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
     public ApiResponse<PageResponse<FileNodeDto>> listFiles(
             @RequestParam(required = false) UUID parentId,
+            @RequestParam(defaultValue = "false") boolean onlyFolders,
+            @RequestParam(defaultValue = "false") boolean uploadedByMe,
+            @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "100") int size) {
         UUID operatorId = currentUserContext.requireCurrentUserId();
-        var files = sharedSpaceService.listSharedSpaceFilesPage(parentId, operatorId, page, size);
+        var files = (onlyFolders || uploadedByMe || (sort != null && !sort.isBlank()))
+                ? sharedSpaceService.listSharedSpaceFilesPage(
+                        parentId, operatorId, onlyFolders, uploadedByMe, sort, page, size)
+                : sharedSpaceService.listSharedSpaceFilesPage(parentId, operatorId, page, size);
         List<FileNodeDto> dtos = fileNodeSupport.toNodeDtos(files.getContent(), operatorId);
         return ApiResponse.success(PageResponse.of(dtos, files.getNumber(), files.getSize(), files.getTotalElements()));
     }

@@ -12,11 +12,16 @@ abstract interface class FileRepository {
     required String mediaType,
   });
 
-  Future<List<FileNode>> listFiles({String? parentId, String? category});
+  Future<List<FileNode>> listFiles({
+    String? parentId,
+    String? category,
+    bool onlyFolders = false,
+  });
 
   Future<FileNodePage> listFilesPage({
     String? parentId,
     String? category,
+    bool onlyFolders = false,
     int page = 0,
     int size = 10,
   });
@@ -269,10 +274,18 @@ abstract interface class FileRepository {
   // ============================================================
 
   /// 浏览共享空间目录
-  Future<List<FileNode>> listSharedSpaceFiles({String? parentId});
+  Future<List<FileNode>> listSharedSpaceFiles({
+    String? parentId,
+    bool onlyFolders = false,
+    bool uploadedByMe = false,
+    String? sort,
+  });
 
   Future<FileNodePage> listSharedSpaceFilesPage({
     String? parentId,
+    bool onlyFolders = false,
+    bool uploadedByMe = false,
+    String? sort,
     int page = 0,
     int size = 10,
   });

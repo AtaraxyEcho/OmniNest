@@ -66,6 +66,10 @@ class MovieNfoServiceTest {
     @Mock
     private DerivedAssetStorageService derivedAssetStorageService;
     @Mock
+    private MediaContentAccessService mediaContentAccessService;
+    @Mock
+    private MediaLibraryAccessService mediaLibraryAccessService;
+    @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     @InjectMocks
@@ -84,7 +88,7 @@ class MovieNfoServiceTest {
         movie.setTitle("A & B <特别版>");
         movie.setOverview("剧情 & 概要");
         movie.setRuntimeSeconds(5_400);
-        when(videoItemRepository.findByIdAndOwnerUserId(VIDEO_ID, OWNER_ID)).thenReturn(Optional.of(item));
+        when(videoItemRepository.findById(VIDEO_ID)).thenReturn(Optional.of(item));
         when(movieRepository.findById(MOVIE_ID)).thenReturn(Optional.of(movie));
         when(nfoExportRepository.findTopByOwnerUserIdAndVideoItemIdOrderByUpdatedAtDesc(OWNER_ID, VIDEO_ID))
                 .thenReturn(Optional.empty());
@@ -122,7 +126,7 @@ class MovieNfoServiceTest {
         MediaVideoItem item = videoItem();
         item.setNfoPath(STORED_NODE_ID.toString());
         item.setNfoStatus(NfoStatus.GENERATED.getValue());
-        when(videoItemRepository.findByIdAndOwnerUserId(VIDEO_ID, OWNER_ID)).thenReturn(Optional.of(item));
+        when(mediaContentAccessService.requireReadableVideo(OWNER_ID, VIDEO_ID)).thenReturn(item);
         when(movieRepository.findById(MOVIE_ID)).thenReturn(Optional.of(new MediaMovie()));
 
         NfoExportDto dto = service.preview(OWNER_ID, VIDEO_ID);
@@ -137,7 +141,7 @@ class MovieNfoServiceTest {
     @Test
     @DisplayName("条目不存在时按媒体资源不存在拒绝")
     void exportRejectsMissingItem() {
-        when(videoItemRepository.findByIdAndOwnerUserId(VIDEO_ID, OWNER_ID)).thenReturn(Optional.empty());
+        when(videoItemRepository.findById(VIDEO_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.export(OWNER_ID, VIDEO_ID))
                 .isInstanceOf(BusinessException.class)

@@ -33,9 +33,18 @@ import 'package:omninest/core/widgets/mobile_status_kit.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/omni_icons.dart';
 
+import 'package:omninest/app/desktop/desktop_icons.dart';
+import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
+import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
+import 'package:omninest/app/desktop/widgets/desktop_select.dart';
+import 'package:omninest/app/theme/desktop/desktop_skin.dart';
+import 'package:omninest/app/theme/desktop/desktop_type.dart';
+
 part 'movie_admin_list.dart';
 part 'movie_admin_list_widgets.dart';
 part 'movie_admin_tasks.dart';
 part 'movie_library_access_management.dart';
 part 'movie_library_review.dart';
 part 'movie_library_management_components.dart';
+part 'desktop_video_library_source_drawer.dart';

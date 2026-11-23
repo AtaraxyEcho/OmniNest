@@ -1,5 +1,4 @@
 package com.omninest.modules.video.service;
-import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
@@ -9,6 +8,7 @@ import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.video.domain.MediaSubtitleTrack;
 import com.omninest.modules.video.domain.MediaVideoItem;
@@ -44,6 +44,7 @@ public class SubtitleManagementService {
     private final FileLifecycleGuard fileLifecycleGuard;
     private final FileQueryService fileQueryService;
     private final MediaContentAccessService mediaContentAccessService;
+    private final MediaLibraryAccessService mediaLibraryAccessService;
     private final MediaPlaybackTokenService mediaPlaybackTokenService;
     private final MediaSyncEventService syncEventService;
     private final DerivedAssetStorageService derivedAssetStorageService;
@@ -60,12 +61,13 @@ public class SubtitleManagementService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public SubtitleTrackDto upload(UUID ownerUserId, UUID videoItemId, SubtitleUploadRequest request) {
-        findVideoItem(ownerUserId, videoItemId);
-        validateSubtitleFile(ownerUserId, request.fileNodeId());
+    public SubtitleTrackDto upload(UUID operatorUserId, UUID videoItemId, SubtitleUploadRequest request) {
+        MediaVideoItem item = findWritableVideoItem(operatorUserId, videoItemId);
+        UUID catalogOwnerId = item.getOwnerUserId();
+        validateSubtitleFile(operatorUserId, request.fileNodeId());
 
         List<MediaSubtitleTrack> existing = subtitleTrackRepository
-                .findByOwnerUserIdAndVideoItemIdOrderBySortOrderAsc(ownerUserId, videoItemId);
+                .findByOwnerUserIdAndVideoItemIdOrderBySortOrderAsc(catalogOwnerId, videoItemId);
         int maxOrder = existing.stream()
                 .mapToInt(MediaSubtitleTrack::getSortOrder)
                 .max()
@@ -73,7 +75,7 @@ public class SubtitleManagementService {
 
         MediaSubtitleTrack track = new MediaSubtitleTrack();
         track.setId(UUID.randomUUID());
-        track.setOwnerUserId(ownerUserId);
+        track.setOwnerUserId(catalogOwnerId);
         track.setVideoItemId(videoItemId);
         track.setFileNodeId(request.fileNodeId());
         track.setLanguage(request.language() != null ? request.language() : "und");
@@ -81,13 +83,13 @@ public class SubtitleManagementService {
         track.setTrackKind(request.kind() != null ? request.kind() : "SUBTITLE");
         track.setSortOrder(maxOrder + 1);
         subtitleTrackRepository.save(track);
-        recordSubtitleEvent(ownerUserId, videoItemId);
-        return toDto(ownerUserId, track);
+        recordSubtitleEvent(catalogOwnerId, videoItemId);
+        return toDto(operatorUserId, track);
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public SubtitleTrackDto update(UUID ownerUserId, UUID subtitleId, SubtitleUpdateRequest request) {
-        MediaSubtitleTrack track = findTrack(ownerUserId, subtitleId);
+    public SubtitleTrackDto update(UUID operatorUserId, UUID subtitleId, SubtitleUpdateRequest request) {
+        MediaSubtitleTrack track = findWritableTrack(operatorUserId, subtitleId);
         if (request.language() != null) {
             track.setLanguage(request.language());
         }
@@ -98,20 +100,21 @@ public class SubtitleManagementService {
             track.setTrackKind(request.kind());
         }
         subtitleTrackRepository.save(track);
-        recordSubtitleEvent(ownerUserId, track.getVideoItemId());
-        return toDto(ownerUserId, track);
+        recordSubtitleEvent(track.getOwnerUserId(), track.getVideoItemId());
+        return toDto(track.getOwnerUserId(), operatorUserId, track);
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void delete(UUID ownerUserId, UUID subtitleId) {
-        MediaSubtitleTrack track = findTrack(ownerUserId, subtitleId);
+    public void delete(UUID operatorUserId, UUID subtitleId) {
+        MediaSubtitleTrack track = findWritableTrack(operatorUserId, subtitleId);
         // 只有内嵌提取的字幕（streamIndex 非空）挂着派生 .vtt 节点；用户上传的字幕
         // 只是引用个人网盘里的文件，删轨道不能动原文件。
         UUID extractedFileId = track.getStreamIndex() != null ? track.getFileNodeId() : null;
+        UUID catalogOwnerId = track.getOwnerUserId();
         subtitleTrackRepository.delete(track);
-        recordSubtitleEvent(ownerUserId, track.getVideoItemId());
+        recordSubtitleEvent(catalogOwnerId, track.getVideoItemId());
         if (extractedFileId != null) {
-            scheduleDerivedSubtitleCleanup(ownerUserId, extractedFileId);
+            scheduleDerivedSubtitleCleanup(catalogOwnerId, extractedFileId);
         }
     }
 
@@ -152,19 +155,42 @@ public class SubtitleManagementService {
         );
     }
 
-    private MediaSubtitleTrack findTrack(UUID ownerUserId, UUID subtitleId) {
+    private MediaSubtitleTrack findWritableTrack(UUID operatorUserId, UUID subtitleId) {
         MediaSubtitleTrack track = subtitleTrackRepository.findById(subtitleId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "字幕轨道不存在"));
-        if (!track.getOwnerUserId().equals(ownerUserId)) {
-            // 他人轨道按不存在处理，避免通过 403/404 差异枚举私有资源 UUID。
+        if (track.getOwnerUserId().equals(operatorUserId)) {
+            return track;
+        }
+        // 非轨道所有者仅当具备所属视频（共享库管理员）写权限时允许修改/删除；无读权限时仍按 404 处理。
+        try {
+            findWritableVideoItem(operatorUserId, track.getVideoItemId());
+            return track;
+        } catch (BusinessException exception) {
+            if (exception.errorCode() == ErrorCode.FORBIDDEN) {
+                throw exception;
+            }
             throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "字幕轨道不存在");
         }
-        return track;
     }
 
-    private MediaVideoItem findVideoItem(UUID ownerUserId, UUID videoItemId) {
-        return videoItemRepository.findByIdAndOwnerUserId(videoItemId, ownerUserId)
+    private MediaVideoItem findWritableVideoItem(UUID operatorUserId, UUID videoItemId) {
+        MediaVideoItem item = videoItemRepository.findById(videoItemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "媒体资源不存在"));
+        if (item.getOwnerUserId().equals(operatorUserId)) {
+            return item;
+        }
+        if (mediaContentAccessService.findReadableVideo(operatorUserId, videoItemId).isEmpty()) {
+            throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "媒体资源不存在");
+        }
+        if (item.getLibrarySourceId() != null) {
+            try {
+                mediaLibraryAccessService.requireManage(operatorUserId, item.getLibrarySourceId());
+                return item;
+            } catch (BusinessException exception) {
+                throw new BusinessException(ErrorCode.FORBIDDEN, "无权管理该媒体资源的字幕");
+            }
+        }
+        throw new BusinessException(ErrorCode.FORBIDDEN, "无权管理该媒体资源的字幕");
     }
 
     private void validateSubtitleFile(UUID ownerUserId, UUID fileNodeId) {
@@ -194,9 +220,21 @@ public class SubtitleManagementService {
     }
 
     private SubtitleTrackDto toDto(UUID ownerUserId, MediaSubtitleTrack track) {
+        return toDto(ownerUserId, ownerUserId, track);
+    }
+
+    private SubtitleTrackDto toDto(UUID primaryUserId, UUID fallbackUserId, MediaSubtitleTrack track) {
         String url = null;
         if (track.getFileNodeId() != null) {
-            url = fileQueryService.createDownloadUrlAs(ownerUserId, track.getFileNodeId()).downloadUrl();
+            try {
+                url = fileQueryService.createDownloadUrlAs(primaryUserId, track.getFileNodeId()).downloadUrl();
+            } catch (RuntimeException exception) {
+                if (fallbackUserId != null && !fallbackUserId.equals(primaryUserId)) {
+                    url = fileQueryService.createDownloadUrlAs(fallbackUserId, track.getFileNodeId()).downloadUrl();
+                } else {
+                    throw exception;
+                }
+            }
         }
         boolean embedded = track.getFileNodeId() == null;
         return new SubtitleTrackDto(

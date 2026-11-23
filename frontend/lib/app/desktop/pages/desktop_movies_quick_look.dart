@@ -6,8 +6,13 @@ void _showMovieQuickLook(
   AppLocalizations l10n,
   MovieVideoItem item,
 ) {
-  final yearText = item.year.trim();
-  final hasYear = yearText.isNotEmpty && yearText != '待识别';
+  final rawYear =
+      item.releaseDate?.year.toString() ??
+      item.metadata['year']?.toString().trim() ??
+      '';
+  final hasYear =
+      item.metadataStatus.toUpperCase() != 'PENDING' && rawYear.isNotEmpty;
+  final yearText = hasYear ? rawYear : '';
   final runtimeText = item.runtimeText.trim();
   final subtitle = [
     if (hasYear) yearText,

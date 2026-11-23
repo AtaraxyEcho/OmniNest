@@ -491,11 +491,13 @@ class SharedSpaceUsage {
     required this.usedBytes,
     required this.maxBytes,
     required this.fileCount,
+    this.typeDistribution = const <FileTypeStats>[],
   });
 
   final int usedBytes;
   final int maxBytes;
   final int fileCount;
+  final List<FileTypeStats> typeDistribution;
 
   bool get isUnlimited => maxBytes < 0;
 

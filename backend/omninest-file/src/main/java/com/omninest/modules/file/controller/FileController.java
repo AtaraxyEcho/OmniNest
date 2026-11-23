@@ -120,12 +120,15 @@ public class FileController {
     ApiResponse<PageResponse<FileNodeDto>> listFiles(
             @RequestParam(required = false) UUID parentId,
             @RequestParam(required = false) String category,
+            @RequestParam(defaultValue = "false") boolean onlyFolders,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "100") int size
     ) {
         size = PageClamps.safeSize(size, PageClamps.MAX_SIZE, 100);
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        var files = fileQueryService.listFilesPage(ownerUserId, parentId, category, page, size);
+        var files = onlyFolders
+                ? fileQueryService.listFilesPage(ownerUserId, parentId, category, true, page, size)
+                : fileQueryService.listFilesPage(ownerUserId, parentId, category, page, size);
         return ApiResponse.success(PageResponse.of(
                 files.getContent(),
                 files.getNumber(),

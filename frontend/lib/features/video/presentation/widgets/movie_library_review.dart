@@ -5,6 +5,15 @@ part of 'movie_management.dart';
 /// 媒体树为父子嵌套列表：文件夹节点原地展开并懒加载子节点，叶子节点
 /// 直接勾选；不再使用右侧详情面板与面包屑钻取。[treeHeight] 为媒体树
 /// 可视区高度，调用方按宿主窗口高度调整；默认值适配电影模块管理面板。
+enum _ReviewScope {
+  pending('PENDING'),
+  imported('IMPORTED'),
+  issues('ISSUES');
+
+  const _ReviewScope(this.apiValue);
+  final String apiValue;
+}
+
 class MediaLibraryReviewWorkspace extends ConsumerStatefulWidget {
   const MediaLibraryReviewWorkspace({
     required this.source,
@@ -27,6 +36,7 @@ class MediaLibraryReviewWorkspaceState
   String? _runId;
   int? _selectionRevision;
   int _page = 0;
+  _ReviewScope _scope = _ReviewScope.pending;
   bool _mutating = false;
 
   @override
@@ -106,10 +116,17 @@ class MediaLibraryReviewWorkspaceState
       );
     }
 
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
     final tree = ref.watch(
-      mediaScanTreeProvider((runId: run.id, parentNodeId: null, page: _page)),
+      mediaScanTreeProvider((
+        runId: run.id,
+        parentNodeId: null,
+        page: _page,
+        scope: _scope.apiValue,
+      )),
     );
-    return Column(
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _ReviewSummaryBar(
@@ -122,7 +139,27 @@ class MediaLibraryReviewWorkspaceState
                   ? () => _apply(run)
                   : null,
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
+        DesktopSeg<_ReviewScope>(
+          small: true,
+          options: _ReviewScope.values,
+          value: _scope,
+          labelOf:
+              (scope) => switch (scope) {
+                _ReviewScope.pending => isZh ? '待入库' : 'Pending',
+                _ReviewScope.imported => isZh ? '已入库' : 'Imported',
+                _ReviewScope.issues => isZh ? '需处理' : 'Issues',
+              },
+          onChanged: (next) {
+            if (next != _scope) {
+              setState(() {
+                _scope = next;
+                _page = 0;
+              });
+            }
+          },
+        ),
+        const SizedBox(height: 12),
         tree.when(
           loading: () => const LinearProgressIndicator(),
           error:
@@ -134,6 +171,13 @@ class MediaLibraryReviewWorkspaceState
           data: (page) => _buildTree(context, l10n, run, page),
         ),
       ],
+    );
+    return LayoutBuilder(
+      builder:
+          (context, constraints) =>
+              constraints.hasBoundedHeight
+                  ? SingleChildScrollView(child: content)
+                  : content,
     );
   }
 
@@ -177,6 +221,7 @@ class MediaLibraryReviewWorkspaceState
                           run: run,
                           node: node,
                           level: 0,
+                          scope: _scope.apiValue,
                           canSelect: canSelect,
                           onToggle:
                               (node, selected) =>
@@ -434,15 +479,17 @@ class _ReviewSummaryBar extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              OutlinedButton.icon(
+              DesktopButton(
+                label: l10n.videoSelectAllCandidates,
+                icon: DesktopIcons.tasks,
+                variant: DesktopButtonVariant.soft,
                 onPressed: mutating ? null : onSelectAll,
-                icon: const Icon(Icons.select_all_rounded),
-                label: Text(l10n.videoSelectAllCandidates),
               ),
-              TextButton.icon(
+              DesktopButton(
+                label: l10n.videoClearCandidateSelection,
+                icon: DesktopIcons.close,
+                variant: DesktopButtonVariant.ghost,
                 onPressed: mutating ? null : onClear,
-                icon: const Icon(Icons.deselect_rounded),
-                label: Text(l10n.videoClearCandidateSelection),
               ),
             ],
           ),
@@ -498,6 +545,7 @@ class _MediaTreeNodeTile extends ConsumerStatefulWidget {
     required this.run,
     required this.node,
     required this.level,
+    required this.scope,
     required this.canSelect,
     required this.onToggle,
   });
@@ -505,6 +553,7 @@ class _MediaTreeNodeTile extends ConsumerStatefulWidget {
   final MediaScanRun run;
   final MediaScanTreeNode node;
   final int level;
+  final String scope;
   final bool canSelect;
   final void Function(MediaScanTreeNode node, bool selected) onToggle;
 
@@ -545,6 +594,7 @@ class _MediaTreeNodeTileState extends ConsumerState<_MediaTreeNodeTile> {
                 runId: widget.run.id,
                 parentNodeId: node.nodeId,
                 page: _childPage,
+                scope: widget.scope,
               )),
             )
             : null;
@@ -660,6 +710,7 @@ class _MediaTreeNodeTileState extends ConsumerState<_MediaTreeNodeTile> {
                         run: widget.run,
                         node: child,
                         level: widget.level + 1,
+                        scope: widget.scope,
                         canSelect: widget.canSelect,
                         onToggle: widget.onToggle,
                       ),

@@ -18,7 +18,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 
-public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
+public interface FileNodeRepository extends JpaRepository<FileNode, UUID>, FileNodeFolderQueries {
 
     /**
      * 目录子项计数投影。

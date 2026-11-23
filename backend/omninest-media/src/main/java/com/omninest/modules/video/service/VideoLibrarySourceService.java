@@ -1,11 +1,13 @@
 package com.omninest.modules.video.service;
 
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.domain.StorageLocation;
+import com.omninest.modules.file.dto.LocalMediaScanEntry;
 import com.omninest.modules.file.dto.StorageLocationDtos.StorageDirectoryDto;
 import com.omninest.modules.file.service.StorageDirectoryService;
 import com.omninest.modules.file.service.StorageLocationService;
@@ -22,6 +24,8 @@ import com.omninest.modules.video.dto.MovieDtos.ScrapeTaskDto;
 import com.omninest.modules.video.dto.VideoLibrarySourceDtos.CreateVideoLibrarySourceRequest;
 import com.omninest.modules.video.dto.VideoLibrarySourceDtos.MountLibraryProvisionDto;
 import com.omninest.modules.video.dto.VideoLibrarySourceDtos.MountLibraryProvisionRequest;
+import com.omninest.modules.video.dto.VideoLibrarySourceDtos.ReclassifyVideoLibrarySourceDto;
+import com.omninest.modules.video.dto.VideoLibrarySourceDtos.ReclassifyVideoLibrarySourceRequest;
 import com.omninest.modules.video.dto.VideoLibrarySourceDtos.UpdateVideoLibrarySourceRequest;
 import com.omninest.modules.video.dto.VideoLibrarySourceDtos.VideoLibrarySourceDto;
 import com.omninest.modules.video.event.LocalVideoLibraryScanRequestedEvent;
@@ -34,9 +38,11 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -81,6 +87,8 @@ public class VideoLibrarySourceService {
     private final MediaLibraryAccessService accessService;
     private final MediaLibraryReviewService reviewService;
     private final MediaSyncEventService syncEventService;
+    private final LocalMediaLibraryClassifier classifier;
+    private final ReadThroughCache readThroughCache;
 
     /** 查询用户影视库来源。 */
     @Transactional(readOnly = true)
@@ -374,7 +382,7 @@ public class VideoLibrarySourceService {
                 ? MediaLibraryType.valueOf(source.getLibraryType())
                 : request.libraryType();
         if (source.getLastScannedCount() > 0 && !source.getLibraryType().equals(libraryType.name())) {
-            throw new BusinessException(ErrorCode.CONFLICT, "已发现的媒体库不能直接更改类型，请新建来源");
+            throw new BusinessException(ErrorCode.CONFLICT, "已发现的媒体库不能直接更改类型，请使用重新归类接口");
         }
         source.setName(normalizeName(request.name()));
         source.setRelativeRoot(relativeRoot);
@@ -390,6 +398,65 @@ public class VideoLibrarySourceService {
         VideoLibrarySourceDto updated = toDto(sourceRepository.save(source));
         recordSourceEvent(operatorUserId, sourceId);
         return updated;
+    }
+
+    /**
+     * 更新来源类型（可选）并按新分类规则原地重归类该来源下所有已入库的视频条目。
+     *
+     * <p>原地更新 {@code MediaVideoItem} 的作品归属，保留播放进度、观看历史与字幕，
+     * 并由分类器自动清理孤儿脏 {@code MediaMovie}。</p>
+     */
+    public ReclassifyVideoLibrarySourceDto reclassify(
+            UUID operatorUserId,
+            UUID sourceId,
+            ReclassifyVideoLibrarySourceRequest request
+    ) {
+        VideoLibrarySource source = accessService.requireManage(operatorUserId, sourceId);
+        if (ACTIVE_RUN_STATUSES.contains(source.getScanStatus())
+                || runRepository.existsByLibrarySourceIdAndStatusIn(sourceId, ACTIVE_RUN_STATUSES)) {
+            throw new BusinessException(ErrorCode.CONFLICT, "媒体发现或入库期间不能重新归类影视库来源");
+        }
+        if (request != null && request.libraryType() != null
+                && !request.libraryType().name().equals(source.getLibraryType())) {
+            source.setLibraryType(request.libraryType().name());
+            source = sourceRepository.save(source);
+        }
+        List<MediaVideoItemRepository.ReclassifySourceItemProjection> items =
+                videoItemRepository.findReclassifyItemsByLibrarySourceId(sourceId);
+        int processedCount = 0;
+        int updatedCount = 0;
+        int unmatchedCount = 0;
+        Set<UUID> touchedOwners = new LinkedHashSet<>();
+        if (source.getOwnerUserId() != null) {
+            touchedOwners.add(source.getOwnerUserId());
+        }
+        touchedOwners.add(operatorUserId);
+        for (MediaVideoItemRepository.ReclassifySourceItemProjection item : items) {
+            processedCount++;
+            UUID itemOwnerId = item.getOwnerUserId() != null ? item.getOwnerUserId() : source.getOwnerUserId();
+            if (itemOwnerId != null) {
+                touchedOwners.add(itemOwnerId);
+            }
+            String relativePath = item.getRelativePath() == null ? item.getFileName() : item.getRelativePath();
+            String fileName = item.getFileName() != null ? item.getFileName() : extractFileName(relativePath);
+            LocalMediaLibraryClassifier.ClassificationOutcome outcome = classifier.classify(
+                    itemOwnerId,
+                    source,
+                    new LocalMediaScanEntry(item.getFileNodeId(), relativePath, fileName)
+            );
+            if (outcome == LocalMediaLibraryClassifier.ClassificationOutcome.UNMATCHED) {
+                unmatchedCount++;
+            } else {
+                updatedCount++;
+            }
+        }
+        for (UUID ownerId : touchedOwners) {
+            readThroughCache.invalidate("omninest:dashboard:video:" + ownerId);
+        }
+        recordSourceEvent(operatorUserId, sourceId);
+        log.info("影视库来源重归类完成: sourceId={}, libraryType={}, processed={}, updated={}, unmatched={}",
+                sourceId, source.getLibraryType(), processedCount, updatedCount, unmatchedCount);
+        return new ReclassifyVideoLibrarySourceDto(toDto(source), processedCount, updatedCount, unmatchedCount);
     }
 
     /**
@@ -476,6 +543,15 @@ public class VideoLibrarySourceService {
             // 发现已成功收尾；自动入库失败只记录，不把扫描任务改判为失败。
             log.warn("媒体发现后自动入库未成功: scanRunId={}", event.scanRunId(), exception);
         }
+    }
+
+    private String extractFileName(String path) {
+        if (path == null || path.isBlank()) {
+            return "";
+        }
+        String normalized = path.replace('\\', '/');
+        int slash = normalized.lastIndexOf('/');
+        return slash >= 0 ? normalized.substring(slash + 1) : normalized;
     }
 
     private MediaLibraryType normalizeLibraryType(MediaLibraryType value) {

@@ -475,4 +475,60 @@ mixin MovieApiCatalog on MovieApiBase {
     );
     ensureEnvelopeSuccess(response.data, fallbackMessage: '收藏剧集失败');
   }
+
+  Future<List<VideoScrapeCandidate>> seriesScrapeCandidates(
+    String seriesId,
+  ) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/video/series/${Uri.encodeComponent(seriesId)}/scrape/candidates',
+      options: Options(
+        receiveTimeout: const Duration(seconds: 25),
+        extra: const {skipServerErrorRetryKey: true},
+      ),
+    );
+    return parseList(response.data).map(VideoScrapeCandidate.fromJson).toList();
+  }
+
+  Future<ScrapeTask> createSeriesScrapeTask({
+    required String seriesId,
+    bool force = false,
+    String? provider,
+    String? externalId,
+  }) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/video/series/${Uri.encodeComponent(seriesId)}/scrape/tasks',
+      data: {
+        'force': force,
+        if (provider != null && provider.isNotEmpty) 'provider': provider,
+        if (externalId != null && externalId.isNotEmpty)
+          'externalId': externalId,
+      },
+    );
+    return ScrapeTask.fromJson(parseData(response.data));
+  }
+
+  Future<void> probeSeries(String seriesId) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/video/series/${Uri.encodeComponent(seriesId)}/probe',
+    );
+    ensureEnvelopeSuccess(response.data, fallbackMessage: '探测剧集信息失败');
+  }
+
+  Future<NfoExport> seriesNfoPreview(String seriesId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/video/series/${Uri.encodeComponent(seriesId)}/nfo',
+    );
+    return NfoExport.fromJson(parseData(response.data));
+  }
+
+  Future<NfoExport> exportSeriesNfo(
+    String seriesId, {
+    bool includeEpisodes = false,
+  }) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/video/series/${Uri.encodeComponent(seriesId)}/nfo',
+      queryParameters: {if (includeEpisodes) 'includeEpisodes': true},
+    );
+    return NfoExport.fromJson(parseData(response.data));
+  }
 }

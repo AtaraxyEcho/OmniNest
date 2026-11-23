@@ -24,8 +24,14 @@ final desktopBackdropScopeProvider =
     );
 
 class DesktopBackdropScopeController extends Notifier<DesktopBackdropScope> {
+  bool _disposed = false;
+  bool _userSelected = false;
+
   @override
   DesktopBackdropScope build() {
+    _disposed = false;
+    _userSelected = false;
+    ref.onDispose(() => _disposed = true);
     unawaited(_restore());
     return DesktopBackdropScope.homeMusic;
   }
@@ -33,6 +39,9 @@ class DesktopBackdropScopeController extends Notifier<DesktopBackdropScope> {
   Future<void> _restore() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (_disposed || _userSelected) {
+        return;
+      }
       if (prefs.getString(_scopeKey) == DesktopBackdropScope.everywhere.name) {
         state = DesktopBackdropScope.everywhere;
       }
@@ -43,6 +52,7 @@ class DesktopBackdropScopeController extends Notifier<DesktopBackdropScope> {
   }
 
   Future<void> select(DesktopBackdropScope scope) async {
+    _userSelected = true;
     if (state == scope) {
       return;
     }

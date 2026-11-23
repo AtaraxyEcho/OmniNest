@@ -21,21 +21,32 @@ public class SimpleFileNameParser {
     private static final Pattern CN_PART_PATTERN = Pattern.compile(
             "第([一二三四五六七八九十百\\d]+)部");
 
-    /** 中文集: 第01集、第1话、第2話、第3回 等 */
+    /** 中文集: 第01集、第1话、第2話、第3回 等，支持 1~4 位长篇集号 */
     private static final Pattern CN_EPISODE_PATTERN = Pattern.compile(
-            "第(\\d{1,3})[集话話回]");
+            "第(\\d{1,4})[集话話回]");
 
     /** 中文季+集组合: 第1季03、第1季EP02 等；末尾必须不是字母或数字，避免吃掉年份前三位。 */
     private static final Pattern CN_SEASON_EPISODE_PATTERN = Pattern.compile(
-            "第([一二三四五六七八九十百\\d]+)[季部][\\s.\\-_]*(?:[Ee][Pp]?)?(\\d{1,3})(?![\\dA-Za-z])");
+            "第([一二三四五六七八九十百\\d]+)[季部][\\s.\\-_]*(?:[Ee][Pp]?)?(\\d{1,4})(?![\\dA-Za-z])");
 
-    /** 西方格式: S01E02、s1e2、S01.E02 等 */
+    /** 西方格式: S01E02、s1e2、S01.E02、S01EP105 等，集号放宽至 1~4 位 */
     private static final Pattern WESTERN_EPISODE_PATTERN = Pattern.compile(
-            "(?i)[Ss](\\d{1,2})[ ._-]?[Ee](\\d{1,2})");
+            "(?i)[Ss](\\d{1,2})[ ._-]?[Ee][Pp]?(\\d{1,4})(?![\\dA-Za-z])");
+
+    /** 显式单集格式: EP01、E01、EP 1089、E12v2 等（无季号时识别为分集） */
+    private static final Pattern EXPLICIT_EPISODE_PATTERN = Pattern.compile(
+            "(?i)(?:^|[\\s.\\-_\\[【(])(?:ep|e)[\\s.\\-_]?(\\d{1,4})(?:v\\d+)?(?=$|[\\s.\\-_\\]】)])");
+
+    /** 字幕组短横线集号格式: [Fansub] Title - 01 [1080p]、Title - 12v2 等 */
+    private static final Pattern FANSUB_DASH_EPISODE_PATTERN = Pattern.compile(
+            "(?:^|\\s)-\\s*(\\d{1,4})(?:v\\d+)?(?=$|[\\s.\\-_\\[【(])");
 
     /** 裸集数: 仅当已识别到季时，匹配末尾的 -01、_02、.03 等 */
     private static final Pattern BARE_EPISODE_PATTERN = Pattern.compile(
-            "[\\s.\\-_](\\d{1,3})(?![\\dA-Za-z])\\s*$");
+            "[\\s.\\-_](\\d{1,4})(?![\\dA-Za-z])\\s*$");
+
+    /** 字幕组/分辨率方括号标签 */
+    private static final Pattern BRACKETED_TAG_PATTERN = Pattern.compile("\\[[^]]*]|【[^】]*】");
 
     /** 常见视频标签 */
     private static final Pattern TAG_PATTERN = Pattern.compile(
@@ -57,12 +68,15 @@ public class SimpleFileNameParser {
         Integer episode = null;
         int titleEnd = baseName.length();
 
-        // 1. 中文季/部 + 集数组合（最高优先级）
+        // 1. 中文季/部 + 集数组合（最高优先级；排除紧随其后的 4 位年份或分辨率）
         Matcher cnComboMatcher = CN_SEASON_EPISODE_PATTERN.matcher(baseName);
         if (cnComboMatcher.find()) {
-            season = parseChineseNumber(cnComboMatcher.group(1));
-            episode = Integer.parseInt(cnComboMatcher.group(2));
-            titleEnd = cnComboMatcher.start();
+            int candidate = Integer.parseInt(cnComboMatcher.group(2));
+            if (!isYearOrResolution(candidate)) {
+                season = parseChineseNumber(cnComboMatcher.group(1));
+                episode = candidate;
+                titleEnd = cnComboMatcher.start();
+            }
         }
 
         // 2. 中文季（独立）
@@ -103,12 +117,40 @@ public class SimpleFileNameParser {
             titleEnd = Math.min(titleEnd, westernMatcher.start());
         }
 
-        // 6. 有季无集时，尝试末尾裸集数
+        // 6. 显式单集格式 EP## / E##
+        if (episode == null) {
+            Matcher explicitMatcher = EXPLICIT_EPISODE_PATTERN.matcher(baseName);
+            if (explicitMatcher.find()) {
+                int candidate = Integer.parseInt(explicitMatcher.group(1));
+                if (!isYearOrResolution(candidate)) {
+                    episode = candidate;
+                    titleEnd = Math.min(titleEnd, explicitMatcher.start());
+                }
+            }
+        }
+
+        // 7. 字幕组常见格式 [Fansub] Title - 01
+        if (episode == null) {
+            Matcher dashMatcher = FANSUB_DASH_EPISODE_PATTERN.matcher(baseName);
+            while (dashMatcher.find()) {
+                int candidate = Integer.parseInt(dashMatcher.group(1));
+                if (!isYearOrResolution(candidate)) {
+                    episode = candidate;
+                    titleEnd = Math.min(titleEnd, dashMatcher.start());
+                    break;
+                }
+            }
+        }
+
+        // 8. 有季无集时，尝试末尾裸集数
         if (season != null && episode == null) {
             Matcher bareMatcher = BARE_EPISODE_PATTERN.matcher(baseName);
             if (bareMatcher.find()) {
-                episode = Integer.parseInt(bareMatcher.group(1));
-                titleEnd = Math.min(titleEnd, bareMatcher.start());
+                int candidate = Integer.parseInt(bareMatcher.group(1));
+                if (!isYearOrResolution(candidate)) {
+                    episode = candidate;
+                    titleEnd = Math.min(titleEnd, bareMatcher.start());
+                }
             }
         }
 
@@ -128,8 +170,8 @@ public class SimpleFileNameParser {
             titleEnd = Math.min(titleEnd, yearStart);
         }
 
-        // 提取标题
-        String title = baseName.substring(0, titleEnd)
+        // 提取标题（先剥离方括号字幕组/清晰度标签）
+        String title = BRACKETED_TAG_PATTERN.matcher(baseName.substring(0, titleEnd)).replaceAll(" ")
                 .replace('.', ' ')
                 .replace('_', ' ')
                 .replace('-', ' ');
@@ -159,6 +201,14 @@ public class SimpleFileNameParser {
                 || lower.endsWith(".ts")
                 || lower.endsWith(".m2ts")
                 || lower.endsWith(".flv");
+    }
+
+    private boolean isYearOrResolution(int value) {
+        return (value >= 1900 && value <= 2099)
+                || value == 480
+                || value == 720
+                || value == 1080
+                || value == 2160;
     }
 
     private int parseChineseNumber(String text) {

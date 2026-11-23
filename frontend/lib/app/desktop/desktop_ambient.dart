@@ -9,7 +9,7 @@ import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 
-part 'desktop_ambient_plain.dart';
+part 'desktop_ambient_painters.dart';
 
 /// 原子环境光场景帧：将 4×3 色网与可选全出血艺术层打包为一个双缓冲单元。
 @immutable

@@ -248,12 +248,43 @@ public class ContentAssetService {
             String assetType,
             UUID fileNodeId
     ) {
+        return setPrimaryFileAsset(ownerUserId, ownerUserId, resourceId, resourceType, assetType, fileNodeId);
+    }
+
+    /**
+     * 从已入库文件设置主资源，支持共享媒体库非所有者管理员上传海报并写入资源所有者名下。
+     *
+     * @param ownerUserId 业务资源实际所有者 ID（ContentAsset 归属）
+     * @param fileOwnerUserId 提交该图片文件的操作者 ID（用于校验文件所有权）
+     * @param resourceId 业务资源 ID
+     * @param resourceType 业务资源类型
+     * @param assetType 资源类型
+     * @param fileNodeId 文件节点 ID
+     * @return 文件节点 ID
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public UUID setPrimaryFileAsset(
+            UUID ownerUserId,
+            UUID fileOwnerUserId,
+            UUID resourceId,
+            String resourceType,
+            String assetType,
+            UUID fileNodeId
+    ) {
         if (ownerUserId == null || resourceId == null || fileNodeId == null) {
             return null;
         }
-        // 入参来自用户提交的元数据表单：必须先确认文件归当前用户且是图片，
-        // 否则资源上会挂一个别人（或不存在的）文件，后续按公开资产分发时取到错图。
-        fileQueryService.validateOwnedImage(ownerUserId, fileNodeId);
+        // 入参来自用户提交的元数据表单：优先校验操作者拥有的上传图；跨所有者管理员恢复原始海报时回退校验资源所有者。
+        UUID validatorUserId = fileOwnerUserId == null ? ownerUserId : fileOwnerUserId;
+        try {
+            fileQueryService.validateOwnedImage(validatorUserId, fileNodeId);
+        } catch (RuntimeException exception) {
+            if (!validatorUserId.equals(ownerUserId)) {
+                fileQueryService.validateOwnedImage(ownerUserId, fileNodeId);
+            } else {
+                throw exception;
+            }
+        }
         ContentAsset asset = contentAssetRepository
                 .findPrimaryAsset(ownerUserId, resourceType, resourceId, assetType)
                 .orElse(null);

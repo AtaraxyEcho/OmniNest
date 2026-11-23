@@ -168,6 +168,8 @@ class FileBrowserState {
     this.favoriteFiles = const [],
     this.sharedSpaceBreadcrumbs = const [],
     this.sharedSpaceUsage,
+    this.sharedUploadedByMe = false,
+    this.sharedSort,
     this.sharedWithMe = const [],
     this.sharedWithMeMeta = const FilesSubPageMeta(),
     this.myShares = const [],
@@ -218,6 +220,8 @@ class FileBrowserState {
   final List<FileNode> recycleBin;
   final List<FileNode> sharedSpaceBreadcrumbs;
   final SharedSpaceUsage? sharedSpaceUsage;
+  final bool sharedUploadedByMe;
+  final String? sharedSort;
   final List<FileNode> breadcrumbs;
   final List<FileUploadSession> uploadSessions;
   final List<FileNode> recentFiles;
@@ -461,6 +465,8 @@ class FileBrowserState {
     List<FileNode>? sharedSpaceBreadcrumbs,
     SharedSpaceUsage? sharedSpaceUsage,
     bool clearSharedSpaceUsage = false,
+    bool? sharedUploadedByMe,
+    Object? sharedSort = _copyWithUnset,
     List<SharedFileItem>? sharedWithMe,
     FilesSubPageMeta? sharedWithMeMeta,
     List<FileShareLink>? myShares,
@@ -523,6 +529,11 @@ class FileBrowserState {
           clearSharedSpaceUsage
               ? null
               : (sharedSpaceUsage ?? this.sharedSpaceUsage),
+      sharedUploadedByMe: sharedUploadedByMe ?? this.sharedUploadedByMe,
+      sharedSort:
+          identical(sharedSort, _copyWithUnset)
+              ? this.sharedSort
+              : sharedSort as String?,
       sharedWithMe: sharedWithMe ?? this.sharedWithMe,
       sharedWithMeMeta: sharedWithMeMeta ?? this.sharedWithMeMeta,
       myShares: myShares ?? this.myShares,

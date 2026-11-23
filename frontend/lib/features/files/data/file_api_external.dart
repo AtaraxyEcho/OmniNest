@@ -227,14 +227,28 @@ mixin FileApiExternal on FileApiBase {
   // ============================================================
 
   /// 浏览共享空间目录
-  Future<List<FileNode>> listSharedSpaceFiles({String? parentId}) async {
+  Future<List<FileNode>> listSharedSpaceFiles({
+    String? parentId,
+    bool onlyFolders = false,
+    bool uploadedByMe = false,
+    String? sort,
+  }) async {
     // 非分页遗留入口按后端分页上限取近似全量首页。
-    final page = await listSharedSpaceFilesPage(parentId: parentId, size: 200);
+    final page = await listSharedSpaceFilesPage(
+      parentId: parentId,
+      onlyFolders: onlyFolders,
+      uploadedByMe: uploadedByMe,
+      sort: sort,
+      size: 200,
+    );
     return page.items;
   }
 
   Future<FileNodePage> listSharedSpaceFilesPage({
     String? parentId,
+    bool onlyFolders = false,
+    bool uploadedByMe = false,
+    String? sort,
     int page = 0,
     int size = 10,
   }) async {
@@ -242,6 +256,9 @@ mixin FileApiExternal on FileApiBase {
       '/shared-space/files',
       queryParameters: {
         if (parentId != null) 'parentId': parentId,
+        if (onlyFolders) 'onlyFolders': true,
+        if (uploadedByMe) 'uploadedByMe': true,
+        if (sort != null && sort.isNotEmpty) 'sort': sort,
         'page': page,
         'size': size,
       },
@@ -317,10 +334,31 @@ mixin FileApiExternal on FileApiBase {
       '/shared-space/usage',
     );
     final data = parseData(response.data);
+    final rawTypes = data['typeDistribution'];
+    final typeDistribution =
+        rawTypes is List
+            ? rawTypes
+                .whereType<Map<String, dynamic>>()
+                .map(
+                  (item) => FileTypeStats(
+                    category:
+                        item['category']?.toString() ?? AppErrorCodes.other,
+                    count: FileApiBase._responseParser.asInt(item['count']),
+                    sizeBytes: FileApiBase._responseParser.asInt(
+                      item['sizeBytes'],
+                    ),
+                  ),
+                )
+                .toList()
+            : <FileTypeStats>[];
+    typeDistribution.sort(
+      (left, right) => right.sizeBytes.compareTo(left.sizeBytes),
+    );
     return SharedSpaceUsage(
       usedBytes: FileApiBase._responseParser.asInt(data['usedBytes']),
       maxBytes: FileApiBase._responseParser.asInt(data['maxBytes']),
       fileCount: FileApiBase._responseParser.asInt(data['fileCount']),
+      typeDistribution: List<FileTypeStats>.unmodifiable(typeDistribution),
     );
   }
 }

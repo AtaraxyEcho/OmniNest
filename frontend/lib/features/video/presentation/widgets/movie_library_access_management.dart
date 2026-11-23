@@ -10,7 +10,11 @@ class MediaLibraryAccessPanel extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final access = ref.watch(mediaLibraryAccessProvider(source.id));
     return access.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading:
+          () => const Padding(
+            padding: EdgeInsets.all(32),
+            child: Center(child: CircularProgressIndicator()),
+          ),
       error:
           (error, _) => SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -73,11 +77,15 @@ class _MediaLibraryAccessFormState
     final users = ref.watch(
       mediaLibraryAccessUsersProvider((query: _query, page: _page)),
     );
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-          sliver: SliverList.list(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               RadioGroup<MediaLibraryVisibility>(
                 groupValue: _visibility,
@@ -88,6 +96,7 @@ class _MediaLibraryAccessFormState
                   setState(() => _visibility = value);
                 },
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children:
                       MediaLibraryVisibility.values
                           .map(
@@ -146,44 +155,37 @@ class _MediaLibraryAccessFormState
         ),
         if (_visibility == MediaLibraryVisibility.selectedUsers)
           ...users.when<List<Widget>>(
-            loading:
-                () => const [
-                  SliverToBoxAdapter(child: LinearProgressIndicator()),
-                ],
+            loading: () => const [LinearProgressIndicator()],
             error:
                 (error, _) => [
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    sliver: SliverToBoxAdapter(
-                      child: MovieNoticePanel(
-                        icon: Icons.error_outline_rounded,
-                        title: l10n.videoLibraryAccessUsersFailed,
-                        message: movieErrorMessage(
-                          error,
-                          AppLocalizations.of(context),
-                        ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: MovieNoticePanel(
+                      icon: Icons.error_outline_rounded,
+                      title: l10n.videoLibraryAccessUsersFailed,
+                      message: movieErrorMessage(
+                        error,
+                        AppLocalizations.of(context),
                       ),
                     ),
                   ),
                 ],
-            data: (page) => _userSlivers(page, l10n),
+            data: (page) => _userWidgets(page, l10n),
           ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-          sliver: SliverToBoxAdapter(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                onPressed: _saving ? null : _save,
-                icon:
-                    _saving
-                        ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                        : const Icon(Icons.save_outlined),
-                label: Text(l10n.videoLibraryAccessSave),
-              ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 16, 4, 4),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: _saving ? null : _save,
+              icon:
+                  _saving
+                      ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.save_outlined),
+              label: Text(l10n.videoLibraryAccessSave),
             ),
           ),
         ),
@@ -191,34 +193,53 @@ class _MediaLibraryAccessFormState
     );
   }
 
-  /// 用户候选列表用 SliverList.builder 惰性构建，分页再多也不会一次性建完整棵子树。
-  List<Widget> _userSlivers(
+  /// 用户候选列表交给外层 DesktopDrawerFrame / WorkstationDialogFrame 统一滚动。
+  List<Widget> _userWidgets(
     MediaPage<MediaLibraryUserCandidate> page,
     AppLocalizations l10n,
   ) {
     if (page.items.isEmpty) {
       return [
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-          sliver: SliverToBoxAdapter(
-            child: Text(
-              l10n.videoLibraryAccessNoUsers,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: context.videoColors.onSurfaceVariant),
-            ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 20),
+          child: Text(
+            l10n.videoLibraryAccessNoUsers,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: context.videoColors.onSurfaceVariant),
           ),
         ),
       ];
     }
     final hasPages = page.totalPages > 1;
     return [
-      SliverPadding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        sliver: SliverList.builder(
-          itemCount: page.items.length + (hasPages ? 1 : 0),
-          itemBuilder: (context, index) {
-            if (index == page.items.length) {
-              return Row(
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final user in page.items)
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _selectedUserIds.contains(user.id),
+                onChanged:
+                    _saving
+                        ? null
+                        : (value) => setState(() {
+                          final next = {..._selectedUserIds};
+                          if (value == true) {
+                            next.add(user.id);
+                          } else {
+                            next.remove(user.id);
+                          }
+                          _selectedUserIds = next;
+                        }),
+                title: Text(
+                  user.displayName.isEmpty ? user.username : user.displayName,
+                ),
+                subtitle: Text('@${user.username}'),
+              ),
+            if (hasPages)
+              Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   IconButton(
@@ -239,31 +260,8 @@ class _MediaLibraryAccessFormState
                     icon: const Icon(Icons.chevron_right_rounded),
                   ),
                 ],
-              );
-            }
-            final user = page.items[index];
-            final selected = _selectedUserIds.contains(user.id);
-            return CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              value: selected,
-              onChanged:
-                  _saving
-                      ? null
-                      : (value) => setState(() {
-                        final next = {..._selectedUserIds};
-                        if (value == true) {
-                          next.add(user.id);
-                        } else {
-                          next.remove(user.id);
-                        }
-                        _selectedUserIds = next;
-                      }),
-              title: Text(
-                user.displayName.isEmpty ? user.username : user.displayName,
               ),
-              subtitle: Text('@${user.username}'),
-            );
-          },
+          ],
         ),
       ),
     ];

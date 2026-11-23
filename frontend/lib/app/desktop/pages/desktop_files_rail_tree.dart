@@ -1,13 +1,6 @@
 part of 'desktop_files_page.dart';
 
-/// 文件夹树：根级一次拉取，展开时才拉子级。
-///
-/// 后端没有"整棵树"接口，逐层加载是唯一不造重复请求的做法；树只是导航辅助，
-/// 取数失败时静默留空，不阻断主列表。
-///
-/// 与样例的同步语义：样例树直接从同一份 `files` 状态派生，新建目录后立刻
-/// 出现在树上。这里保留逐层接口，但把当前目录的文件夹签名（id + 名称集）
-/// 作为失效依据——列表一变化就丢掉该层缓存并重取，避免"列表有、树没有"。
+/// 文件夹树：根级一次拉取，展开时才拉子级；展平后虚拟化渲染并内置树顶工具条。
 class _FolderTree extends ConsumerStatefulWidget {
   const _FolderTree({
     super.key,
@@ -16,6 +9,9 @@ class _FolderTree extends ConsumerStatefulWidget {
     required this.onOpen,
     required this.onSection,
     required this.onMoveFiles,
+    this.onNewFolder,
+    this.leadingItems = const <Widget>[],
+    this.trailingItems = const <Widget>[],
   });
 
   final FileBrowserState? state;
@@ -24,18 +20,27 @@ class _FolderTree extends ConsumerStatefulWidget {
   final VoidCallback onSection;
   final Future<void> Function(List<String> ids, String targetParentId)
   onMoveFiles;
+  final VoidCallback? onNewFolder;
+  final List<Widget> leadingItems;
+  final List<Widget> trailingItems;
 
   @override
   ConsumerState<_FolderTree> createState() => _FolderTreeState();
 }
 
 class _FolderTreeState extends ConsumerState<_FolderTree> {
+  static const double _maxIndent = 72.0;
+
+  final ScrollController _scrollController = ScrollController();
+  final TextEditingController _filterController = TextEditingController();
   final Map<String, List<FileNode>> _children = <String, List<FileNode>>{};
   final Set<String> _open = <String>{};
   final Map<String, FocusNode> _focusNodes = <String, FocusNode>{};
   final Map<String, String> _parentSignatures = <String, String>{};
   final Map<String, int> _fetchGenerations = <String, int>{};
   bool _loadedRoot = false;
+  bool _filterExpanded = false;
+  String _filterQuery = '';
   String? _lastParentKey;
   String? _lastSpaceType;
 
@@ -46,8 +51,6 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
   @override
   void initState() {
     super.initState();
-    // 禁止在 widget.state == null 时首帧抢跑 _load(null)；
-    // 若首帧已拿到有效 state，直接同步种子化根目录文件夹。
     if (widget.state != null) {
       _syncWithState();
     }
@@ -64,9 +67,9 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
   @override
   void dispose() {
     _hoverTimer?.cancel();
-    for (final node in _focusNodes.values) {
-      node.dispose();
-    }
+    _scrollController.dispose();
+    _filterController.dispose();
+    _disposeAllFocusNodes();
     super.dispose();
   }
 
@@ -74,6 +77,21 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
     id,
     () => FocusNode(debugLabel: 'files-tree-$id'),
   );
+
+  void _disposeAllFocusNodes() {
+    for (final node in _focusNodes.values) {
+      node.dispose();
+    }
+    _focusNodes.clear();
+  }
+
+  void _pruneFocusNodes(Set<String> keepIds) {
+    final staleIds =
+        _focusNodes.keys.where((id) => !keepIds.contains(id)).toList();
+    for (final id in staleIds) {
+      _focusNodes.remove(id)?.dispose();
+    }
+  }
 
   Future<void> _load(String? parentId) async {
     if (widget.state == null) {
@@ -102,6 +120,7 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
       final nodes = await controller.listFolderOptions(
         key.isEmpty ? null : key,
         shared: widget.state?.spaceType == 'SHARED',
+        onlyFolders: true,
       );
       if (!mounted || _fetchGenerations[key] != generation) {
         return;
@@ -124,7 +143,6 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
     }
   }
 
-  /// 样例 `treeFolders` 用 `localeCompare(numeric: true)` 按名称排序。
   static List<FileNode> _sortedFolders(List<FileNode> nodes) {
     final folders = nodes.where((node) => node.isFolder).toList();
     folders.sort(
@@ -133,7 +151,6 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
     return List<FileNode>.unmodifiable(folders);
   }
 
-  /// 当前目录的文件夹签名：列表新增/删除/改名都会改变它。
   static String _signatureOf(List<FileNode> nodes) {
     final folders =
         nodes.where((node) => node.isFolder).toList()
@@ -141,15 +158,19 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
     return folders.map((node) => '${node.id}:${node.name}').join('|');
   }
 
-  /// 列表状态与树缓存的同步：首次拿到有效 state 时同步种子化根层，零清空零塌缩；
-  /// 仅真实空间切换时才清空重拉；当前目录变化或文件夹集变化时按签名局部刷新。
+  /// 阶梯收敛缩进：前 5 层每层 12px，第 6 层起每层 4px，总缩进钳制在 72px。
+  static double _indentForDepth(int depth) {
+    final level = math.max(0, depth - 1);
+    final stepped = math.min(level, 5) * 12.0 + math.max(0, level - 5) * 4.0;
+    return math.min(stepped, _maxIndent);
+  }
+
   void _syncWithState() {
     final state = widget.state;
     if (state == null) {
       return;
     }
 
-    // 首次拿到有效 state：记录初始空间并直接种子化根目录，避免误判为空间切换。
     if (_lastSpaceType == null) {
       _lastSpaceType = state.spaceType;
       if (state.section == FileManagerSection.allFiles) {
@@ -160,7 +181,6 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
         if (parentKey.isEmpty) {
           _children[''] = _sortedFolders(state.files);
           _loadedRoot = true;
-          // 若根目录分页未取全，后台静默补全，签名未变时不会触发重绘。
           if (state.fileTotalElements > state.files.length) {
             _scheduleReload('');
           }
@@ -187,6 +207,10 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
       _children.clear();
       _parentSignatures.clear();
       _open.clear();
+      _disposeAllFocusNodes();
+      _filterQuery = '';
+      _filterExpanded = false;
+      _filterController.clear();
       _lastParentKey = state.parentId ?? '';
       final parentKey = state.parentId ?? '';
       if (parentKey.isEmpty) {
@@ -216,15 +240,12 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
     }
     _parentSignatures[parentKey] = signature;
     if (known == null) {
-      // 第一次看到这一层：缓存若存在（之前展开过），按最新列表重取。
       if (_children.containsKey(parentKey)) {
         _scheduleReload(parentKey);
       }
       return;
     }
     if (known != signature) {
-      // 文件夹移动会同时改变来源与目标层。刷新树上当前可见的每层，避免
-      // 只刷新当前列表所在目录而把另一侧已展开的子树留在旧状态。
       _scheduleReloadVisibleLayers();
     } else if (parentChanged && _children.containsKey(parentKey)) {
       _scheduleReload(parentKey);
@@ -238,7 +259,6 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
     }
   }
 
-  /// 树内跨分支移动不会改变当前主列表层级；在移动请求结束后显式重取已展开节点。
   void refreshAfterMove() => _scheduleReloadVisibleLayers();
 
   void _scheduleReload(String key) {
@@ -253,11 +273,75 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
     setState(() {
       if (_open.contains(folder.id)) {
         _open.remove(folder.id);
+        final keepIds =
+            _flattenVisibleNodes().map((node) => node.folder.id).toSet();
+        _pruneFocusNodes(keepIds);
       } else {
         _open.add(folder.id);
-        // 展开时重取这一层：目录内容可能在别处被改过（上传/新建/移动）。
         unawaited(_reload(folder.id));
       }
+    });
+  }
+
+  void _collapseAll() {
+    if (_open.isEmpty) {
+      return;
+    }
+    setState(() {
+      _open.clear();
+      final rootIds =
+          (_children[''] ?? const <FileNode>[]).map((node) => node.id).toSet();
+      _pruneFocusNodes(rootIds);
+    });
+  }
+
+  Future<void> _revealActiveFolder() async {
+    final state = widget.state;
+    final activeId = widget.currentId;
+    if (state == null || activeId == null) {
+      return;
+    }
+    final crumbs =
+        state.spaceType == 'SHARED'
+            ? state.sharedSpaceBreadcrumbs
+            : state.breadcrumbs;
+    final ancestorIds = <String>[
+      for (final node in crumbs)
+        if (node.id != activeId) node.id,
+    ];
+    setState(() {
+      if (_filterQuery.isNotEmpty) {
+        _filterQuery = '';
+        _filterController.clear();
+      }
+      _open.addAll(ancestorIds);
+    });
+    if (!_children.containsKey('')) {
+      await _load(null);
+    }
+    for (final id in ancestorIds) {
+      if (!mounted) return;
+      if (!_children.containsKey(id)) {
+        await _load(id);
+      }
+    }
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final nodes = _flattenVisibleNodes();
+      final index = nodes.indexWhere((node) => node.folder.id == activeId);
+      if (index < 0) return;
+      final target = (index * _FilesRailGeometry.nodeHeight).clamp(
+        0.0,
+        _scrollController.position.maxScrollExtent,
+      );
+      unawaited(
+        _scrollController.animateTo(
+          target,
+          duration: DesktopMotion.of(context, DesktopMotion.soft),
+          curve: DesktopMotion.ease,
+        ),
+      );
     });
   }
 
@@ -287,34 +371,258 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
     }
   }
 
+  /// 将可见树节点展平为线性列表，支持目录快速过滤。
+  List<_VisibleTreeNode> _flattenVisibleNodes() {
+    final root = _children[''] ?? const <FileNode>[];
+    final query = _filterQuery.trim().toLowerCase();
+    final result = <_VisibleTreeNode>[];
+
+    bool collect(FileNode folder, int depth, List<FileNode> path) {
+      final children = _children[folder.id] ?? const <FileNode>[];
+      if (query.isEmpty) {
+        result.add(_VisibleTreeNode(folder: folder, depth: depth, path: path));
+        if (_open.contains(folder.id)) {
+          final nextPath = [...path, folder];
+          for (final child in children) {
+            collect(child, depth + 1, nextPath);
+          }
+        }
+        return true;
+      }
+      final selfMatches = folder.name.toLowerCase().contains(query);
+      final childStart = result.length;
+      final nextPath = [...path, folder];
+      var descendantMatches = false;
+      for (final child in children) {
+        if (collect(child, depth + 1, nextPath)) {
+          descendantMatches = true;
+        }
+      }
+      if (selfMatches || descendantMatches) {
+        result.insert(
+          childStart,
+          _VisibleTreeNode(folder: folder, depth: depth, path: path),
+        );
+        return true;
+      }
+      return false;
+    }
+
+    for (final folder in root) {
+      collect(folder, 1, const <FileNode>[]);
+    }
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     final root = _children[''] ?? const <FileNode>[];
-    if (_loadedRoot && root.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    if (!_loadedRoot) {
-      return const SizedBox(height: 4);
-    }
+    final visibleNodes =
+        _loadedRoot ? _flattenVisibleNodes() : const <_VisibleTreeNode>[];
+    final shared = widget.state?.spaceType == 'SHARED';
+    final showToolbar = _loadedRoot && root.isNotEmpty;
+
+    return CustomScrollView(
+      controller: _scrollController,
+      slivers: [
+        if (widget.leadingItems.isNotEmpty)
+          SliverList(delegate: SliverChildListDelegate(widget.leadingItems)),
+        if (showToolbar) SliverToBoxAdapter(child: _buildToolbar(context)),
+        if (!_loadedRoot)
+          const SliverToBoxAdapter(child: SizedBox(height: 4))
+        else if (root.isEmpty)
+          SliverToBoxAdapter(
+            child:
+                shared
+                    ? _buildSharedEmptyGuide(context)
+                    : const SizedBox.shrink(),
+          )
+        else if (visibleNodes.isEmpty)
+          SliverToBoxAdapter(child: _buildFilterEmptyHint(context))
+        else
+          SliverFixedExtentList.builder(
+            itemExtent: _FilesRailGeometry.nodeHeight,
+            itemCount: visibleNodes.length,
+            itemBuilder:
+                (context, index) => _buildVisibleRow(visibleNodes[index]),
+          ),
+        if (widget.trailingItems.isNotEmpty)
+          SliverList(delegate: SliverChildListDelegate(widget.trailingItems)),
+      ],
+    );
+  }
+
+  Widget _buildToolbar(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
+    final hasActive = widget.currentId != null;
+    final hasOpen = _open.isNotEmpty;
     return Padding(
-      padding: const EdgeInsets.only(top: 2),
+      padding: const EdgeInsets.fromLTRB(6, 2, 4, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [for (final folder in root) ..._buildNode(folder, 1)],
+        children: [
+          Row(
+            children: [
+              const Spacer(),
+              _TreeMiniAction(
+                icon: DesktopIcons.filter,
+                tooltip: isZh ? '筛选目录' : 'Filter folders',
+                active: _filterExpanded || _filterQuery.isNotEmpty,
+                onTap: () {
+                  setState(() {
+                    _filterExpanded = !_filterExpanded;
+                    if (!_filterExpanded && _filterQuery.isNotEmpty) {
+                      _filterQuery = '';
+                      _filterController.clear();
+                    }
+                  });
+                },
+              ),
+              _TreeMiniAction(
+                icon: DesktopIcons.pin,
+                tooltip: isZh ? '定位当前目录' : 'Reveal active folder',
+                enabled: hasActive,
+                onTap: () => unawaited(_revealActiveFolder()),
+              ),
+              _TreeMiniAction(
+                icon: DesktopIcons.chevUp,
+                tooltip: isZh ? '全部折叠' : 'Collapse all',
+                enabled: hasOpen,
+                onTap: _collapseAll,
+              ),
+            ],
+          ),
+          if (_filterExpanded)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 2),
+              child: Container(
+                height: 28,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: skin.raise,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: skin.line),
+                ),
+                child: Row(
+                  children: [
+                    Icon(DesktopIcons.search, size: 13, color: skin.text3),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: TextField(
+                        controller: _filterController,
+                        onChanged:
+                            (value) => setState(() => _filterQuery = value),
+                        style: DesktopType.caption(skin.text),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                          hintText: isZh ? '过滤已加载目录…' : 'Filter folders…',
+                          hintStyle: DesktopType.caption(skin.text3),
+                        ),
+                      ),
+                    ),
+                    if (_filterQuery.isNotEmpty)
+                      GestureDetector(
+                        onTap: () {
+                          _filterController.clear();
+                          setState(() => _filterQuery = '');
+                        },
+                        child: Icon(
+                          DesktopIcons.close,
+                          size: 13,
+                          color: skin.text3,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
 
-  List<Widget> _buildNode(
-    FileNode folder,
-    int depth, [
-    List<FileNode> path = const <FileNode>[],
-  ]) {
+  Widget _buildSharedEmptyGuide(BuildContext context) {
     final skin = DesktopSkin.of(context);
-    final children = _children[folder.id];
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: skin.raise,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: skin.line),
+        ),
+        child: Row(
+          children: [
+            Icon(DesktopIcons.folder, size: 14, color: skin.text3),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                isZh ? '暂无子文件夹' : 'No subfolders yet',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: DesktopType.caption(skin.text3),
+              ),
+            ),
+            if (widget.onNewFolder != null)
+              DesktopHover(
+                builder:
+                    (context, hovered) => GestureDetector(
+                      onTap: widget.onNewFolder,
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color:
+                              hovered
+                                  ? skin.accentWash(0.18)
+                                  : skin.accentWash(0.10),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          isZh ? '新建文件夹' : 'New folder',
+                          style: DesktopType.nano(skin.accent),
+                        ),
+                      ),
+                    ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterEmptyHint(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      child: Text(
+        isZh ? '未找到匹配目录' : 'No matching folders',
+        style: DesktopType.caption(skin.text3),
+      ),
+    );
+  }
+
+  Widget _buildVisibleRow(_VisibleTreeNode item) {
+    final skin = DesktopSkin.of(context);
+    final folder = item.folder;
+    final depth = item.depth;
+    final path = item.path;
     final open = _open.contains(folder.id);
     final active = widget.currentId == folder.id;
     final dropping = _hoverFolderId == folder.id;
+    final indent = _indentForDepth(depth);
+    final guideOffsets = <double>[
+      for (var d = 1; d < depth; d++) 4 + _indentForDepth(d) + 10,
+    ];
 
     Widget row({required bool hovered, required bool dropActive}) {
       return GestureDetector(
@@ -330,7 +638,6 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
         child: AnimatedContainer(
           duration: DesktopMotion.of(context, DesktopMotion.fast),
           height: _FilesRailGeometry.nodeHeight,
-          padding: EdgeInsets.only(left: 4 + (depth - 1) * 14.0),
           decoration: BoxDecoration(
             color:
                 dropActive
@@ -349,44 +656,67 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
                     )
                     : null,
           ),
-          child: Row(
+          child: Stack(
             children: [
-              // 样例 `.tw`：20×28 展开钮，展开时 chevron 旋转 90°。
-              GestureDetector(
-                onTap: () => _toggle(folder),
-                behavior: HitTestBehavior.opaque,
-                child: SizedBox(
-                  key: ValueKey<String>(
-                    'desktop-files-tree-chevron-${folder.id}',
-                  ),
-                  width: 20,
-                  height: 28,
-                  child: Center(
-                    child: AnimatedRotation(
-                      turns: open ? 0.25 : 0,
-                      duration: DesktopMotion.of(context, DesktopMotion.fast),
-                      curve: DesktopMotion.ease,
-                      child: Icon(
-                        DesktopIcons.chevron,
-                        size: 12,
-                        color: skin.text3,
+              for (final x in guideOffsets.toSet())
+                Positioned(
+                  left: x,
+                  top: 3,
+                  bottom: 3,
+                  width: 1,
+                  child: ColoredBox(color: skin.line.withValues(alpha: 0.7)),
+                ),
+              Padding(
+                padding: EdgeInsets.only(left: 4 + indent, right: 6),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => _toggle(folder),
+                      behavior: HitTestBehavior.opaque,
+                      child: SizedBox(
+                        key: ValueKey<String>(
+                          'desktop-files-tree-chevron-${folder.id}',
+                        ),
+                        width: 20,
+                        height: 28,
+                        child: Center(
+                          child: AnimatedRotation(
+                            turns: open ? 0.25 : 0,
+                            duration: DesktopMotion.of(
+                              context,
+                              DesktopMotion.fast,
+                            ),
+                            curve: DesktopMotion.ease,
+                            child: Icon(
+                              DesktopIcons.chevron,
+                              size: 12,
+                              color: skin.text3,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              ),
-              Icon(
-                DesktopIcons.folder,
-                size: _FilesRailGeometry.folderIconSize,
-                color: active ? skin.accent : skin.text3,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  folder.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: DesktopType.navSub(active ? skin.text : skin.text2),
+                    Icon(
+                      DesktopIcons.folder,
+                      size: _FilesRailGeometry.folderIconSize,
+                      color: active ? skin.accent : skin.text3,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Tooltip(
+                        message: folder.name,
+                        waitDuration: const Duration(milliseconds: 500),
+                        child: Text(
+                          folder.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: DesktopType.navSub(
+                            active ? skin.text : skin.text2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -400,7 +730,6 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
           (context, hovered) => row(hovered: hovered, dropActive: dropActive),
     );
 
-    // 拖放目标：悬停延时展开 + 落点高亮 + 接收 id 集。
     Widget rowWithHover = DragTarget<List<String>>(
       onWillAcceptWithDetails:
           (details) =>
@@ -416,9 +745,6 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
               buildRow(dropActive: candidate.isNotEmpty || dropping),
     );
 
-    // 键盘：样例 → 展开、← 收起（`Files.tsx` tree-item onKeyDown）。
-    // Focus 必须在 DragTarget 外层：DragTarget 的 builder 会重建子行，
-    // 把 Focus 放进 builder 里每帧换实例，焦点会在重绘时丢失。
     rowWithHover = Focus(
       focusNode: _focusNode(folder.id),
       onKeyEvent: (node, event) {
@@ -438,8 +764,7 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
       child: rowWithHover,
     );
 
-    // 树节点自身可拖：样例 `onDragStart` 用单个目录 id。
-    rowWithHover = KeyedSubtree(
+    return KeyedSubtree(
       key: ValueKey<String>('files-tree-node-${folder.id}'),
       child: _AdaptiveFileDraggable(
         data: <String>[folder.id],
@@ -450,294 +775,6 @@ class _FolderTreeState extends ConsumerState<_FolderTree> {
           child: rowWithHover,
         ),
         child: rowWithHover,
-      ),
-    );
-
-    return <Widget>[
-      rowWithHover,
-      if (open)
-        for (final child in children ?? const <FileNode>[])
-          ..._buildNode(child, depth + 1, [...path, folder]),
-    ];
-  }
-}
-
-/// 轨道底部存储用量（样例 `.usage`）：分隔线 + 眉标 + 8px 分段条 + 图例。
-class _RailStorageCard extends StatelessWidget {
-  const _RailStorageCard({required this.stats});
-
-  final FileStorageStats stats;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final skin = DesktopSkin.of(context);
-    final types = stats.typeDistribution.take(3).toList(growable: false);
-    final remainingBytes = stats.typeDistribution
-        .skip(3)
-        .fold<int>(0, (sum, entry) => sum + entry.sizeBytes);
-    final segments = <({String label, int bytes, Color color})>[
-      for (var index = 0; index < types.length; index++)
-        (
-          label: _categoryLabel(l10n, types[index].category),
-          bytes: types[index].sizeBytes,
-          color: switch (index) {
-            0 => skin.accent,
-            1 => skin.info,
-            _ => skin.warn,
-          },
-        ),
-      if (remainingBytes > 0)
-        (
-          label: l10n.filesCategoryOther,
-          bytes: remainingBytes,
-          color: skin.text3,
-        ),
-    ];
-    return Container(
-      margin: const EdgeInsets.only(top: 18),
-      padding: const EdgeInsets.fromLTRB(10, 14, 10, 4),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: skin.line)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            l10n.desktopFilesGroupStorage.toUpperCase(),
-            style: DesktopType.eyebrow(skin.text3),
-          ),
-          const SizedBox(height: 10),
-          if (segments.isNotEmpty)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                height: 8,
-                child: Row(
-                  children: [
-                    for (var index = 0; index < segments.length; index++) ...[
-                      if (index > 0) const SizedBox(width: 2),
-                      Expanded(
-                        flex: segments[index].bytes.clamp(1, 0x7fffffff),
-                        child: ColoredBox(color: segments[index].color),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            )
-          else
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                height: 8,
-                child: Stack(
-                  children: [
-                    Positioned.fill(child: ColoredBox(color: skin.raise2)),
-                    FractionallySizedBox(
-                      widthFactor: stats.usageRatio,
-                      child: ColoredBox(color: skin.accent),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          const SizedBox(height: 10),
-          for (final segment in segments)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 5),
-              child: Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: segment.color,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      segment.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: DesktopType.nano(skin.text2),
-                    ),
-                  ),
-                  Text(
-                    formatFileSize(segment.bytes),
-                    style: DesktopType.nano(skin.text3),
-                  ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 3),
-          Text(
-            l10n.desktopFilesStorageUsed(
-              formatFileSize(stats.usedBytes),
-              stats.isQuotaUnlimited
-                  ? l10n.filesUnlimited
-                  : formatFileSize(stats.quotaBytes),
-            ),
-            style: DesktopType.caption(skin.text3),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _categoryLabel(AppLocalizations l10n, String category) =>
-      switch (category.toUpperCase()) {
-        'FOLDER' => l10n.filesCategoryFolder,
-        'IMAGE' || 'PHOTO' => l10n.filesCategoryImage,
-        'VIDEO' => l10n.filesCategoryVideo,
-        'AUDIO' => l10n.filesCategoryAudio,
-        'DOCUMENT' || 'PDF' || 'TEXT' => l10n.filesCategoryDocument,
-        'NOVEL' => l10n.filesCategoryNovel,
-        'COMIC' => l10n.filesCategoryComic,
-        'ARCHIVE' => l10n.filesCategoryArchive,
-        _ => l10n.filesCategoryOther,
-      };
-}
-
-/// 冷启动存储统计尚未就绪时的等高轻骨架占位，防止底部存储卡晚到引起侧栏跳动。
-class _RailStorageSkeleton extends StatelessWidget {
-  const _RailStorageSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    final skin = DesktopSkin.of(context);
-    return ExcludeSemantics(
-      child: Container(
-        margin: const EdgeInsets.only(top: 18),
-        padding: const EdgeInsets.fromLTRB(10, 14, 10, 4),
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: skin.line)),
-        ),
-        child: const Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: DesktopSkeletonBox(width: 68, height: 10, radius: 4),
-            ),
-            SizedBox(height: 10),
-            DesktopSkeletonBox(width: double.infinity, height: 8, radius: 8),
-            SizedBox(height: 10),
-            Row(
-              children: [
-                DesktopSkeletonBox(width: 8, height: 8, radius: 3),
-                SizedBox(width: 8),
-                Expanded(
-                  child: DesktopSkeletonBox(
-                    width: double.infinity,
-                    height: 10,
-                    radius: 4,
-                  ),
-                ),
-                SizedBox(width: 12),
-                DesktopSkeletonBox(width: 38, height: 10, radius: 4),
-              ],
-            ),
-            SizedBox(height: 7),
-            Row(
-              children: [
-                DesktopSkeletonBox(width: 8, height: 8, radius: 3),
-                SizedBox(width: 8),
-                Expanded(
-                  child: DesktopSkeletonBox(
-                    width: double.infinity,
-                    height: 10,
-                    radius: 4,
-                  ),
-                ),
-                SizedBox(width: 12),
-                DesktopSkeletonBox(width: 34, height: 10, radius: 4),
-              ],
-            ),
-            SizedBox(height: 7),
-            Row(
-              children: [
-                DesktopSkeletonBox(width: 8, height: 8, radius: 3),
-                SizedBox(width: 8),
-                Expanded(
-                  child: DesktopSkeletonBox(
-                    width: double.infinity,
-                    height: 10,
-                    radius: 4,
-                  ),
-                ),
-                SizedBox(width: 12),
-                DesktopSkeletonBox(width: 32, height: 10, radius: 4),
-              ],
-            ),
-            SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: DesktopSkeletonBox(width: 112, height: 11, radius: 4),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 共享空间没有按文件类型拆分的后端统计；显示真实配额进度，避免用原型演示
-/// 的类别数字伪造生产数据，同时保留样例底部用量条的层级和尺寸。
-class _RailSharedStorageCard extends StatelessWidget {
-  const _RailSharedStorageCard({required this.usage});
-
-  final SharedSpaceUsage usage;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final skin = DesktopSkin.of(context);
-    final capacity =
-        usage.isUnlimited
-            ? l10n.filesSharedSpaceUnlimited
-            : formatFileSize(usage.maxBytes);
-    return Container(
-      margin: const EdgeInsets.only(top: 18),
-      padding: const EdgeInsets.fromLTRB(10, 14, 10, 4),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: skin.line)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            l10n.desktopFilesGroupStorage.toUpperCase(),
-            style: DesktopType.eyebrow(skin.text3),
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: SizedBox(
-              height: 8,
-              child: Stack(
-                children: [
-                  Positioned.fill(child: ColoredBox(color: skin.raise2)),
-                  FractionallySizedBox(
-                    widthFactor: usage.usageRatio,
-                    child: ColoredBox(color: skin.accent),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            l10n.filesSharedSpaceInfo(
-              formatFileSize(usage.usedBytes),
-              capacity,
-              usage.fileCount,
-            ),
-            style: DesktopType.caption(skin.text2),
-          ),
-        ],
       ),
     );
   }

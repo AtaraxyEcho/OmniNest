@@ -31,6 +31,18 @@ public interface MediaPlaybackProgressRepository extends JpaRepository<MediaPlay
     );
 
     /**
+     * 查询指定用户和媒体类型最近更新的未播完进度（继续观看统一口径）。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param mediaType 媒体类型
+     * @return 最近未播完进度列表
+     */
+    List<MediaPlaybackProgress> findTop24ByOwnerUserIdAndMediaTypeAndCompletedFalseOrderByUpdatedAtDesc(
+            UUID ownerUserId,
+            String mediaType
+    );
+
+    /**
      * 查询指定媒体的唯一进度。
      *
      * @param ownerUserId 当前用户 ID

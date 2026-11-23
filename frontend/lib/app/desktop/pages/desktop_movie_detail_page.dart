@@ -14,7 +14,9 @@ import 'package:omninest/app/desktop/pages/desktop_movie_detail_actions.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
+import 'package:omninest/app/desktop/widgets/desktop_subtitle_panel.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
+import 'package:omninest/app/desktop/widgets/desktop_tab_transition.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
@@ -168,15 +170,21 @@ class _DesktopMovieDetailPageState
             ),
           ),
           const SizedBox(height: 20),
-          switch (_tab) {
-            _MovieDetailTab.overview => _Overview(item: item),
-            _MovieDetailTab.files => _MovieFilesTab(
-              videoItemId: item.id,
-              transcoding: _transcoding,
-              onTranscode: () => _queueTranscode(item),
+          DesktopTabTransition(
+            tabIndex: _tab.index,
+            child: KeyedSubtree(
+              key: ValueKey(_tab),
+              child: switch (_tab) {
+                _MovieDetailTab.overview => _Overview(item: item),
+                _MovieDetailTab.files => _MovieFilesTab(
+                  videoItemId: item.id,
+                  transcoding: _transcoding,
+                  onTranscode: () => _queueTranscode(item),
+                ),
+                _MovieDetailTab.subtitles => _Subtitles(videoItemId: item.id),
+              },
             ),
-            _MovieDetailTab.subtitles => _Subtitles(videoItemId: item.id),
-          },
+          ),
           if (related.isNotEmpty) ...[
             const SizedBox(height: 40),
             Text(

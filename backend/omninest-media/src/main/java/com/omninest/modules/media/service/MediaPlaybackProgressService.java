@@ -66,6 +66,21 @@ public class MediaPlaybackProgressService {
     }
 
     /**
+     * 查询指定媒体类型的最近未播完进度（继续观看统一口径）。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param mediaType 媒体类型
+     * @return 最近未播完进度列表
+     */
+    @Transactional(readOnly = true)
+    public List<MediaPlaybackProgress> latestIncomplete(UUID ownerUserId, MediaPlaybackType mediaType) {
+        return repository.findTop24ByOwnerUserIdAndMediaTypeAndCompletedFalseOrderByUpdatedAtDesc(
+                ownerUserId,
+                mediaType.value()
+        );
+    }
+
+    /**
      * 统计指定用户未播完的进度总数（继续观看口径）。
      *
      * @param ownerUserId 当前用户 ID

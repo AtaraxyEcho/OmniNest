@@ -25,6 +25,8 @@ export 'package:omninest/features/video/application/movie_providers.dart'
         movieScrapeCandidatesProvider,
         movieSeriesDetailProvider,
         movieSeriesEpisodesProvider,
+        movieSeriesHistoryProvider,
+        seriesScrapeCandidatesProvider,
         movieSubtitlesProvider,
         seriesFavoriteProvider,
         seriesPlayIntentProvider,

@@ -1,5 +1,26 @@
 part of 'desktop_movies_page.dart';
 
+class _WideGrid extends StatelessWidget {
+  const _WideGrid({required this.items});
+
+  final List<MovieContinueWatching> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 22,
+      runSpacing: 22,
+      children: [
+        for (var i = 0; i < items.length; i++)
+          SizedBox(
+            width: 340,
+            child: DesktopStagger(index: i, child: _WideCard(item: items[i])),
+          ),
+      ],
+    );
+  }
+}
+
 /// History 沿用影片浏览的海报网格，观看进度压在海报底缘。
 class _HistoryGrid extends StatelessWidget {
   const _HistoryGrid({required this.entries, required this.onClear});

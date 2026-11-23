@@ -74,7 +74,8 @@ class DesktopSelect<T> extends StatefulWidget {
   State<DesktopSelect<T>> createState() => _DesktopSelectState<T>();
 }
 
-class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
+class _DesktopSelectState<T> extends State<DesktopSelect<T>>
+    with SingleTickerProviderStateMixin {
   final LayerLink _link = LayerLink();
   final TextEditingController _search = TextEditingController();
   final FocusNode _focus = FocusNode(debugLabel: 'desktop select');
@@ -91,6 +92,12 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
   double _dx = 0;
   int _active = 0;
   String _query = '';
+  final ScrollController _scrollController = ScrollController();
+  late final AnimationController _anim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 160),
+    reverseDuration: const Duration(milliseconds: 120),
+  );
   OverlayEntry? _entry;
 
   bool get _searchable => widget.search ?? widget.options.length > 12;
@@ -121,6 +128,8 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
   @override
   void dispose() {
     _removeEntry();
+    _anim.dispose();
+    _scrollController.dispose();
     _search.dispose();
     _focus.dispose();
     _panelFocus.dispose();
@@ -178,95 +187,104 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
               (context, hovered) => GestureDetector(
                 onTap: _open ? _close : _show,
                 behavior: HitTestBehavior.opaque,
-                child: Container(
-                  width: widget.width,
-                  height: height,
-                  padding: EdgeInsets.only(
-                    left: widget.variant == DesktopSelectVariant.pill ? 12 : 10,
-                    right: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: switch (widget.variant) {
-                      DesktopSelectVariant.field => skin.bg,
-                      DesktopSelectVariant.small => skin.raise,
-                      DesktopSelectVariant.pill =>
-                        hovered ? skin.raise2 : skin.raise,
-                    },
-                    borderRadius: BorderRadius.circular(radius),
-                    boxShadow:
-                        focused && widget.variant != DesktopSelectVariant.pill
-                            ? [
-                              BoxShadow(
-                                color: skin.accent.withValues(alpha: 0.18),
-                                blurRadius: 0,
-                                spreadRadius: 4,
-                              ),
-                            ]
-                            : const <BoxShadow>[],
-                    border: Border.all(
-                      color:
-                          // 样例 `.dd-field.bad{border-color:#e57a74}`：错误态压过
-                          // 悬停/展开的强调色描边，只让焦点环继续提示位置。
-                          widget.invalid
-                              ? DesktopPalette.bad
-                              : _open
-                              ? skin.accent
-                              : hovered &&
-                                  widget.variant != DesktopSelectVariant.pill
-                              ? Color.lerp(skin.line2, skin.accent, 0.4)!
-                              : skin.line2,
-                    ),
-                  ),
-                  // 未给 width 时触发器放在 Wrap 里，宽度是无界的：
-                  // 这时不能用 Expanded（RenderFlex 会断言 non-zero flex +
-                  // unbounded width），改用松约束让文本按内容宽铺开。
-                  child: Row(
-                    mainAxisSize:
-                        widget.width == null
-                            ? MainAxisSize.min
-                            : MainAxisSize.max,
-                    children: [
-                      if (widget.icon != null) ...[
-                        Icon(widget.icon, size: 15, color: skin.text2),
-                        const SizedBox(width: 8),
-                      ],
-                      if (widget.width == null)
-                        Flexible(
-                          fit: FlexFit.loose,
-                          child: Text(
-                            current?.label ?? widget.placeholder ?? '',
-                            maxLines: 1,
-                            softWrap: false,
-                            overflow: TextOverflow.ellipsis,
-                            style: DesktopType.dense(
-                              current == null ? skin.text3 : skin.text,
-                            ),
-                          ),
-                        )
-                      else
-                        Expanded(
-                          child: Text(
-                            current?.label ?? widget.placeholder ?? '',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: DesktopType.dense(
-                              current == null ? skin.text3 : skin.text,
-                            ),
-                          ),
-                        ),
-                      const SizedBox(width: 6),
-                      AnimatedRotation(
-                        turns: _open ? 0.5 : 0,
-                        duration: DesktopMotion.fast,
-                        curve: Curves.easeOut,
-                        child: Icon(
-                          DesktopIcons.chevDown,
-                          size: 14,
-                          color: _open ? skin.accent : skin.text3,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final fillWidth =
+                        widget.width != null ||
+                        (widget.variant == DesktopSelectVariant.field &&
+                            constraints.hasBoundedWidth);
+                    return AnimatedContainer(
+                      duration: DesktopMotion.of(context, DesktopMotion.fast),
+                      curve: Curves.easeOut,
+                      width:
+                          widget.width ?? (fillWidth ? double.infinity : null),
+                      height: height,
+                      padding: EdgeInsets.only(
+                        left:
+                            widget.variant == DesktopSelectVariant.pill
+                                ? 12
+                                : 10,
+                        right: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: switch (widget.variant) {
+                          DesktopSelectVariant.field => skin.bg,
+                          DesktopSelectVariant.small => skin.raise,
+                          DesktopSelectVariant.pill =>
+                            hovered ? skin.raise2 : skin.raise,
+                        },
+                        borderRadius: BorderRadius.circular(radius),
+                        boxShadow:
+                            focused &&
+                                    widget.variant != DesktopSelectVariant.pill
+                                ? [
+                                  BoxShadow(
+                                    color: skin.accent.withValues(alpha: 0.18),
+                                    blurRadius: 0,
+                                    spreadRadius: 4,
+                                  ),
+                                ]
+                                : const <BoxShadow>[],
+                        border: Border.all(
+                          color:
+                              widget.invalid
+                                  ? DesktopPalette.bad
+                                  : _open
+                                  ? skin.accent
+                                  : hovered &&
+                                      widget.variant !=
+                                          DesktopSelectVariant.pill
+                                  ? Color.lerp(skin.line2, skin.accent, 0.4)!
+                                  : skin.line2,
                         ),
                       ),
-                    ],
-                  ),
+                      child: Row(
+                        mainAxisSize:
+                            fillWidth ? MainAxisSize.max : MainAxisSize.min,
+                        children: [
+                          if (widget.icon != null) ...[
+                            Icon(widget.icon, size: 15, color: skin.text2),
+                            const SizedBox(width: 8),
+                          ],
+                          if (!fillWidth)
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child: Text(
+                                current?.label ?? widget.placeholder ?? '',
+                                maxLines: 1,
+                                softWrap: false,
+                                overflow: TextOverflow.ellipsis,
+                                style: DesktopType.dense(
+                                  current == null ? skin.text3 : skin.text,
+                                ),
+                              ),
+                            )
+                          else
+                            Expanded(
+                              child: Text(
+                                current?.label ?? widget.placeholder ?? '',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: DesktopType.dense(
+                                  current == null ? skin.text3 : skin.text,
+                                ),
+                              ),
+                            ),
+                          const SizedBox(width: 6),
+                          AnimatedRotation(
+                            turns: _open ? 0.5 : 0,
+                            duration: DesktopMotion.fast,
+                            curve: Curves.easeOut,
+                            child: Icon(
+                              DesktopIcons.chevDown,
+                              size: 14,
+                              color: _open ? skin.accent : skin.text3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
         ),
@@ -296,19 +314,19 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
             // 样例 `select.css:11` 的 `.dd-pop`：**不透明** `panel-solid` 底，
             // 投影 `0 28px 64px -18px rgba(0,0,0,.45)` + 1px 内高光线，
             // 入场 `ddin .16s`（下移 4px + scale .98）。
-            child: TweenAnimationBuilder<double>(
-              tween: Tween<double>(begin: 0, end: 1),
-              duration: MotionToken.reduced(
-                context,
-                const Duration(milliseconds: 160),
-              ),
-              curve: Curves.easeOut,
-              builder:
-                  (context, t, child) => Opacity(
+            child: IgnorePointer(
+              ignoring: !_open,
+              child: AnimatedBuilder(
+                animation: _anim,
+                builder: (context, child) {
+                  final t = Curves.easeOut
+                      .transform(_anim.value)
+                      .clamp(0.0, 1.0);
+                  return Opacity(
                     opacity: t,
                     alwaysIncludeSemantics: true,
                     child: Transform.translate(
-                      offset: Offset(0, (1 - t) * -4),
+                      offset: Offset(0, (1 - t) * (_up ? 4 : -4)),
                       child: Transform.scale(
                         scale: 0.98 + 0.02 * t,
                         alignment:
@@ -316,30 +334,29 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
                         child: child,
                       ),
                     ),
+                  );
+                },
+                child: Container(
+                  width: width,
+                  constraints: BoxConstraints(maxHeight: _maxHeight + 48),
+                  decoration: BoxDecoration(
+                    color: skin.panelSolid,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: skin.line2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(
+                          0xFF000000,
+                        ).withValues(alpha: skin.isDark ? 0.45 : 0.14),
+                        blurRadius: skin.isDark ? 48 : 32,
+                        spreadRadius: skin.isDark ? -14 : -10,
+                        offset: Offset(0, skin.isDark ? 22 : 14),
+                      ),
+                    ],
                   ),
-              child: Container(
-                width: width,
-                constraints: BoxConstraints(maxHeight: _maxHeight + 48),
-                decoration: BoxDecoration(
-                  color: skin.panelSolid,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: skin.line2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF000000).withValues(alpha: 0.45),
-                      blurRadius: 64,
-                      spreadRadius: -18,
-                      offset: const Offset(0, 28),
-                    ),
-                    BoxShadow(
-                      color: skin.text.withValues(alpha: 0.04),
-                      blurRadius: 0,
-                      spreadRadius: 1,
-                    ),
-                  ],
+                  clipBehavior: Clip.antiAlias,
+                  child: _panel(skin),
                 ),
-                clipBehavior: Clip.antiAlias,
-                child: _panel(skin),
               ),
             ),
           ),
@@ -467,6 +484,7 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
                           context,
                         ).copyWith(scrollbars: true),
                         child: ListView.builder(
+                          controller: _scrollController,
                           shrinkWrap: true,
                           padding: const EdgeInsets.all(6),
                           itemCount: items.length,
@@ -493,6 +511,7 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
       _active = (_active + delta).clamp(0, items.length - 1);
       _entry?.markNeedsBuild();
     });
+    _scrollActiveIntoView();
     return KeyEventResult.handled;
   }
 
@@ -505,7 +524,29 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
       _active = index.clamp(0, items.length - 1);
       _entry?.markNeedsBuild();
     });
+    _scrollActiveIntoView();
     return KeyEventResult.handled;
+  }
+
+  void _scrollActiveIntoView() {
+    if (!_scrollController.hasClients) return;
+    const itemExtent = 34.0;
+    final position = _scrollController.position;
+    final targetTop = _active * itemExtent;
+    final targetBottom = targetTop + itemExtent;
+    final viewTop = position.pixels;
+    final viewBottom = viewTop + position.viewportDimension;
+    double? nextOffset;
+    if (targetTop < viewTop) {
+      nextOffset = targetTop;
+    } else if (targetBottom > viewBottom) {
+      nextOffset = targetBottom - position.viewportDimension;
+    }
+    if (nextOffset != null) {
+      _scrollController.jumpTo(
+        nextOffset.clamp(position.minScrollExtent, position.maxScrollExtent),
+      );
+    }
   }
 
   KeyEventResult _choose(List<DesktopSelectOption<T>> items) {
@@ -537,7 +578,11 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
             (context, hovered) => GestureDetector(
               onTap: () => _select(option),
               behavior: HitTestBehavior.opaque,
-              child: Container(
+              child: AnimatedContainer(
+                duration: DesktopMotion.of(
+                  context,
+                  const Duration(milliseconds: 120),
+                ),
                 constraints: const BoxConstraints(minHeight: 34),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
@@ -643,6 +688,16 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
     final entry = OverlayEntry(builder: _overlay);
     _entry = entry;
     overlay.insert(entry);
+    final inDur = MotionToken.reduced(
+      context,
+      const Duration(milliseconds: 160),
+    );
+    _anim.duration = inDur;
+    if (inDur == Duration.zero) {
+      _anim.value = 1;
+    } else {
+      _anim.forward(from: 0);
+    }
     // 键盘打开时触发器已经在焦点里，`autofocus` 不会再落地，
     // 这里显式把焦点推进面板（可搜索时直接进搜索框）。
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -650,6 +705,7 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
         return;
       }
       (_searchable ? _searchFocus : _panelFocus).requestFocus();
+      _scrollActiveIntoView();
     });
   }
 
@@ -660,7 +716,21 @@ class _DesktopSelectState<T> extends State<DesktopSelect<T>> {
       return;
     }
     setState(() => _open = false);
-    _removeEntry();
+    _entry?.markNeedsBuild();
+    final outDur = MotionToken.reduced(
+      context,
+      const Duration(milliseconds: 120),
+    );
+    _anim.reverseDuration = outDur;
+    if (outDur == Duration.zero) {
+      _removeEntry();
+    } else {
+      _anim.reverse().whenComplete(() {
+        if (!_open) {
+          _removeEntry();
+        }
+      });
+    }
     if (returnFocus) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {

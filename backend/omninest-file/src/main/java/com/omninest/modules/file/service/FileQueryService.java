@@ -87,6 +87,12 @@ public class FileQueryService {
     }
 
     @Transactional(readOnly = true)
+    public Page<FileNodeDto> listFilesPage(
+            UUID ownerUserId, UUID parentId, String category, boolean onlyFolders, int page, int size) {
+        return listQueryService.listFilesPage(ownerUserId, parentId, category, onlyFolders, page, size);
+    }
+
+    @Transactional(readOnly = true)
     public Page<FileNodeDto> listRecycleBinPage(
             UUID ownerUserId, SpaceType spaceType, int page, int size) {
         return listQueryService.listRecycleBinPage(ownerUserId, spaceType, page, size);

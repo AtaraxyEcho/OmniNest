@@ -9,6 +9,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_palette.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 import 'package:omninest/app/theme/desktop/desktop_type.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/platform/file_pick.dart';
 
@@ -169,7 +170,13 @@ class _DesktopCoverFieldState extends State<DesktopCoverField> {
       );
     } on Object catch (error) {
       if (mounted) {
-        setState(() => _pickError = '$error');
+        setState(
+          () =>
+              _pickError = userFacingErrorText(
+                error,
+                l10n: AppLocalizations.of(context),
+              ),
+        );
       }
     } finally {
       if (mounted) {

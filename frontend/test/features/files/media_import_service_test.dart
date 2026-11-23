@@ -614,8 +614,14 @@ class _ScanningFileApi extends FileApi {
   FileUploadCompleteResult? completeOverride;
 
   @override
-  Future<List<FileNode>> listFiles({String? parentId, String? category}) async {
-    return _directory;
+  Future<List<FileNode>> listFiles({
+    String? parentId,
+    String? category,
+    bool onlyFolders = false,
+  }) async {
+    return onlyFolders
+        ? _directory.where((node) => node.isFolder).toList(growable: false)
+        : _directory;
   }
 
   @override

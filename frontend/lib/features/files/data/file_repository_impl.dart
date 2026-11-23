@@ -25,20 +25,30 @@ class FileRepositoryImpl implements FileRepository {
   }
 
   @override
-  Future<List<FileNode>> listFiles({String? parentId, String? category}) async {
-    return fileApi.listFiles(parentId: parentId, category: category);
+  Future<List<FileNode>> listFiles({
+    String? parentId,
+    String? category,
+    bool onlyFolders = false,
+  }) async {
+    return fileApi.listFiles(
+      parentId: parentId,
+      category: category,
+      onlyFolders: onlyFolders,
+    );
   }
 
   @override
   Future<FileNodePage> listFilesPage({
     String? parentId,
     String? category,
+    bool onlyFolders = false,
     int page = 0,
     int size = 10,
   }) {
     return fileApi.listFilesPage(
       parentId: parentId,
       category: category,
+      onlyFolders: onlyFolders,
       page: page,
       size: size,
     );
@@ -543,18 +553,34 @@ class FileRepositoryImpl implements FileRepository {
   // ============================================================
 
   @override
-  Future<List<FileNode>> listSharedSpaceFiles({String? parentId}) {
-    return fileApi.listSharedSpaceFiles(parentId: parentId);
+  Future<List<FileNode>> listSharedSpaceFiles({
+    String? parentId,
+    bool onlyFolders = false,
+    bool uploadedByMe = false,
+    String? sort,
+  }) {
+    return fileApi.listSharedSpaceFiles(
+      parentId: parentId,
+      onlyFolders: onlyFolders,
+      uploadedByMe: uploadedByMe,
+      sort: sort,
+    );
   }
 
   @override
   Future<FileNodePage> listSharedSpaceFilesPage({
     String? parentId,
+    bool onlyFolders = false,
+    bool uploadedByMe = false,
+    String? sort,
     int page = 0,
     int size = 10,
   }) {
     return fileApi.listSharedSpaceFilesPage(
       parentId: parentId,
+      onlyFolders: onlyFolders,
+      uploadedByMe: uploadedByMe,
+      sort: sort,
       page: page,
       size: size,
     );

@@ -269,6 +269,7 @@ class MovieContinueWatching {
     this.posterUrl,
     this.updatedAt,
     this.mediaType,
+    this.movieId,
     this.seriesId,
     this.seasonNumber,
     this.episodeNumber,
@@ -285,6 +286,9 @@ class MovieContinueWatching {
 
   /// 后端 MediaType：MOVIE / EPISODE。
   final String? mediaType;
+
+  /// 电影所属作品 id；分集为空。
+  final String? movieId;
 
   /// 分集所属系列 id；电影为空。
   final String? seriesId;
@@ -305,6 +309,7 @@ class MovieContinueWatching {
       updatedAt:
           DateTime.tryParse(json['updatedAt']?.toString() ?? '')?.toLocal(),
       mediaType: json['mediaType']?.toString(),
+      movieId: json['movieId']?.toString(),
       seriesId: json['seriesId']?.toString(),
       seasonNumber:
           json['seasonNumber'] == null

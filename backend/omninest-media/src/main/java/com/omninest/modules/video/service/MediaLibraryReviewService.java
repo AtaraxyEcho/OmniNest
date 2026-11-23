@@ -28,8 +28,12 @@ import com.omninest.modules.video.repository.MediaScanRunRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import com.omninest.modules.video.repository.VideoLibrarySourceRepository;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -44,6 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MediaLibraryReviewService {
     private static final String APPLY_TASK_TYPE = "LOCAL_VIDEO_LIBRARY_APPLY";
+    private static final Set<String> SUPPORTED_SCOPES = Set.of("PENDING", "IMPORTED", "ISSUES", "ALL");
 
     private final MediaScanRunRepository runRepository;
     private final MediaScanCandidateRepository candidateRepository;
@@ -96,7 +101,7 @@ public class MediaLibraryReviewService {
         return PageResponse.of(items, safePage, safeSize, result.getTotalElements());
     }
 
-    /** 懒加载候选媒体语义树的直接子节点。 */
+    /** 懒加载候选媒体语义树的直接子节点（默认仅待入库 PENDING）。 */
     @Transactional(readOnly = true)
     public PageResponse<MediaScanTreeNodeDto> tree(
             UUID ownerUserId,
@@ -105,21 +110,43 @@ public class MediaLibraryReviewService {
             int page,
             int size
     ) {
+        return tree(ownerUserId, runId, parentNodeId, "PENDING", page, size);
+    }
+
+    /** 按筛选范围懒加载候选媒体语义树的直接子节点。 */
+    @Transactional(readOnly = true)
+    public PageResponse<MediaScanTreeNodeDto> tree(
+            UUID ownerUserId,
+            UUID runId,
+            String parentNodeId,
+            String scope,
+            int page,
+            int size
+    ) {
         MediaScanRun run = requireRun(ownerUserId, runId);
         UUID catalogOwnerId = run.getOwnerUserId();
         VideoLibrarySource source = requireSource(ownerUserId, run.getLibrarySourceId());
+        String normalizedScope = normalizeScope(scope);
         int safePage = Math.max(0, page);
         int safeSize = PageClamps.safeSize(size);
         String parent = parentNodeId == null || parentNodeId.isBlank() ? "ROOT" : parentNodeId;
         if ("ROOT".equals(parent)) {
-            return rootNodes(catalogOwnerId, runId, source, safePage, safeSize);
+            return rootNodes(catalogOwnerId, runId, source, normalizedScope, safePage, safeSize);
         }
         if (parent.startsWith("SERIES:")) {
-            return seasonNodes(catalogOwnerId, runId, parseSeriesId(parent), safePage, safeSize);
+            return seasonNodes(catalogOwnerId, runId, parseSeriesId(parent), normalizedScope, safePage, safeSize);
         }
         if (parent.startsWith("SEASON:")) {
             SeasonNodeKey key = parseSeason(parent);
-            return candidateNodes(catalogOwnerId, runId, key.groupId(), key.seasonNumber(), safePage, safeSize);
+            return candidateNodes(
+                    catalogOwnerId,
+                    runId,
+                    key.groupId(),
+                    key.seasonNumber(),
+                    normalizedScope,
+                    safePage,
+                    safeSize
+            );
         }
         throw new BusinessException(ErrorCode.PARAM_ERROR, "候选树父节点无效");
     }
@@ -140,7 +167,7 @@ public class MediaLibraryReviewService {
             throw new BusinessException(ErrorCode.CONFLICT, "候选选择已更新，请刷新后重试");
         }
         int updated = updateSelectionScope(catalogOwnerId, runId, request.nodeId(), request.selected());
-        if (updated == 0) {
+        if (updated == 0 && request.nodeId().startsWith("CANDIDATE:")) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "候选选择范围不存在");
         }
         run.setSelectionRevision(run.getSelectionRevision() + 1);
@@ -293,41 +320,68 @@ public class MediaLibraryReviewService {
             UUID ownerUserId,
             UUID runId,
             VideoLibrarySource source,
+            String scope,
             int page,
             int size
     ) {
         if (MediaLibraryType.valueOf(source.getLibraryType()) == MediaLibraryType.MOVIE) {
-            Page<MediaScanCandidate> candidates = candidateRepository
-                    .findByOwnerUserIdAndScanRunIdOrderByGroupTitleAscSeasonNumberAscEpisodeNumberAsc(
-                            ownerUserId,
-                            runId,
-                            PageRequest.of(page, size)
-                    );
+            Page<MediaScanCandidate> candidates = candidateRepository.findScopedCandidates(
+                    ownerUserId,
+                    runId,
+                    scope,
+                    PageRequest.of(page, size)
+            );
             return PageResponse.of(candidates.getContent().stream().map(this::candidateNode).toList(),
                     page, size, candidates.getTotalElements());
         }
-        Page<GroupSummary> groups = candidateRepository.summarizeGroups(
+        Page<GroupSummary> groups = candidateRepository.summarizeGroupsByScope(
                 ownerUserId,
                 runId,
+                scope,
                 PageRequest.of(page, size)
         );
-        List<MediaScanTreeNodeDto> items = groups.getContent().stream().map(group -> new MediaScanTreeNodeDto(
-                "SERIES:" + group.getGroupId(),
-                "SERIES",
-                group.getGroupTitle(),
-                group.getCandidateCount() + " 集",
-                true,
-                group.getCandidateCount(),
-                group.getCandidateCount(),
-                group.getSelectedCount(),
-                group.getIssueCount(),
-                selectionState(group.getSelectedCount(), group.getCandidateCount()),
-                null,
-                null,
-                null,
-                null,
-                null
-        )).toList();
+        List<UUID> movieOnlyGroupIds = groups.getContent().stream()
+                .filter(group -> group.getEpisodeCount() <= 0)
+                .map(GroupSummary::getGroupId)
+                .toList();
+        Map<UUID, List<MediaScanCandidate>> movieCandidatesByGroup = new LinkedHashMap<>();
+        if (!movieOnlyGroupIds.isEmpty()) {
+            for (MediaScanCandidate candidate : candidateRepository.findScopedCandidatesByGroupIds(
+                    ownerUserId, runId, movieOnlyGroupIds, scope)) {
+                movieCandidatesByGroup
+                        .computeIfAbsent(candidate.getGroupId(), key -> new ArrayList<>())
+                        .add(candidate);
+            }
+        }
+        List<MediaScanTreeNodeDto> items = new ArrayList<>();
+        for (GroupSummary group : groups.getContent()) {
+            if (group.getEpisodeCount() <= 0) {
+                // ROOT 来源中的电影候选直接作为叶子节点返回，不挂到虚拟“第 1 季”
+                List<MediaScanCandidate> movieCandidates =
+                        movieCandidatesByGroup.getOrDefault(group.getGroupId(), List.of());
+                for (MediaScanCandidate movieCandidate : movieCandidates) {
+                    items.add(candidateNode(movieCandidate));
+                }
+                continue;
+            }
+            items.add(new MediaScanTreeNodeDto(
+                    "SERIES:" + group.getGroupId(),
+                    "SERIES",
+                    group.getGroupTitle(),
+                    group.getCandidateCount() + " 集",
+                    true,
+                    group.getCandidateCount(),
+                    group.getCandidateCount(),
+                    group.getSelectedCount(),
+                    group.getIssueCount(),
+                    selectionState(group.getSelectedCount(), group.getCandidateCount()),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+            ));
+        }
         return PageResponse.of(items, page, size, groups.getTotalElements());
     }
 
@@ -335,10 +389,21 @@ public class MediaLibraryReviewService {
             UUID ownerUserId,
             UUID runId,
             UUID groupId,
+            String scope,
             int page,
             int size
     ) {
-        List<SeasonSummary> seasons = candidateRepository.summarizeSeasons(ownerUserId, runId, groupId);
+        List<SeasonSummary> seasons = candidateRepository.summarizeSeasonsByScope(
+                ownerUserId, runId, groupId, scope);
+        if (seasons.isEmpty()) {
+            List<MediaScanCandidate> directCandidates = candidateRepository.findScopedCandidatesByGroupIds(
+                    ownerUserId, runId, List.of(groupId), scope);
+            List<MediaScanTreeNodeDto> leafItems = PageClamps.slice(directCandidates, page, size)
+                    .stream()
+                    .map(this::candidateNode)
+                    .toList();
+            return PageResponse.of(leafItems, page, size, directCandidates.size());
+        }
         List<MediaScanTreeNodeDto> items = PageClamps.slice(seasons, page, size).stream().map(season -> {
             int seasonNumber = season.getSeasonNumber() == null ? 1 : season.getSeasonNumber();
             String title = seasonNumber == 0 ? "特别篇" : "第 " + seasonNumber + " 季";
@@ -368,17 +433,18 @@ public class MediaLibraryReviewService {
             UUID runId,
             UUID groupId,
             int seasonNumber,
+            String scope,
             int page,
             int size
     ) {
-        Page<MediaScanCandidate> candidates = candidateRepository
-                .findByOwnerUserIdAndScanRunIdAndGroupIdAndSeasonNumberOrderByEpisodeNumberAsc(
-                        ownerUserId,
-                        runId,
-                        groupId,
-                        seasonNumber,
-                        PageRequest.of(page, size)
-                );
+        Page<MediaScanCandidate> candidates = candidateRepository.findScopedSeasonCandidates(
+                ownerUserId,
+                runId,
+                groupId,
+                seasonNumber,
+                scope,
+                PageRequest.of(page, size)
+        );
         return PageResponse.of(candidates.getContent().stream().map(this::candidateNode).toList(),
                 page, size, candidates.getTotalElements());
     }
@@ -404,6 +470,17 @@ public class MediaLibraryReviewService {
                 candidate.getId(),
                 candidate.getSizeBytes()
         );
+    }
+
+    private String normalizeScope(String scope) {
+        if (scope == null || scope.isBlank()) {
+            return "PENDING";
+        }
+        String normalized = scope.trim().toUpperCase(Locale.ROOT);
+        if (!SUPPORTED_SCOPES.contains(normalized)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的候选筛选范围: " + scope);
+        }
+        return normalized;
     }
 
     private int updateSelectionScope(UUID ownerUserId, UUID runId, String nodeId, boolean selected) {

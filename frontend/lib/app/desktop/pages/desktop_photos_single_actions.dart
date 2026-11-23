@@ -1,7 +1,72 @@
 part of 'desktop_photos_page.dart';
 
-/// 单张照片快捷操作（右键菜单及检查器复用）：收藏切换、单张导出与移入回收站。
+/// 单张照片上下文菜单、收藏、下载与删除动作（从 desktop_photos_page.dart 拆出）。
 extension _DesktopPhotosSingleActions on _DesktopPhotosPageState {
+  void _openPhotoContextMenu(
+    PhotoItem photo,
+    List<PhotoItem> photos,
+    Offset globalPosition, {
+    required PhotoBrowseSource source,
+  }) {
+    final l10n = AppLocalizations.of(context);
+    final isSelected = _selection.contains(photo.id);
+    ref.read(desktopShellProvider.notifier).openMenu(globalPosition, [
+      DesktopMenuItem(
+        label: l10n.filesOpen,
+        icon: DesktopIcons.image,
+        onPressed: () => _openPhoto(photo, photos, source),
+      ),
+      DesktopMenuItem(
+        label:
+            Localizations.localeOf(context).languageCode == 'zh'
+                ? '检查信息'
+                : l10n.desktopOpenDetails,
+        icon: DesktopIcons.info,
+        onPressed: () => _inspectPhoto(photo, photos, source: source),
+      ),
+      DesktopMenuItem(
+        label:
+            isSelected
+                ? l10n.desktopPhotosClearSelection
+                : l10n.desktopPhotosSelect,
+        icon: DesktopIcons.check,
+        onPressed: () => _toggleSelect(photo),
+      ),
+      const DesktopMenuItem.separator(),
+      DesktopMenuItem(
+        label: photo.favorite ? l10n.photosUnfavorite : l10n.photosFavorite,
+        icon: DesktopIcons.heart,
+        onPressed: () => unawaited(_toggleSingleFavorite(photo)),
+      ),
+      DesktopMenuItem(
+        label: l10n.photosAddToAlbum,
+        icon: DesktopIcons.album,
+        onPressed: () {
+          if (!_selection.contains(photo.id)) {
+            _update(() {
+              _selection
+                ..clear()
+                ..add(photo.id);
+            });
+          }
+          unawaited(_addSelectedToAlbum(_update));
+        },
+      ),
+      DesktopMenuItem(
+        label: l10n.photosDownload,
+        icon: DesktopIcons.download,
+        onPressed: () => unawaited(_downloadSinglePhoto(photo)),
+      ),
+      const DesktopMenuItem.separator(),
+      DesktopMenuItem(
+        label: l10n.photosDelete,
+        icon: DesktopIcons.trash,
+        danger: true,
+        onPressed: () => unawaited(_deleteSinglePhoto(photo)),
+      ),
+    ]);
+  }
+
   Future<void> _toggleSingleFavorite(PhotoItem photo) async {
     final l10n = AppLocalizations.of(context);
     try {
@@ -97,4 +162,16 @@ extension _DesktopPhotosSingleActions on _DesktopPhotosPageState {
       }
     }
   }
+
+  void _openPhoto(
+    PhotoItem photo,
+    List<PhotoItem> photos,
+    PhotoBrowseSource source,
+  ) {
+    ref.read(desktopAmbientHintProvider.notifier).rememberPhotoId(photo.id);
+    ref.read(photoBrowseScopeProvider.notifier).set(photos, source);
+    desktopPush(context, DesktopRoutes.photoDetail(photo.id));
+  }
+
+  /// 供拆分出的动作扩展调用的状态刷新出口。
 }

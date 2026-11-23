@@ -270,10 +270,14 @@ extension FileBrowserSelectionActions on FileBrowserController {
   Future<List<FileNode>> listFolderOptions(
     String? parentId, {
     bool shared = false,
+    bool onlyFolders = true,
   }) {
     return shared
-        ? _repository.listSharedSpaceFiles(parentId: parentId)
-        : _repository.listFiles(parentId: parentId);
+        ? _repository.listSharedSpaceFiles(
+          parentId: parentId,
+          onlyFolders: onlyFolders,
+        )
+        : _repository.listFiles(parentId: parentId, onlyFolders: onlyFolders);
   }
 
   /// 分页拉取目录选择器节点；调用方自行过滤文件夹并续页。
@@ -281,9 +285,11 @@ extension FileBrowserSelectionActions on FileBrowserController {
     String? parentId, {
     int page = 0,
     int size = 100,
+    bool onlyFolders = true,
   }) {
     return _repository.listFilesPage(
       parentId: parentId,
+      onlyFolders: onlyFolders,
       page: page,
       size: size,
     );

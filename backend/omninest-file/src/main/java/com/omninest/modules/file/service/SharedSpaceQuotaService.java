@@ -4,12 +4,19 @@ import com.omninest.common.config.ConfigValueProvider;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.SharedSpaceUsage;
+import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.file.dto.FileTypeStatsDto;
 import com.omninest.modules.file.dto.SharedSpaceUsageDto;
 import com.omninest.modules.file.repository.FileMetricsRepository;
 import com.omninest.modules.file.repository.SharedSpaceUsageProjection;
 import com.omninest.modules.file.repository.SharedSpaceUsageRepository;
 import com.omninest.modules.quota.port.SharedSpaceUsageReconcile;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -159,7 +166,53 @@ public class SharedSpaceQuotaService implements SharedSpaceUsageReconcile {
     public SharedSpaceUsageDto getUsageDto() {
         SharedSpaceUsage usage = getUsage();
         long maxBytes = configuredMaxBytes();
-        return new SharedSpaceUsageDto(usage.getUsedBytes(), maxBytes, usage.getFileCount());
+        List<Object[]> rows = fileMetricsRepository.aggregateFileStatsByMimeTypeInSpace(SpaceType.SHARED);
+        Map<String, long[]> typeStats = new LinkedHashMap<>();
+        if (rows != null) {
+            for (Object[] row : rows) {
+                String mimeType = row[0] != null ? row[0].toString() : null;
+                long count = ((Number) row[1]).longValue();
+                long size = ((Number) row[2]).longValue();
+                String category = resolveCategory(mimeType);
+                long[] totals = typeStats.computeIfAbsent(category, key -> new long[2]);
+                totals[0] += count;
+                totals[1] += size;
+            }
+        }
+        List<FileTypeStatsDto> distribution = typeStats.entrySet().stream()
+                .map(entry -> new FileTypeStatsDto(
+                        entry.getKey(),
+                        entry.getValue()[0],
+                        entry.getValue()[1]
+                ))
+                .toList();
+        long activeBytes = typeStats.values().stream().mapToLong(value -> value[1]).sum();
+        if (usage.getUsedBytes() > activeBytes && !distribution.isEmpty()) {
+            List<FileTypeStatsDto> withRecycle = new ArrayList<>(distribution);
+            withRecycle.add(new FileTypeStatsDto("历史版本与回收站", 0L, usage.getUsedBytes() - activeBytes));
+            distribution = List.copyOf(withRecycle);
+        }
+        return new SharedSpaceUsageDto(usage.getUsedBytes(), maxBytes, usage.getFileCount(), distribution);
+    }
+
+    private String resolveCategory(String mimeType) {
+        String value = mimeType == null ? "" : mimeType.toLowerCase(Locale.ROOT);
+        if (value.startsWith("image/")) {
+            return "图片";
+        }
+        if (value.startsWith("video/")) {
+            return "视频";
+        }
+        if (value.startsWith("audio/")) {
+            return "音频";
+        }
+        if (value.contains("pdf") || value.contains("document") || value.contains("text")) {
+            return "文档";
+        }
+        if (value.contains("zip") || value.contains("rar") || value.contains("7z")) {
+            return "压缩包";
+        }
+        return "其他";
     }
 
     /**

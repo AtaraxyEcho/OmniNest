@@ -174,6 +174,23 @@ class _PosterCardState extends ConsumerState<_PosterCard> {
         icon: saved ? DesktopIcons.check : DesktopIcons.plus,
         onPressed: () => unawaited(_toggleMovieWatchlist(context, ref, item)),
       ),
+      const DesktopMenuItem.separator(),
+      DesktopMenuItem(
+        label: l10n.desktopMoviesMatchMetadata,
+        icon: DesktopIcons.sparkle,
+        onPressed: () => unawaited(showDesktopMovieMatchDialog(context, item)),
+      ),
+      DesktopMenuItem(
+        label: l10n.desktopMoviesReprobe,
+        icon: DesktopIcons.retry,
+        onPressed: () => unawaited(runDesktopMovieProbe(context, ref, item)),
+      ),
+      DesktopMenuItem(
+        label: l10n.desktopMoviesExportNfo,
+        icon: DesktopIcons.download,
+        onPressed:
+            () => unawaited(runDesktopMovieExportNfo(context, ref, item)),
+      ),
     ]);
   }
 
@@ -431,7 +448,15 @@ class _SeriesPosterState extends ConsumerState<_SeriesPoster> {
   void _openContextMenu(BuildContext context, Offset position) {
     final l10n = AppLocalizations.of(context);
     final series = widget.series;
+    final fav =
+        ref.read(seriesFavoriteProvider(series.id)).asData?.value ??
+        series.isFavorite;
     ref.read(desktopShellProvider.notifier).openMenu(position, [
+      DesktopMenuItem(
+        label: l10n.desktopPlay,
+        icon: DesktopIcons.play,
+        onPressed: () => unawaited(runDesktopSeriesPlay(context, ref, series)),
+      ),
       DesktopMenuItem(
         label: l10n.desktopQuickLook,
         icon: DesktopIcons.panel,
@@ -441,6 +466,38 @@ class _SeriesPosterState extends ConsumerState<_SeriesPoster> {
         label: l10n.desktopOpenDetails,
         icon: DesktopIcons.info,
         onPressed: () => desktopPush(context, '/video/series/${series.id}'),
+      ),
+      const DesktopMenuItem.separator(),
+      DesktopMenuItem(
+        label: l10n.videoFavorite,
+        icon: fav ? DesktopIcons.heartFilled : DesktopIcons.heart,
+        onPressed:
+            () => unawaited(
+              runDesktopSeriesToggleFavorite(
+                context,
+                ref,
+                series,
+                currentFavorite: fav,
+              ),
+            ),
+      ),
+      const DesktopMenuItem.separator(),
+      DesktopMenuItem(
+        label: l10n.desktopMoviesMatchMetadata,
+        icon: DesktopIcons.sparkle,
+        onPressed:
+            () => unawaited(showDesktopSeriesMatchDialog(context, series)),
+      ),
+      DesktopMenuItem(
+        label: l10n.desktopMoviesReprobe,
+        icon: DesktopIcons.retry,
+        onPressed: () => unawaited(runDesktopSeriesProbe(context, ref, series)),
+      ),
+      DesktopMenuItem(
+        label: l10n.desktopMoviesExportNfo,
+        icon: DesktopIcons.download,
+        onPressed:
+            () => unawaited(runDesktopSeriesExportNfo(context, ref, series)),
       ),
     ]);
   }
@@ -713,27 +770,6 @@ class _WideCardState extends ConsumerState<_WideCard> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _WideGrid extends StatelessWidget {
-  const _WideGrid({required this.items});
-
-  final List<MovieContinueWatching> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 22,
-      runSpacing: 22,
-      children: [
-        for (var i = 0; i < items.length; i++)
-          SizedBox(
-            width: 340,
-            child: DesktopStagger(index: i, child: _WideCard(item: items[i])),
-          ),
-      ],
     );
   }
 }

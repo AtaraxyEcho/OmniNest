@@ -11,6 +11,8 @@ import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_shell_state.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
+import 'package:omninest/app/desktop/pages/desktop_movie_detail_actions.dart';
+import 'package:omninest/app/desktop/pages/desktop_series_detail_actions.dart';
 import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
@@ -42,7 +44,7 @@ import 'package:omninest/features/video/video_dashboard.dart';
 // 单文件 800 行的源码闸门，按职责拆成 part 而不是压行数。
 part 'desktop_movies_cinema.dart';
 part 'desktop_movies_cards.dart';
-part 'desktop_movies_history.dart';
+part 'desktop_movies_cards_history.dart';
 part 'desktop_movies_quick_look.dart';
 part 'desktop_movies_slivers.dart';
 

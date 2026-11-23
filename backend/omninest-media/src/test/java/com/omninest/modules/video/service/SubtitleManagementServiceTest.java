@@ -53,6 +53,7 @@ class SubtitleManagementServiceTest {
     private FileLifecycleGuard fileLifecycleGuard;
     private FileQueryService fileQueryService;
     private MediaContentAccessService mediaContentAccessService;
+    private MediaLibraryAccessService mediaLibraryAccessService;
     private MediaPlaybackTokenService mediaPlaybackTokenService;
     private MediaSyncEventService syncEventService;
     private DerivedAssetStorageService derivedAssetStorageService;
@@ -66,6 +67,7 @@ class SubtitleManagementServiceTest {
         fileLifecycleGuard = mock(FileLifecycleGuard.class);
         fileQueryService = mock(FileQueryService.class);
         mediaContentAccessService = mock(MediaContentAccessService.class);
+        mediaLibraryAccessService = mock(MediaLibraryAccessService.class);
         mediaPlaybackTokenService = mock(MediaPlaybackTokenService.class);
         syncEventService = mock(MediaSyncEventService.class);
         derivedAssetStorageService = mock(DerivedAssetStorageService.class);
@@ -76,6 +78,7 @@ class SubtitleManagementServiceTest {
                 fileLifecycleGuard,
                 fileQueryService,
                 mediaContentAccessService,
+                mediaLibraryAccessService,
                 mediaPlaybackTokenService,
                 syncEventService,
                 derivedAssetStorageService
@@ -125,7 +128,7 @@ class SubtitleManagementServiceTest {
         MediaVideoItem videoItem = videoItem();
         MediaSubtitleTrack existingTrack = subtitleTrack(UUID.randomUUID(), "en", "English", 1);
 
-        when(videoItemRepository.findByIdAndOwnerUserId(VIDEO_ITEM_ID, OWNER_ID))
+        when(videoItemRepository.findById(VIDEO_ITEM_ID))
                 .thenReturn(Optional.of(videoItem));
         when(subtitleTrackRepository.findByOwnerUserIdAndVideoItemIdOrderBySortOrderAsc(OWNER_ID, VIDEO_ITEM_ID))
                 .thenReturn(List.of(existingTrack));
@@ -232,7 +235,7 @@ class SubtitleManagementServiceTest {
         // 验证上传时未指定语言和标签使用默认值
         MediaVideoItem videoItem = videoItem();
 
-        when(videoItemRepository.findByIdAndOwnerUserId(VIDEO_ITEM_ID, OWNER_ID))
+        when(videoItemRepository.findById(VIDEO_ITEM_ID))
                 .thenReturn(Optional.of(videoItem));
         when(subtitleTrackRepository.findByOwnerUserIdAndVideoItemIdOrderBySortOrderAsc(OWNER_ID, VIDEO_ITEM_ID))
                 .thenReturn(List.of());
@@ -250,7 +253,7 @@ class SubtitleManagementServiceTest {
 
     @Test
     void uploadSubtitle_rejectsFileNotOwnedByCurrentUser() {
-        when(videoItemRepository.findByIdAndOwnerUserId(VIDEO_ITEM_ID, OWNER_ID))
+        when(videoItemRepository.findById(VIDEO_ITEM_ID))
                 .thenReturn(Optional.of(videoItem()));
         when(fileLifecycleGuard.requireOwnedWritable(OWNER_ID, FILE_NODE_ID))
                 .thenThrow(new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
@@ -264,7 +267,7 @@ class SubtitleManagementServiceTest {
 
     @Test
     void uploadSubtitle_rejectsUnsupportedFileType() {
-        when(videoItemRepository.findByIdAndOwnerUserId(VIDEO_ITEM_ID, OWNER_ID))
+        when(videoItemRepository.findById(VIDEO_ITEM_ID))
                 .thenReturn(Optional.of(videoItem()));
         when(fileLifecycleGuard.requireOwnedWritable(OWNER_ID, FILE_NODE_ID))
                 .thenReturn(subtitleFile("payload.exe", "application/octet-stream", 1024));

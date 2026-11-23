@@ -416,11 +416,13 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState>
         _liveOr(current).copyWith(
           files: filesPage.items,
           parentId: null,
-          breadcrumbs: [],
+          breadcrumbs: const [],
           sharedSpaceBreadcrumbs: const [],
           spaceType: newSpaceType,
           section: FileManagerSection.allFiles,
           sharedSpaceUsage: usage,
+          sharedUploadedByMe: false,
+          sharedSort: null,
           fileCategory: FileBrowserFileCategory.all,
           searchQuery: '',
           filePage: filesPage.page,
@@ -797,167 +799,5 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState>
     }
     state = AsyncData(current.copyWith(filePageSize: size, filePage: 0));
     await refreshFiles();
-  }
-
-  /// 桌面端独立跳页：按目标页码与每页条数替换当前页数据并同步分页元数据，
-  /// 不影响移动端既有的 `loadMore*` 滚动续载行为。
-  Future<void> goToPage(
-    FileManagerSection section, {
-    required int page,
-    int? size,
-  }) async {
-    final current = _currentState;
-    if (current == null || current.isBusy) {
-      return;
-    }
-    final targetPage = page < 0 ? 0 : page;
-    _clearSelection();
-    final navigation = _beginNavigation();
-    switch (section) {
-      case FileManagerSection.allFiles:
-        final targetSize = size ?? current.filePageSize;
-        await _runAction(FileOperation.refresh, () async {
-          final result = await _fetchSectionPage(
-            (p, s) => _listFilePageForSpace(
-              spaceType: current.spaceType,
-              parentId: current.parentId,
-              category: current.fileCategory,
-              page: p,
-              size: s,
-            ),
-            page: targetPage,
-            size: targetSize,
-          );
-          if (_isStaleNavigation(navigation)) {
-            return;
-          }
-          _emitState(
-            _liveOr(current).copyWith(
-              files: result.items,
-              filePage: result.page,
-              filePageSize: result.size,
-              fileTotalElements: result.totalElements,
-              fileTotalPages: result.totalPages,
-            ),
-          );
-        });
-      case FileManagerSection.sharedSpace:
-        final targetSize = size ?? current.filePageSize;
-        await _runAction(FileOperation.loadSharedSpace, () async {
-          final result = await _fetchSectionPage(
-            (p, s) => _repository.listSharedSpaceFilesPage(
-              parentId: current.parentId,
-              page: p,
-              size: s,
-            ),
-            page: targetPage,
-            size: targetSize,
-          );
-          if (_isStaleNavigation(navigation)) {
-            return;
-          }
-          _emitState(
-            _liveOr(current).copyWith(
-              files: result.items,
-              filePage: result.page,
-              filePageSize: result.size,
-              fileTotalElements: result.totalElements,
-              fileTotalPages: result.totalPages,
-            ),
-          );
-        });
-      case FileManagerSection.recent:
-        final targetSize = size ?? current.recentMeta.size;
-        await _runAction(FileOperation.loadRecent, () async {
-          final result = await _fetchSectionPage(
-            (p, s) => _repository.listRecentFilesPage(page: p, size: s),
-            page: targetPage,
-            size: targetSize,
-          );
-          if (_isStaleNavigation(navigation)) {
-            return;
-          }
-          _emitState(
-            _liveOr(current).copyWith(
-              recentFiles: result.items,
-              recentMeta: _metaOfNodePage(result),
-            ),
-          );
-        });
-      case FileManagerSection.favorites:
-        final targetSize = size ?? current.favoritesMeta.size;
-        await _runAction(FileOperation.loadFavorites, () async {
-          final result = await _fetchSectionPage(
-            (p, s) => _repository.listFavoriteFilesPage(page: p, size: s),
-            page: targetPage,
-            size: targetSize,
-          );
-          if (_isStaleNavigation(navigation)) {
-            return;
-          }
-          _emitState(
-            _liveOr(current).copyWith(
-              favoriteFiles: result.items,
-              favoritesMeta: _metaOfNodePage(result),
-            ),
-          );
-        });
-      case FileManagerSection.recycleBin:
-        final targetSize = size ?? current.recycleMeta.size;
-        final spaceType = current.spaceType;
-        await _runAction(FileOperation.loadRecycleBin, () async {
-          final result = await _fetchSectionPage(
-            (p, s) => _repository.listRecycleBinPage(
-              spaceType: spaceType,
-              page: p,
-              size: s,
-            ),
-            page: targetPage,
-            size: targetSize,
-          );
-          if (_isStaleNavigation(navigation)) {
-            return;
-          }
-          _emitState(
-            _liveOr(current).copyWith(
-              recycleBin: result.items,
-              recycleMeta: _metaOfNodePage(result),
-            ),
-          );
-        });
-      case FileManagerSection.sharedWithMe:
-        final targetSize = size ?? current.sharedWithMeMeta.size;
-        await _runAction(FileOperation.loadShared, () async {
-          var result = await _repository.listSharedWithMePage(
-            page: targetPage,
-            size: targetSize,
-          );
-          if (result.items.isEmpty &&
-              result.page > 0 &&
-              result.page >= result.totalPages) {
-            final lastPage = result.totalPages > 0 ? result.totalPages - 1 : 0;
-            result = await _repository.listSharedWithMePage(
-              page: lastPage,
-              size: targetSize,
-            );
-          }
-          if (_isStaleNavigation(navigation)) {
-            return;
-          }
-          _emitState(
-            _liveOr(current).copyWith(
-              sharedWithMe: result.items,
-              sharedWithMeMeta: FilesSubPageMeta(
-                page: result.page,
-                size: result.size,
-                totalElements: result.totalElements,
-                totalPages: result.totalPages,
-              ),
-            ),
-          );
-        });
-      default:
-        return;
-    }
   }
 }

@@ -1,5 +1,10 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:omninest/app/desktop/desktop_icons.dart';
+import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/desktop/desktop_skin.dart';
+import 'package:omninest/app/theme/desktop/desktop_type.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
@@ -29,6 +34,268 @@ Future<(String, String)?> showPhotoShareDialog(
   String? revokeError;
   var revokingAll = false;
   final revokingIds = <String>{};
+  final desktopSkin = DesktopSkin.maybeOf(context);
+  if (desktopSkin != null) {
+    return showDesktopDialog<(String, String)>(
+      context,
+      builder:
+          (ctx) => PhotoDialogTextField(
+            builder:
+                (ctx, passwordController) => StatefulBuilder(
+                  builder: (ctx, setDialogState) {
+                    final skin = DesktopSkin.of(ctx);
+                    final l10n = AppLocalizations.of(ctx);
+                    return DesktopDialog(
+                      width: 460,
+                      title: title,
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextField(
+                            controller: passwordController,
+                            obscureText: true,
+                            style: DesktopType.dense(skin.text),
+                            decoration: InputDecoration(
+                              hintText: l10n.photosSharePasswordHint,
+                              hintStyle: DesktopType.dense(skin.text3),
+                              filled: true,
+                              fillColor: skin.raise,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(color: skin.line),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(color: skin.line),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(color: skin.accent),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            l10n.photosShareExpiry,
+                            style: DesktopType.caption(skin.text2),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final option in const [
+                                '1d',
+                                '7d',
+                                '30d',
+                                'never',
+                              ])
+                                DesktopButton(
+                                  label: _expiryLabel(ctx, option),
+                                  variant:
+                                      expiryOption == option
+                                          ? DesktopButtonVariant.primary
+                                          : DesktopButtonVariant.soft,
+                                  onPressed:
+                                      () => setDialogState(
+                                        () => expiryOption = option,
+                                      ),
+                                ),
+                            ],
+                          ),
+                          if (remainingShares.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    l10n.photosExistingShareLinks,
+                                    style: DesktopType.caption(skin.text2),
+                                  ),
+                                ),
+                                if (onRevokeAll != null)
+                                  DesktopButton(
+                                    label: l10n.photosShareRevokeAll,
+                                    variant: DesktopButtonVariant.ghost,
+                                    onPressed:
+                                        revokingAll
+                                            ? null
+                                            : () async {
+                                              final confirmed = await showDesktopConfirm(
+                                                ctx,
+                                                title:
+                                                    l10n.photosShareRevokeAllConfirmTitle,
+                                                message:
+                                                    l10n.photosShareRevokeAllConfirmBody,
+                                                confirmLabel:
+                                                    l10n.photosShareRevokeAll,
+                                                destructive: true,
+                                              );
+                                              if (!confirmed || !ctx.mounted) {
+                                                return;
+                                              }
+                                              setDialogState(
+                                                () => revokingAll = true,
+                                              );
+                                              try {
+                                                await onRevokeAll();
+                                              } on Exception catch (error) {
+                                                if (!ctx.mounted) return;
+                                                setDialogState(() {
+                                                  revokingAll = false;
+                                                  revokeError =
+                                                      describeUserFacingError(
+                                                        error,
+                                                        l10n:
+                                                            AppLocalizations.of(
+                                                              ctx,
+                                                            ),
+                                                      ).displayMessage;
+                                                });
+                                                return;
+                                              }
+                                              if (!ctx.mounted) return;
+                                              setDialogState(() {
+                                                revokingAll = false;
+                                                revokeError = null;
+                                                remainingShares.clear();
+                                              });
+                                            },
+                                  ),
+                              ],
+                            ),
+                            if (revokeError != null) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                revokeError!,
+                                style: DesktopType.caption(skin.bad),
+                              ),
+                            ],
+                            const SizedBox(height: 8),
+                            for (final share in remainingShares)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _shareStatusText(ctx, share),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: DesktopType.dense(
+                                              share.isExpired
+                                                  ? skin.text3
+                                                  : skin.text,
+                                            ),
+                                          ),
+                                          Text(
+                                            l10n.photosShareAccessCount(
+                                              share.accessCount,
+                                            ),
+                                            style: DesktopType.caption(
+                                              skin.text3,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (shareUrlOf != null)
+                                      DesktopIconButton(
+                                        tooltip: l10n.filesCopyLink,
+                                        icon: DesktopIcons.link,
+                                        onPressed: () async {
+                                          final url = await shareUrlOf(share);
+                                          final copied =
+                                              await copyTextToClipboard(url);
+                                          if (!ctx.mounted) return;
+                                          showOmniFeedback(
+                                            ctx,
+                                            copied
+                                                ? l10n.filesCopiedClipboard
+                                                : url,
+                                            severity:
+                                                OmniFeedbackSeverity.success,
+                                          );
+                                        },
+                                      ),
+                                    DesktopIconButton(
+                                      tooltip: l10n.coreDelete,
+                                      icon: DesktopIcons.trash,
+                                      onPressed:
+                                          revokingIds.contains(share.id)
+                                              ? null
+                                              : () async {
+                                                setDialogState(
+                                                  () =>
+                                                      revokingIds.add(share.id),
+                                                );
+                                                try {
+                                                  await onRevoke(share.id);
+                                                } on Exception catch (error) {
+                                                  if (!ctx.mounted) return;
+                                                  setDialogState(() {
+                                                    revokingIds.remove(
+                                                      share.id,
+                                                    );
+                                                    revokeError =
+                                                        describeUserFacingError(
+                                                          error,
+                                                          l10n:
+                                                              AppLocalizations.of(
+                                                                ctx,
+                                                              ),
+                                                        ).displayMessage;
+                                                  });
+                                                  return;
+                                                }
+                                                if (!ctx.mounted) return;
+                                                setDialogState(() {
+                                                  revokingIds.remove(share.id);
+                                                  revokeError = null;
+                                                  remainingShares.removeWhere(
+                                                    (item) =>
+                                                        item.id == share.id,
+                                                  );
+                                                });
+                                              },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ],
+                      ),
+                      actions: [
+                        DesktopButton(
+                          label: l10n.photosCancel,
+                          variant: DesktopButtonVariant.ghost,
+                          onPressed: () => closeDesktopModal(ctx),
+                        ),
+                        DesktopButton(
+                          label: l10n.photosCreateLink,
+                          variant: DesktopButtonVariant.primary,
+                          onPressed:
+                              () => closeDesktopModal(ctx, (
+                                passwordController.text.trim(),
+                                expiryOption,
+                              )),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+          ),
+    );
+  }
 
   return showWorkstationDialog<(String, String)>(
     context: context,

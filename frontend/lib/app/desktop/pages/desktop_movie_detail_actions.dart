@@ -96,15 +96,14 @@ class _DesktopMovieDetailActionsState
     setState(() => _probing = true);
     try {
       await ref.read(movieDetailBackendActionsProvider).reprobe(widget.item.id);
+      if (!mounted) return;
       ref.invalidate(movieDetailProvider(widget.item.id));
-      if (mounted) {
-        showDesktopToast(
-          context,
-          l10n.desktopMoviesProbeDone,
-          kind: DesktopToastKind.success,
-          icon: DesktopIcons.check,
-        );
-      }
+      showDesktopToast(
+        context,
+        l10n.desktopMoviesProbeDone,
+        kind: DesktopToastKind.success,
+        icon: DesktopIcons.check,
+      );
     } on Object catch (error) {
       if (mounted) {
         showDesktopToast(
@@ -128,17 +127,16 @@ class _DesktopMovieDetailActionsState
       final export = await ref
           .read(movieDetailBackendActionsProvider)
           .exportNfo(widget.item.id);
+      if (!mounted) return;
       ref.invalidate(movieDetailProvider(widget.item.id));
-      if (mounted) {
-        showDesktopToast(
-          context,
-          export.exportPath.isEmpty
-              ? l10n.desktopMoviesNfoExported
-              : '${l10n.desktopMoviesNfoExported} · ${export.exportPath}',
-          kind: DesktopToastKind.success,
-          icon: DesktopIcons.download,
-        );
-      }
+      showDesktopToast(
+        context,
+        export.exportPath.isEmpty
+            ? l10n.desktopMoviesNfoExported
+            : '${l10n.desktopMoviesNfoExported} · ${export.exportPath}',
+        kind: DesktopToastKind.success,
+        icon: DesktopIcons.download,
+      );
     } on Object catch (error) {
       if (mounted) {
         showDesktopToast(
@@ -626,10 +624,10 @@ class _MatchCandidatesDialog extends ConsumerWidget {
             provider: candidate.provider,
             externalId: candidate.externalId,
           );
-      ref.invalidate(movieScrapeCandidatesProvider(item.fileNodeId));
       if (!context.mounted) {
         return;
       }
+      ref.invalidate(movieScrapeCandidatesProvider(item.fileNodeId));
       showDesktopToast(
         context,
         l10n.desktopMoviesMatchQueued,

@@ -114,6 +114,7 @@ Future<void> _pumpReviewWorkspace(
             runId: reviewRun.id,
             parentNodeId: null,
             page: 0,
+            scope: 'PENDING',
           )).overrideWith((ref) async => reviewPage),
         if (reviewRun != null &&
             reviewChildNodeId != null &&
@@ -122,6 +123,7 @@ Future<void> _pumpReviewWorkspace(
             runId: reviewRun.id,
             parentNodeId: reviewChildNodeId,
             page: 0,
+            scope: 'PENDING',
           )).overrideWith((ref) async => reviewChildPage),
       ],
       child: MaterialApp(

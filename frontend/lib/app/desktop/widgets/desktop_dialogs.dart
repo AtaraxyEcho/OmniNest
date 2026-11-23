@@ -660,11 +660,11 @@ class _DesktopModalSurfaceState extends State<_DesktopModalSurface>
 
   @override
   Widget build(BuildContext context) {
-    final panel = Align(
-      alignment: widget.align,
-      child: widget.builder(context),
-    );
     final drawer = widget.slideWidth > 0;
+    final panel =
+        drawer
+            ? widget.builder(context)
+            : Align(alignment: widget.align, child: widget.builder(context));
     final animated =
         drawer
             ? TweenAnimationBuilder<double>(
@@ -751,15 +751,22 @@ class _DesktopModalSurfaceState extends State<_DesktopModalSurface>
       clipBehavior: Clip.none,
       children: [
         Positioned.fill(child: scrim),
-        Positioned.fill(child: withExit),
+        if (drawer)
+          Positioned(top: 0, right: 0, bottom: 0, child: withExit)
+        else
+          Positioned.fill(child: withExit),
       ],
     );
-    // 样例 Modal / Drawer 都在 window 上监听 Escape（不看遮罩可否点击）；
-    // 弹层不再走 route，必须自己接管，否则键盘关不掉。CallbackShortcuts
-    // 要在 FocusScope 之外，焦点停在弹层自身时也能收到 Escape。
+    // 弹层不再走 route，必须自己接管 Escape；同步校验 widget.dismissible，
+    // 避免不可关闭弹层被键盘误关。CallbackShortcuts 放在 FocusScope 之外，
+    // 焦点停在弹层自身时也能收到 Escape。
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
-        const SingleActivator(LogicalKeyboardKey.escape): widget.onDismiss,
+        const SingleActivator(LogicalKeyboardKey.escape): () {
+          if (widget.dismissible) {
+            widget.onDismiss();
+          }
+        },
       },
       child: FocusScope(node: _scope, autofocus: true, child: stack),
     );

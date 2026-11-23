@@ -40,13 +40,12 @@ class _MovieSectionTransitionState extends State<MovieSectionTransition> {
         reverseDuration: MotionToken.resolve(context, MotionToken.fast),
         switchInCurve: MotionToken.pageCurve,
         switchOutCurve: MotionToken.curveIn,
-        layoutBuilder: (currentChild, previousChildren) {
-          return excludeExitingSemanticsStack(
-            currentChild,
-            previousChildren,
-            alignment: Alignment.topLeft,
-          );
-        },
+        layoutBuilder:
+            (currentChild, previousChildren) => excludeExitingSemanticsStack(
+              currentChild,
+              previousChildren,
+              alignment: Alignment.topLeft,
+            ),
         transitionBuilder: (child, animation) {
           final isIncoming = child.key == currentKey;
           final offset =

@@ -16,6 +16,8 @@ import com.omninest.modules.video.dto.MovieDtos.ScrapeTaskDto;
 import com.omninest.modules.video.dto.VideoLibrarySourceDtos.CreateVideoLibrarySourceRequest;
 import com.omninest.modules.video.dto.VideoLibrarySourceDtos.MountLibraryProvisionDto;
 import com.omninest.modules.video.dto.VideoLibrarySourceDtos.MountLibraryProvisionRequest;
+import com.omninest.modules.video.dto.VideoLibrarySourceDtos.ReclassifyVideoLibrarySourceDto;
+import com.omninest.modules.video.dto.VideoLibrarySourceDtos.ReclassifyVideoLibrarySourceRequest;
 import com.omninest.modules.video.dto.VideoLibrarySourceDtos.UpdateVideoLibrarySourceRequest;
 import com.omninest.modules.video.dto.VideoLibrarySourceDtos.VideoLibrarySourceDto;
 import com.omninest.modules.video.service.MediaLibraryAccessService;
@@ -98,6 +100,20 @@ public class VideoLibrarySourceController {
         ));
     }
 
+    @Operation(summary = "重新归类影视库来源下的已入库媒体")
+    @PostMapping("/api/v1/video/library-sources/{sourceId}/reclassify")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
+    ApiResponse<ReclassifyVideoLibrarySourceDto> reclassify(
+            @PathVariable UUID sourceId,
+            @RequestBody(required = false) ReclassifyVideoLibrarySourceRequest request
+    ) {
+        return ApiResponse.success(sourceService.reclassify(
+                currentUserContext.requireCurrentUserId(),
+                sourceId,
+                request
+        ));
+    }
+
     @Operation(summary = "扫描影视库来源")
     @PostMapping("/api/v1/video/library-sources/{sourceId}/scan/tasks")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
@@ -132,6 +148,7 @@ public class VideoLibrarySourceController {
     ApiResponse<PageResponse<MediaScanTreeNodeDto>> tree(
             @PathVariable UUID runId,
             @RequestParam(required = false) String parentNodeId,
+            @RequestParam(defaultValue = "PENDING") String scope,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "100") int size
     ) {
@@ -139,6 +156,7 @@ public class VideoLibrarySourceController {
                 currentUserContext.requireCurrentUserId(),
                 runId,
                 parentNodeId,
+                scope,
                 page,
                 size
         ));

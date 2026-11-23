@@ -1,11 +1,6 @@
 part of 'desktop_files_page.dart';
 
-/// 左侧分区轨：分区 + 文件夹树 + 存储用量（样例 `.fx-tree`）。
-///
-/// 样例把整条轨道做成一块独立玻璃面板（`desktop.css:446`：圆角 20、
-/// `--panel` 半透明底、1px 边线、`backdrop-filter: blur(20px)`），
-/// 内部再排分区标题与导航行。此前这里只画了透明的行，轨道落在页面底色上，
-/// 与样例的层级差一整层容器，所以面板在这里收口。
+/// 左侧分区轨：顶部固定空间切换 + 中部独立滚动导航与虚拟化目录树 + 底部固定存储卡。
 class _FilesRail extends StatefulWidget {
   const _FilesRail({
     required this.state,
@@ -13,9 +8,12 @@ class _FilesRail extends StatefulWidget {
     required this.stats,
     required this.onSection,
     required this.onSharedRoot,
+    required this.onSharedRecent,
+    required this.onSharedUploadedByMe,
     required this.onSpaceChanged,
     required this.onOpenFolder,
     required this.onMoveFiles,
+    this.onNewFolder,
   });
 
   final FileBrowserState? state;
@@ -23,6 +21,9 @@ class _FilesRail extends StatefulWidget {
   final FileStorageStats? stats;
   final ValueChanged<FileManagerSection> onSection;
   final VoidCallback onSharedRoot;
+  final VoidCallback onSharedRecent;
+  final VoidCallback onSharedUploadedByMe;
+  final VoidCallback? onNewFolder;
   final ValueChanged<String> onSpaceChanged;
   final void Function(FileNode folder, List<FileNode> breadcrumbs) onOpenFolder;
 
@@ -52,19 +53,148 @@ class _FilesRailState extends State<_FilesRail> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final skin = DesktopSkin.of(context);
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
+    final state = widget.state;
+    final shared = state?.spaceType == 'SHARED';
+    final sharedQuickRecent =
+        shared &&
+        widget.section == FileManagerSection.allFiles &&
+        state?.sharedSort == 'updatedAt,desc';
+    final sharedQuickUploaded =
+        shared &&
+        widget.section == FileManagerSection.allFiles &&
+        (state?.sharedUploadedByMe ?? false);
     final currentId =
-        widget.state != null &&
-                widget.state!.section == FileManagerSection.allFiles
-            ? (widget.state!.spaceType == 'SHARED'
-                ? widget.state!.sharedSpaceBreadcrumbs.isEmpty
+        state != null && state.section == FileManagerSection.allFiles
+            ? (shared
+                ? state.sharedSpaceBreadcrumbs.isEmpty
                     ? null
-                    : widget.state!.sharedSpaceBreadcrumbs.last.id
-                : widget.state!.breadcrumbs.isEmpty
+                    : state.sharedSpaceBreadcrumbs.last.id
+                : state.breadcrumbs.isEmpty
                 ? null
-                : widget.state!.breadcrumbs.last.id)
+                : state.breadcrumbs.last.id)
             : null;
     final canDrop = widget.section == FileManagerSection.allFiles;
-    final shared = widget.state?.spaceType == 'SHARED';
+
+    final List<Widget> leadingItems;
+    final List<Widget> trailingItems;
+    if (!shared) {
+      leadingItems = <Widget>[
+        _RailGroupLabel(l10n.desktopFilesGroupLibrary),
+        _RailItem(
+          label: l10n.desktopFilesAll,
+          icon: DesktopIcons.folderFilled,
+          active:
+              widget.section == FileManagerSection.allFiles &&
+              currentId == null,
+          onTap: () => widget.onSection(FileManagerSection.allFiles),
+          onDropFiles: canDrop ? (ids) => _moveFiles(ids, '') : null,
+        ),
+      ];
+      trailingItems = <Widget>[
+        _RailItem(
+          label: l10n.filesRecent,
+          icon: DesktopIcons.clock,
+          active: widget.section == FileManagerSection.recent,
+          onTap: () => widget.onSection(FileManagerSection.recent),
+        ),
+        _RailItem(
+          label: l10n.filesFavorites,
+          icon: DesktopIcons.star,
+          count: state?.favoriteFiles.length,
+          active: widget.section == FileManagerSection.favorites,
+          onTap: () => widget.onSection(FileManagerSection.favorites),
+        ),
+        _RailGroupLabel(l10n.desktopFilesGroupSharing, gap: true),
+        _RailItem(
+          label: l10n.desktopFilesSharedByMe,
+          icon: DesktopIcons.link,
+          count: state?.myShares.length,
+          active:
+              widget.section == FileManagerSection.myShares ||
+              widget.section == FileManagerSection.shareManagement,
+          onTap: () => widget.onSection(FileManagerSection.myShares),
+        ),
+        _RailItem(
+          label: l10n.filesSharedWithMe,
+          icon: DesktopIcons.user,
+          count: state?.sharedWithMe.length,
+          active: widget.section == FileManagerSection.sharedWithMe,
+          onTap: () => widget.onSection(FileManagerSection.sharedWithMe),
+        ),
+        _RailGroupLabel(l10n.desktopFilesGroupSources, gap: true),
+        _RailItem(
+          label: l10n.filesExternalStorage,
+          icon: DesktopIcons.server,
+          count: state?.externalAccounts.length,
+          active: widget.section == FileManagerSection.externalStorage,
+          onTap: () => widget.onSection(FileManagerSection.externalStorage),
+        ),
+        _RailItem(
+          label: l10n.filesRecycleBin,
+          icon: DesktopIcons.trash,
+          count: state?.recycleBin.length,
+          active: widget.section == FileManagerSection.recycleBin,
+          onTap: () => widget.onSection(FileManagerSection.recycleBin),
+        ),
+      ];
+    } else {
+      leadingItems = <Widget>[
+        _RailGroupLabel(isZh ? '共享目录' : 'Shared folders'),
+        _RailItem(
+          label: isZh ? '全部共享文件' : 'All shared files',
+          icon: DesktopIcons.users,
+          active:
+              widget.section == FileManagerSection.allFiles &&
+              currentId == null &&
+              !sharedQuickRecent &&
+              !sharedQuickUploaded,
+          onTap: widget.onSharedRoot,
+          onDropFiles: canDrop ? (ids) => _moveFiles(ids, '') : null,
+        ),
+      ];
+      trailingItems = <Widget>[
+        _RailGroupLabel(isZh ? '快捷视图' : 'Quick views', gap: true),
+        _RailItem(
+          label: isZh ? '最近更新' : 'Recently updated',
+          icon: DesktopIcons.clock,
+          active: sharedQuickRecent,
+          onTap: widget.onSharedRecent,
+        ),
+        _RailItem(
+          label: isZh ? '我上传的' : 'Uploaded by me',
+          icon: DesktopIcons.upload,
+          active: sharedQuickUploaded,
+          onTap: widget.onSharedUploadedByMe,
+        ),
+        _RailGroupLabel(isZh ? '协作分享' : 'Collaboration', gap: true),
+        _RailItem(
+          label: l10n.filesSharedWithMe,
+          icon: DesktopIcons.user,
+          count: state?.sharedWithMe.length,
+          active: widget.section == FileManagerSection.sharedWithMe,
+          onTap: () => widget.onSection(FileManagerSection.sharedWithMe),
+        ),
+        _RailItem(
+          label: l10n.desktopFilesSharedByMe,
+          icon: DesktopIcons.link,
+          count: state?.myShares.length,
+          active:
+              widget.section == FileManagerSection.myShares ||
+              widget.section == FileManagerSection.shareManagement,
+          onTap: () => widget.onSection(FileManagerSection.myShares),
+        ),
+        _RailGroupLabel(isZh ? '管理' : 'Manage', gap: true),
+        _RailItem(
+          label: l10n.filesRecycleBin,
+          icon: DesktopIcons.trash,
+          count: state?.recycleBin.length,
+          active: widget.section == FileManagerSection.recycleBin,
+          onTap: () => widget.onSection(FileManagerSection.recycleBin),
+        ),
+      ];
+    }
+
     return DesktopGlassSurface(
       borderRadius: BorderRadius.circular(_FilesRailGeometry.radius),
       blur: _FilesRailGeometry.blur,
@@ -81,111 +211,101 @@ class _FilesRailState extends State<_FilesRail> {
           children: [
             _RailSpaceSwitch(shared: shared, onChanged: widget.onSpaceChanged),
             const SizedBox(height: 10),
-            if (!shared) ...[
-              _RailGroupLabel(l10n.desktopFilesGroupLibrary),
-              _RailItem(
-                label: l10n.desktopFilesAll,
-                icon: DesktopIcons.folderFilled,
-                active:
-                    widget.section == FileManagerSection.allFiles &&
-                    currentId == null,
-                onTap: () => widget.onSection(FileManagerSection.allFiles),
-                onDropFiles: canDrop ? (ids) => _moveFiles(ids, '') : null,
-              ),
-              _FolderTree(
+            Expanded(
+              child: _FolderTree(
                 key: _folderTreeKey,
-                state: widget.state,
-                currentId: currentId,
-                onOpen: widget.onOpenFolder,
-                onSection: () => widget.onSection(FileManagerSection.allFiles),
-                onMoveFiles: _moveFiles,
-              ),
-              _RailItem(
-                label: l10n.filesRecent,
-                icon: DesktopIcons.clock,
-                active: widget.section == FileManagerSection.recent,
-                onTap: () => widget.onSection(FileManagerSection.recent),
-              ),
-              _RailItem(
-                label: l10n.filesFavorites,
-                icon: DesktopIcons.star,
-                count: widget.state?.favoriteFiles.length,
-                active: widget.section == FileManagerSection.favorites,
-                onTap: () => widget.onSection(FileManagerSection.favorites),
-              ),
-              _RailGroupLabel(l10n.desktopFilesGroupSharing, gap: true),
-              _RailItem(
-                label: l10n.desktopFilesSharedByMe,
-                icon: DesktopIcons.link,
-                count: widget.state?.myShares.length,
-                active:
-                    widget.section == FileManagerSection.myShares ||
-                    widget.section == FileManagerSection.shareManagement,
-                onTap: () => widget.onSection(FileManagerSection.myShares),
-              ),
-              _RailItem(
-                label: l10n.filesSharedWithMe,
-                icon: DesktopIcons.user,
-                count: widget.state?.sharedWithMe.length,
-                active: widget.section == FileManagerSection.sharedWithMe,
-                onTap: () => widget.onSection(FileManagerSection.sharedWithMe),
-              ),
-              _RailGroupLabel(l10n.desktopFilesGroupSources, gap: true),
-              _RailItem(
-                label: l10n.filesExternalStorage,
-                icon: DesktopIcons.server,
-                count: widget.state?.externalAccounts.length,
-                active: widget.section == FileManagerSection.externalStorage,
-                onTap:
-                    () => widget.onSection(FileManagerSection.externalStorage),
-              ),
-              _RailItem(
-                label: l10n.filesRecycleBin,
-                icon: DesktopIcons.trash,
-                count: widget.state?.recycleBin.length,
-                active: widget.section == FileManagerSection.recycleBin,
-                onTap: () => widget.onSection(FileManagerSection.recycleBin),
-              ),
-            ] else ...[
-              _RailGroupLabel(l10n.filesSharedSpace),
-              _RailItem(
-                label: l10n.filesSharedSpace,
-                icon: DesktopIcons.users,
-                active:
-                    widget.section == FileManagerSection.allFiles &&
-                    currentId == null,
-                onTap: widget.onSharedRoot,
-                onDropFiles: canDrop ? (ids) => _moveFiles(ids, '') : null,
-              ),
-              _FolderTree(
-                key: _folderTreeKey,
-                state: widget.state,
+                state: state,
                 currentId: currentId,
                 onOpen: widget.onOpenFolder,
                 // 共享空间中的树节点已经处于 allFiles；点击节点只打开它，
                 // 不先回根目录，否则两次异步导航会互相覆盖面包屑。
-                onSection: () {},
+                onSection:
+                    shared
+                        ? () {}
+                        : () => widget.onSection(FileManagerSection.allFiles),
                 onMoveFiles: _moveFiles,
+                onNewFolder: shared ? widget.onNewFolder : null,
+                leadingItems: leadingItems,
+                trailingItems: trailingItems,
               ),
-              if (widget.state?.sharedSpaceUsage != null) ...[
-                _RailGroupLabel(l10n.filesSharedSpaceUsage, gap: true),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-                  child: Text(
-                    '${formatFileSize(widget.state!.sharedSpaceUsage!.usedBytes)} · '
-                    '${l10n.desktopFilesItemCount(widget.state!.sharedSpaceUsage!.fileCount)}',
-                    style: DesktopType.caption(skin.text3),
-                  ),
-                ),
-              ],
-            ],
-            if (shared && widget.state?.sharedSpaceUsage != null)
-              _RailSharedStorageCard(usage: widget.state!.sharedSpaceUsage!)
+            ),
+            if (shared && state?.sharedSpaceUsage != null)
+              _RailSharedStorageCard(usage: state!.sharedSpaceUsage!)
             else if (widget.stats != null)
               _RailStorageCard(stats: widget.stats!)
-            else if (widget.state == null)
+            else if (state == null)
               const _RailStorageSkeleton(),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 侧栏与主视图之间的可拖拽分隔条（200px–380px，双击重置 244px）。
+class _RailResizeHandle extends StatefulWidget {
+  const _RailResizeHandle({
+    required this.width,
+    required this.onChanged,
+    required this.onReset,
+  });
+
+  static const double minWidth = 200.0;
+  static const double maxWidth = 380.0;
+
+  final double width;
+  final ValueChanged<double> onChanged;
+  final VoidCallback onReset;
+
+  @override
+  State<_RailResizeHandle> createState() => _RailResizeHandleState();
+}
+
+class _RailResizeHandleState extends State<_RailResizeHandle> {
+  bool _hovered = false;
+  bool _dragging = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    final active = _hovered || _dragging;
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onDoubleTap: widget.onReset,
+        onHorizontalDragStart: (_) => setState(() => _dragging = true),
+        onHorizontalDragEnd: (_) => setState(() => _dragging = false),
+        onHorizontalDragCancel: () => setState(() => _dragging = false),
+        onHorizontalDragUpdate: (details) {
+          final next = (widget.width + details.delta.dx).clamp(
+            _RailResizeHandle.minWidth,
+            _RailResizeHandle.maxWidth,
+          );
+          if (next != widget.width) {
+            widget.onChanged(next);
+          }
+        },
+        child: SizedBox(
+          width: 22,
+          child: Center(
+            child: AnimatedContainer(
+              duration: DesktopMotion.of(context, DesktopMotion.fast),
+              width: active ? 3 : 1,
+              height: active ? 56 : 28,
+              decoration: BoxDecoration(
+                color:
+                    _dragging
+                        ? skin.accent
+                        : _hovered
+                        ? skin.text3.withValues(alpha: 0.55)
+                        : Colors.transparent,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -356,10 +476,6 @@ class _RailSpaceButton extends StatelessWidget {
 }
 
 /// 分区导航行（样例 `.tree-item` 34px，圆角 9，hover `--raise`）。
-///
-/// `onDropFiles` 非空时整行同时是拖放目标（样例 `nav()` 给 My files 挂了
-/// `dropProps("root")`），落点高亮走 `.tree-item.drop` 的 accent 22% 底
-/// 与 1.5px 内描边。
 class _RailItem extends StatefulWidget {
   const _RailItem({
     required this.label,
@@ -457,7 +573,6 @@ class _RailItemState extends State<_RailItem> {
         try {
           await onDropFiles(details.data);
         } on Object catch (error) {
-          // 捕获的是 build 的 BuildContext 参数，必须用它自己的 mounted 判定。
           if (!context.mounted) {
             return;
           }
@@ -481,6 +596,74 @@ class _RailItemState extends State<_RailItem> {
         }
       },
       builder: (context, candidate, rejected) => content,
+    );
+  }
+}
+
+/// 展平后的可见树节点，供 `SliverFixedExtentList.builder` 虚拟化渲染。
+class _VisibleTreeNode {
+  const _VisibleTreeNode({
+    required this.folder,
+    required this.depth,
+    required this.path,
+  });
+
+  final FileNode folder;
+  final int depth;
+  final List<FileNode> path;
+}
+
+class _TreeMiniAction extends StatelessWidget {
+  const _TreeMiniAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.active = false,
+    this.enabled = true,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool active;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final skin = DesktopSkin.of(context);
+    return Tooltip(
+      message: tooltip,
+      child: DesktopHover(
+        builder:
+            (context, hovered) => GestureDetector(
+              onTap: enabled ? onTap : null,
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                width: 24,
+                height: 24,
+                margin: const EdgeInsets.only(left: 2),
+                decoration: BoxDecoration(
+                  color:
+                      active
+                          ? skin.accentWash(0.16)
+                          : (enabled && hovered)
+                          ? skin.raise
+                          : Colors.transparent,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(
+                  icon,
+                  size: 13,
+                  color:
+                      !enabled
+                          ? skin.text3.withValues(alpha: 0.4)
+                          : active
+                          ? skin.accent
+                          : skin.text2,
+                ),
+              ),
+            ),
+      ),
     );
   }
 }

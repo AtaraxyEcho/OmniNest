@@ -72,10 +72,25 @@ class FileListQueryService {
             String category,
             int page,
             int size) {
+        return listFilesPage(ownerUserId, parentId, category, false, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<FileNodeDto> listFilesPage(
+            UUID ownerUserId,
+            UUID parentId,
+            String category,
+            boolean onlyFolders,
+            int page,
+            int size) {
         String normalizedCategory = normalizeCategory(category);
         Pageable pageable = filePageable(page, size);
         Page<FileNode> nodes;
-        if (normalizedCategory == null) {
+        if (onlyFolders && normalizedCategory == null) {
+            nodes = parentId == null
+                    ? fileNodeRepository.findVisiblePersonalRootFolders(ownerUserId, SpaceType.PERSONAL, pageable)
+                    : fileNodeRepository.findVisiblePersonalChildFolders(ownerUserId, parentId, pageable);
+        } else if (normalizedCategory == null) {
             nodes = parentId == null
                     ? fileNodeRepository.findVisiblePersonalRoot(ownerUserId, SpaceType.PERSONAL, pageable)
                     : fileNodeRepository.findVisiblePersonalChildren(ownerUserId, parentId, pageable);

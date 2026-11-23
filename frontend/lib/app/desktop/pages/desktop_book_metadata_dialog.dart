@@ -328,10 +328,10 @@ class _DesktopBookMetadataDrawerState
             'coverImageUrl': coverUrl,
         },
       );
-      ref.invalidate(readerItemDetailProvider(widget.item.id));
       if (!mounted) {
         return;
       }
+      ref.invalidate(readerItemDetailProvider(widget.item.id));
       showDesktopToast(
         context,
         l10n.desktopBookMetadataSaved,
@@ -360,8 +360,8 @@ class _DesktopBookMetadataDrawerState
             itemId: widget.item.id,
             fields: const {'restoreOriginal': true},
           );
-      ref.invalidate(readerItemDetailProvider(widget.item.id));
       if (!mounted) return;
+      ref.invalidate(readerItemDetailProvider(widget.item.id));
       showDesktopToast(
         context,
         l10n.desktopBookMetadataRestored,

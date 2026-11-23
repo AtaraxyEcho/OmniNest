@@ -246,7 +246,7 @@ public class MovieLibraryService {
                         .toList()
         ).stream().limit(12).toList();
         List<MovieVideoItemDto> recentlyAdded = videoItemDtoConverter.toVideoDtos(ownerUserId, recentItems);
-        List<MediaPlaybackProgress> progresses = progressService.latest(ownerUserId, MediaPlaybackType.VIDEO);
+        List<MediaPlaybackProgress> progresses = progressService.latestIncomplete(ownerUserId, MediaPlaybackType.VIDEO);
         List<MovieContinueWatchingDto> continueWatching = toContinueWatchingDtos(ownerUserId, progresses);
         ZoneId zone = ZoneId.systemDefault();
         Instant todayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant();
@@ -564,9 +564,10 @@ public class MovieLibraryService {
         // 都能借此改掉别人创建的剧集标题与简介。库来源条目的跨所有者维护
         // 只放行持有 MEDIA_LIBRARY_MANAGE 的管理员，并仍经库来源校验。
         MediaTvSeries series = requireWritableSeries(ownerUserId, seriesId);
+        UUID catalogOwnerId = series.getOwnerUserId();
         boolean restoreOriginal = Boolean.TRUE.equals(request.restoreOriginal());
         if (restoreOriginal) {
-            restoreSeriesOriginal(ownerUserId, series);
+            restoreSeriesOriginal(catalogOwnerId, ownerUserId, series);
             series.setUpdatedAt(Instant.now());
             tvSeriesRepository.save(series);
         } else {
@@ -574,7 +575,7 @@ public class MovieLibraryService {
             if (title.isEmpty()) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "剧集标题不能为空");
             }
-            captureSeriesOriginal(ownerUserId, series);
+            captureSeriesOriginal(catalogOwnerId, series);
             series.setTitle(title);
             if (request.overview() != null) {
                 series.setOverview(request.overview());
@@ -618,14 +619,15 @@ public class MovieLibraryService {
             }
             if (Boolean.TRUE.equals(request.clearPoster())) {
                 contentAssetService.clearPrimaryAsset(
-                        ownerUserId,
+                        catalogOwnerId,
                         series.getId(),
                         ResourceType.TV_SERIES.getValue(),
                         AssetType.POSTER.getValue());
                 series.setPosterFileId(null);
                 metadata.remove("manualPosterUrl");
             } else if (request.posterFileId() != null) {
-                series.setPosterFileId(contentAssetService.setPrimaryFileAsset(
+                series.setPosterFileId(setPrimaryFileAssetForOwner(
+                        catalogOwnerId,
                         ownerUserId,
                         series.getId(),
                         ResourceType.TV_SERIES.getValue(),
@@ -638,7 +640,7 @@ public class MovieLibraryService {
                     metadata.remove("manualPosterUrl");
                 } else {
                     series.setPosterFileId(contentAssetService.setPrimaryRemoteAsset(
-                            ownerUserId,
+                            catalogOwnerId,
                             series.getId(),
                             ResourceType.TV_SERIES.getValue(),
                             AssetType.POSTER.getValue(),
@@ -718,10 +720,7 @@ public class MovieLibraryService {
 
     @Transactional(readOnly = true)
     public List<MovieContinueWatchingDto> continueWatching(UUID ownerUserId) {
-        List<MediaPlaybackProgress> progresses = progressService.latest(ownerUserId, MediaPlaybackType.VIDEO)
-                .stream()
-                .filter(p -> !p.isCompleted())
-                .toList();
+        List<MediaPlaybackProgress> progresses = progressService.latestIncomplete(ownerUserId, MediaPlaybackType.VIDEO);
         return toContinueWatchingDtos(ownerUserId, progresses);
     }
 
@@ -771,6 +770,7 @@ public class MovieLibraryService {
     @Transactional(rollbackFor = Exception.class)
     public MovieVideoItemDto updateMetadata(UUID ownerUserId, UUID videoItemId, MovieMetadataUpdateRequest request) {
         MediaVideoItem item = requireWritableVideo(ownerUserId, videoItemId);
+        UUID catalogOwnerId = item.getOwnerUserId();
         boolean restoreOriginal = Boolean.TRUE.equals(request.restoreOriginal());
         if (!restoreOriginal && (request.title() == null || request.title().isBlank())) {
             throw new BusinessException(
@@ -803,14 +803,15 @@ public class MovieLibraryService {
                     }
                     if (restored.externalUrl() != null && !restored.externalUrl().isBlank()) {
                         movie.setPosterFileId(contentAssetService.setPrimaryRemoteAsset(
-                                ownerUserId,
+                                catalogOwnerId,
                                 movie.getId(),
                                 ResourceType.MOVIE.getValue(),
                                 AssetType.POSTER.getValue(),
                                 restored.fileNodeId(),
                                 restored.externalUrl()));
                     } else if (restored.fileNodeId() != null) {
-                        movie.setPosterFileId(contentAssetService.setPrimaryFileAsset(
+                        movie.setPosterFileId(setPrimaryFileAssetForOwner(
+                                catalogOwnerId,
                                 ownerUserId,
                                 movie.getId(),
                                 ResourceType.MOVIE.getValue(),
@@ -818,7 +819,7 @@ public class MovieLibraryService {
                                 restored.fileNodeId()));
                     } else {
                         contentAssetService.clearPrimaryAsset(
-                                ownerUserId,
+                                catalogOwnerId,
                                 movie.getId(),
                                 ResourceType.MOVIE.getValue(),
                                 AssetType.POSTER.getValue());
@@ -828,12 +829,12 @@ public class MovieLibraryService {
                 } else {
                     if (!MovieMetadataService.hasOriginal(movie)) {
                         String posterExternalUrl = contentAssetService.primaryExternalUrl(
-                                ownerUserId,
+                                catalogOwnerId,
                                 movie.getId(),
                                 ResourceType.MOVIE.getValue(),
                                 AssetType.POSTER.getValue());
                         UUID posterFileNodeId = contentAssetService.primaryFileNodeId(
-                                ownerUserId,
+                                catalogOwnerId,
                                 movie.getId(),
                                 ResourceType.MOVIE.getValue(),
                                 AssetType.POSTER.getValue());
@@ -845,13 +846,14 @@ public class MovieLibraryService {
                     movie.setOverview(blankToNull(request.overview()));
                     if (clearPoster) {
                         contentAssetService.clearPrimaryAsset(
-                                ownerUserId,
+                                catalogOwnerId,
                                 movie.getId(),
                                 ResourceType.MOVIE.getValue(),
                                 AssetType.POSTER.getValue());
                         movie.setPosterFileId(null);
                     } else if (request.posterFileId() != null) {
-                        movie.setPosterFileId(contentAssetService.setPrimaryFileAsset(
+                        movie.setPosterFileId(setPrimaryFileAssetForOwner(
+                                catalogOwnerId,
                                 ownerUserId,
                                 movie.getId(),
                                 ResourceType.MOVIE.getValue(),
@@ -861,14 +863,14 @@ public class MovieLibraryService {
                         String posterUrl = MovieMetadataService.validatePosterUrl(request.posterUrl());
                         if (posterUrl != null) {
                             movie.setPosterFileId(contentAssetService.setPrimaryRemoteAsset(
-                                    ownerUserId,
+                                    catalogOwnerId,
                                     movie.getId(),
                                     ResourceType.MOVIE.getValue(),
                                     AssetType.POSTER.getValue(),
                                     posterUrl));
                         } else {
                             contentAssetService.clearPrimaryAsset(
-                                    ownerUserId,
+                                    catalogOwnerId,
                                     movie.getId(),
                                     ResourceType.MOVIE.getValue(),
                                     AssetType.POSTER.getValue());
@@ -876,7 +878,8 @@ public class MovieLibraryService {
                         }
                     }
                     if (request.backdropFileId() != null) {
-                        UUID backdropFileId = contentAssetService.setPrimaryFileAsset(
+                        UUID backdropFileId = setPrimaryFileAssetForOwner(
+                                catalogOwnerId,
                                 ownerUserId,
                                 movie.getId(),
                                 ResourceType.MOVIE.getValue(),
@@ -947,14 +950,15 @@ public class MovieLibraryService {
                 }
                 if (clearPoster) {
                     contentAssetService.clearPrimaryAsset(
-                            ownerUserId,
+                            catalogOwnerId,
                             item.getId(),
                             ResourceType.VIDEO_ITEM.getValue(),
                             AssetType.POSTER.getValue());
                     episode.setStillFileId(null);
                     metadata.remove("manualPosterUrl");
                 } else if (request.posterFileId() != null) {
-                    UUID posterFileId = contentAssetService.setPrimaryFileAsset(
+                    UUID posterFileId = setPrimaryFileAssetForOwner(
+                            catalogOwnerId,
                             ownerUserId,
                             item.getId(),
                             ResourceType.VIDEO_ITEM.getValue(),
@@ -966,7 +970,7 @@ public class MovieLibraryService {
                     String posterUrl = MovieMetadataService.validatePosterUrl(request.posterUrl());
                     if (posterUrl != null) {
                         UUID posterFileId = contentAssetService.setPrimaryRemoteAsset(
-                                ownerUserId,
+                                catalogOwnerId,
                                 item.getId(),
                                 ResourceType.VIDEO_ITEM.getValue(),
                                 AssetType.POSTER.getValue(),
@@ -975,7 +979,7 @@ public class MovieLibraryService {
                         metadata.put("manualPosterUrl", posterUrl);
                     } else {
                         contentAssetService.clearPrimaryAsset(
-                                ownerUserId,
+                                catalogOwnerId,
                                 item.getId(),
                                 ResourceType.VIDEO_ITEM.getValue(),
                                 AssetType.POSTER.getValue());
@@ -1126,39 +1130,39 @@ public class MovieLibraryService {
                                     item.mediaType(),
                                     item.seriesId(),
                                     item.seasonNumber(),
-                                    item.episodeNumber()
+                                    item.episodeNumber(),
+                                    item.movieId()
                             );
                         })
                         .stream())
                 .toList();
-        return dedupeContinueWatchingBySeries(mapped);
+        return dedupeContinueWatchingByWork(mapped);
     }
 
     /**
-     * 同一剧集只保留最近一次未看完进度，避免继续观看出现多张同系列分集卡。
-     * 电影（seriesId 为空）不合并；组内按 updatedAt 取最新。
+     * 按作品维度去重继续观看：优先按 seriesId -> movieId -> id 保留最近一次未看完进度，
+     * 避免同系列多集或多版本电影在继续观看中重复出现。
      */
-    private List<MovieContinueWatchingDto> dedupeContinueWatchingBySeries(
+    private List<MovieContinueWatchingDto> dedupeContinueWatchingByWork(
             List<MovieContinueWatchingDto> entries
     ) {
-        Map<UUID, MovieContinueWatchingDto> latestBySeries = new LinkedHashMap<>();
-        List<MovieContinueWatchingDto> movies = new ArrayList<>();
+        Map<String, MovieContinueWatchingDto> latestByWork = new LinkedHashMap<>();
         for (MovieContinueWatchingDto entry : entries) {
-            if (entry.seriesId() == null) {
-                movies.add(entry);
-                continue;
-            }
-            MovieContinueWatchingDto current = latestBySeries.get(entry.seriesId());
+            String workKey = entry.seriesId() != null
+                    ? "SERIES:" + entry.seriesId()
+                    : entry.movieId() != null
+                            ? "MOVIE:" + entry.movieId()
+                            : "ITEM:" + entry.id();
+            MovieContinueWatchingDto current = latestByWork.get(workKey);
             Instant currentAt = current == null || current.updatedAt() == null
                     ? Instant.EPOCH
                     : current.updatedAt();
             Instant entryAt = entry.updatedAt() == null ? Instant.EPOCH : entry.updatedAt();
             if (current == null || entryAt.isAfter(currentAt)) {
-                latestBySeries.put(entry.seriesId(), entry);
+                latestByWork.put(workKey, entry);
             }
         }
-        List<MovieContinueWatchingDto> result = new ArrayList<>(movies);
-        result.addAll(latestBySeries.values());
+        List<MovieContinueWatchingDto> result = new ArrayList<>(latestByWork.values());
         result.sort((left, right) -> {
             Instant leftAt = left.updatedAt() == null ? Instant.EPOCH : left.updatedAt();
             Instant rightAt = right.updatedAt() == null ? Instant.EPOCH : right.updatedAt();
@@ -1485,8 +1489,71 @@ public class MovieLibraryService {
         series.setMetadata(metadata);
     }
 
+    /**
+     * 解析系列下首个有效分集的 fileNodeId，供系列级刮削候选与任务接口委托 {@link MovieScrapeService}。
+     */
+    @Transactional(readOnly = true)
+    public UUID resolvePrimarySeriesFileNodeId(UUID operatorUserId, UUID seriesId, boolean requireWritable) {
+        if (requireWritable) {
+            requireWritableSeries(operatorUserId, seriesId);
+        } else {
+            MediaTvSeries series = tvSeriesRepository.findById(seriesId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "剧集不存在"));
+            requireReadableSeriesOrNotFound(operatorUserId, series);
+        }
+        var scope = mediaLibraryAccessService.visibilityScope(operatorUserId);
+        List<MediaVideoItem> items = videoItemRepository.findReadableBySeriesId(
+                operatorUserId,
+                scope.sharedSpaceReadable(),
+                SpaceType.SHARED,
+                scope.librarySourceIds(),
+                seriesId
+        );
+        return items.stream()
+                .map(MediaVideoItem::getFileNodeId)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "该剧集下没有可用的分集文件"));
+    }
+
+    /**
+     * 解析系列下所有可写分集的 videoItemId，供系列级批量重新探测使用。
+     */
+    @Transactional(readOnly = true)
+    public List<UUID> resolveWritableSeriesVideoItemIds(UUID operatorUserId, UUID seriesId) {
+        requireWritableSeries(operatorUserId, seriesId);
+        var scope = mediaLibraryAccessService.visibilityScope(operatorUserId);
+        List<MediaVideoItem> items = videoItemRepository.findReadableBySeriesId(
+                operatorUserId,
+                scope.sharedSpaceReadable(),
+                SpaceType.SHARED,
+                scope.librarySourceIds(),
+                seriesId
+        );
+        if (items.isEmpty()) {
+            throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "该剧集下没有可探测的分集");
+        }
+        return items.stream().map(MediaVideoItem::getId).toList();
+    }
+
+    private UUID setPrimaryFileAssetForOwner(
+            UUID catalogOwnerId,
+            UUID operatorUserId,
+            UUID resourceId,
+            String resourceType,
+            String assetType,
+            UUID fileNodeId
+    ) {
+        if (catalogOwnerId.equals(operatorUserId)) {
+            return contentAssetService.setPrimaryFileAsset(
+                    catalogOwnerId, resourceId, resourceType, assetType, fileNodeId);
+        }
+        return contentAssetService.setPrimaryFileAsset(
+                catalogOwnerId, operatorUserId, resourceId, resourceType, assetType, fileNodeId);
+    }
+
     @SuppressWarnings("unchecked")
-    private void restoreSeriesOriginal(UUID ownerUserId, MediaTvSeries series) {
+    private void restoreSeriesOriginal(UUID catalogOwnerId, UUID operatorUserId, MediaTvSeries series) {
         Map<String, Object> metadata = series.getMetadata() == null ? Map.of() : series.getMetadata();
         Object rawOriginal = metadata.get("manualMetadataOriginal");
         if (!(rawOriginal instanceof Map<?, ?> originalMap) || originalMap.isEmpty()) {
@@ -1523,22 +1590,23 @@ public class MovieLibraryService {
                 : UUID.fromString(posterFileIdText);
         if (posterExternalUrl != null && !posterExternalUrl.isBlank()) {
             series.setPosterFileId(contentAssetService.setPrimaryRemoteAsset(
-                    ownerUserId,
+                    catalogOwnerId,
                     series.getId(),
                     ResourceType.TV_SERIES.getValue(),
                     AssetType.POSTER.getValue(),
                     posterFileId,
                     posterExternalUrl));
         } else if (posterFileId != null) {
-            series.setPosterFileId(contentAssetService.setPrimaryFileAsset(
-                    ownerUserId,
+            series.setPosterFileId(setPrimaryFileAssetForOwner(
+                    catalogOwnerId,
+                    operatorUserId,
                     series.getId(),
                     ResourceType.TV_SERIES.getValue(),
                     AssetType.POSTER.getValue(),
                     posterFileId));
         } else {
             contentAssetService.clearPrimaryAsset(
-                    ownerUserId,
+                    catalogOwnerId,
                     series.getId(),
                     ResourceType.TV_SERIES.getValue(),
                     AssetType.POSTER.getValue());
@@ -1557,10 +1625,15 @@ public class MovieLibraryService {
 
     private List<MediaVideoItem> deduplicateBySeries(List<MediaVideoItem> items) {
         Set<UUID> seenSeriesIds = new HashSet<>();
+        Set<UUID> seenMovieIds = new HashSet<>();
         return items.stream().filter(item -> {
             UUID seriesId = item.getSeriesId();
             if (seriesId != null) {
                 return seenSeriesIds.add(seriesId);
+            }
+            UUID movieId = item.getMovieId();
+            if (movieId != null) {
+                return seenMovieIds.add(movieId);
             }
             return true;
         }).toList();

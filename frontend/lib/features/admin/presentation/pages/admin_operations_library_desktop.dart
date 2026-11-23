@@ -186,10 +186,14 @@ class _DesktopMediaLibraryPanelState
   }
 
   void _edit(VideoLibrarySource? source, List<VideoStorageLocation> locations) {
-    showWorkstationDialog<void>(
-      context: context,
+    showDesktopDrawer<void>(
+      context,
+      width: 520,
       builder:
-          (_) => VideoLibrarySourceDialog(source: source, locations: locations),
+          (_) => DesktopVideoLibrarySourceDrawer(
+            source: source,
+            locations: locations,
+          ),
     );
   }
 

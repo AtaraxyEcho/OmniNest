@@ -9,6 +9,7 @@ import 'package:omninest/app/desktop/desktop_icons.dart';
 import 'package:omninest/app/desktop/desktop_routes.dart';
 import 'package:omninest/app/desktop/desktop_router_scope.dart';
 import 'package:omninest/app/desktop/desktop_toast.dart';
+import 'package:omninest/app/desktop/pages/desktop_series_detail_actions.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover.dart';
 import 'package:omninest/app/desktop/widgets/desktop_cover_field.dart';
@@ -18,7 +19,9 @@ import 'package:omninest/app/desktop/widgets/desktop_fields.dart';
 import 'package:omninest/app/desktop/widgets/desktop_glass.dart';
 import 'package:omninest/app/desktop/widgets/desktop_select.dart';
 import 'package:omninest/app/desktop/widgets/desktop_skeleton.dart';
+import 'package:omninest/app/desktop/widgets/desktop_subtitle_panel.dart';
 import 'package:omninest/app/desktop/widgets/desktop_surfaces.dart';
+import 'package:omninest/app/desktop/widgets/desktop_tab_transition.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
 import 'package:omninest/app/theme/desktop/desktop_skin.dart';
@@ -150,15 +153,21 @@ class _DesktopSeriesDetailPageState
                 ),
               ),
               const SizedBox(height: 20),
-              switch (_tab) {
-                _SeriesTab.overview => _OverviewTab(detail: detail),
-                _SeriesTab.episodes => _EpisodesTab(
-                  detail: detail,
-                  onPlay: (episode) => _playEpisode(episode.id),
+              DesktopTabTransition(
+                tabIndex: _tab.index,
+                child: KeyedSubtree(
+                  key: ValueKey(_tab),
+                  child: switch (_tab) {
+                    _SeriesTab.overview => _OverviewTab(detail: detail),
+                    _SeriesTab.episodes => _EpisodesTab(
+                      detail: detail,
+                      onPlay: (episode) => _playEpisode(episode.id),
+                    ),
+                    _SeriesTab.files => _FilesTab(seriesId: series.id),
+                    _SeriesTab.subtitles => _SubtitlesTab(seriesId: series.id),
+                  },
                 ),
-                _SeriesTab.files => _FilesTab(seriesId: series.id),
-                _SeriesTab.subtitles => _SubtitlesTab(seriesId: series.id),
-              },
+              ),
               if (related.isNotEmpty) ...[
                 const SizedBox(height: 40),
                 Text(
@@ -254,109 +263,5 @@ class _DesktopSeriesDetailPageState
     } finally {
       if (mounted) setState(() => _savingFavorite = false);
     }
-  }
-}
-
-class _SeriesMetaStrip extends StatelessWidget {
-  const _SeriesMetaStrip({required this.series, required this.seasons});
-
-  final MovieSeries series;
-  final List<MovieSeason> seasons;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final skin = DesktopSkin.of(context);
-    final episodeCount = seasons.fold<int>(
-      0,
-      (sum, season) => sum + (season.episodeCount ?? 0),
-    );
-    final hasEpisodeCount = seasons.any(
-      (season) => season.episodeCount != null,
-    );
-    final cells = <(String, String, String)>[
-      (l10n.videoRating, series.rating?.toStringAsFixed(1) ?? '—', 'TMDB'),
-      (
-        l10n.videoYear,
-        series.firstAirDate?.year.toString() ?? '—',
-        series.seriesType,
-      ),
-      (
-        l10n.desktopSeriesEpisodes,
-        hasEpisodeCount ? '$episodeCount' : '—',
-        l10n.desktopSeriesSeasonCount(seasons.length),
-      ),
-      (
-        l10n.videoGenre,
-        series.genres.isEmpty ? '—' : series.genres.take(2).join(' · '),
-        '',
-      ),
-      (
-        l10n.videoContentRating,
-        series.contentRating?.isNotEmpty == true ? series.contentRating! : '—',
-        '',
-      ),
-    ];
-    final radius = BorderRadius.circular(16);
-    return DesktopGlassSurface(
-      borderRadius: radius,
-      child: Container(
-        decoration: BoxDecoration(
-          color: skin.panel,
-          borderRadius: radius,
-          border: Border.all(color: skin.line),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Row(
-          children: [
-            for (var index = 0; index < cells.length; index++)
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 14,
-                  ),
-                  decoration: BoxDecoration(
-                    border:
-                        index == 0
-                            ? null
-                            : Border(left: BorderSide(color: skin.line)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        cells[index].$1.toUpperCase(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: DesktopType.eyebrow(skin.text3),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        cells[index].$2,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: DesktopType.sectionTitle(
-                          skin.text,
-                        ).copyWith(letterSpacing: -24 * 0.01),
-                      ),
-                      if (cells[index].$3.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          cells[index].$3,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: DesktopType.caption(skin.text3),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
   }
 }

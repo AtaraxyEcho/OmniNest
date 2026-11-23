@@ -14,6 +14,8 @@ import 'package:omninest/core/utils/clipboard_writer.dart';
 import 'package:omninest/core/feedback/omni_feedback.dart';
 import 'package:omninest/core/widgets/desktop_shell_scope.dart';
 import 'package:omninest/app/desktop/widgets/desktop_controls.dart';
+import 'package:omninest/app/desktop/widgets/desktop_dialogs.dart';
+import 'package:omninest/app/theme/desktop/desktop_skin.dart';
 
 final profileTwoFactorStatusProvider =
     FutureProvider.autoDispose<TwoFactorStatusData>((ref) {
@@ -155,6 +157,13 @@ class ProfileTwoFactorCard extends ConsumerWidget {
 
   /// 开启向导（密码复核 → 扫码 → 备份码）：供移动行开关等外部入口复用。
   static Future<void> showEnableWizard(BuildContext context) {
+    if (DesktopSkin.maybeOf(context) != null) {
+      return showDesktopDialog<void>(
+        context,
+        barrierDismissible: false,
+        builder: (_) => const _TwoFactorEnableDialog(),
+      );
+    }
     return showWorkstationDialog<void>(
       context: context,
       dismissible: false,
@@ -164,6 +173,12 @@ class ProfileTwoFactorCard extends ConsumerWidget {
 
   /// 关闭流程（密码与验证码双重复核）：供移动行开关复用。
   static Future<void> showDisableWizard(BuildContext context) {
+    if (DesktopSkin.maybeOf(context) != null) {
+      return showDesktopDialog<void>(
+        context,
+        builder: (_) => const _TwoFactorDisableDialog(),
+      );
+    }
     return showWorkstationDialog<void>(
       context: context,
       builder: (_) => const _TwoFactorDisableDialog(),
@@ -203,52 +218,87 @@ class _TwoFactorEnableDialogState
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final body = SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_error != null) ...[
+            Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+            const SizedBox(height: 12),
+          ],
+          switch (_step) {
+            _EnableStep.password => TextFormField(
+              key: const Key('profileTwoFactorPasswordField'),
+              controller: _passwordController,
+              obscureText: _obscurePassword,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: l10n.twoFactorEnrollPasswordLabel,
+                prefixIcon: const Icon(Icons.lock_outline_rounded),
+                suffixIcon: IconButton(
+                  tooltip: l10n.loginShowPassword,
+                  onPressed:
+                      () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                  ),
+                ),
+              ),
+            ),
+            _EnableStep.scan => _buildScanStep(l10n),
+            _EnableStep.codes => _buildCodesStep(l10n),
+          },
+        ],
+      ),
+    );
+    if (DesktopSkin.maybeOf(context) != null) {
+      return DesktopDialog(
+        width: 440,
+        title: l10n.profileTwoFactorTitle,
+        content: body,
+        actions: [
+          DesktopButton(
+            label: l10n.coreCancel,
+            variant: DesktopButtonVariant.ghost,
+            onPressed: _submitting ? null : () => closeDesktopModal(context),
+          ),
+          if (_step == _EnableStep.password)
+            DesktopButton(
+              key: const Key('profileTwoFactorNextButton'),
+              label: l10n.twoFactorEnrollContinue,
+              variant: DesktopButtonVariant.primary,
+              onPressed: _submitting ? null : _submitPassword,
+            ),
+          if (_step == _EnableStep.scan)
+            DesktopButton(
+              key: const Key('profileTwoFactorEnableButton'),
+              label: l10n.twoFactorEnrollConfirmCode,
+              variant: DesktopButtonVariant.primary,
+              onPressed: _submitting ? null : _submitCode,
+            ),
+          if (_step == _EnableStep.codes)
+            DesktopButton(
+              key: const Key('profileTwoFactorDoneButton'),
+              label: l10n.twoFactorEnrollSavedAndFinish,
+              variant: DesktopButtonVariant.primary,
+              onPressed: (_submitting || !_codesSaved) ? null : _finish,
+            ),
+        ],
+      );
+    }
     return AlertDialog(
       title: Text(l10n.profileTwoFactorTitle),
       content: ConstrainedBox(
         // 手机宽度下 AlertDialog 可用宽小于 380，固定宽会溢出。
         constraints: const BoxConstraints(maxWidth: 380),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_error != null) ...[
-                Text(
-                  _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-                const SizedBox(height: 12),
-              ],
-              switch (_step) {
-                _EnableStep.password => TextFormField(
-                  key: const Key('profileTwoFactorPasswordField'),
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    labelText: l10n.twoFactorEnrollPasswordLabel,
-                    prefixIcon: const Icon(Icons.lock_outline_rounded),
-                    suffixIcon: IconButton(
-                      tooltip: l10n.loginShowPassword,
-                      onPressed:
-                          () => setState(
-                            () => _obscurePassword = !_obscurePassword,
-                          ),
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                      ),
-                    ),
-                  ),
-                ),
-                _EnableStep.scan => _buildScanStep(l10n),
-                _EnableStep.codes => _buildCodesStep(l10n),
-              },
-            ],
-          ),
-        ),
+        child: body,
       ),
       actions: [
         TextButton(
@@ -381,7 +431,7 @@ class _TwoFactorEnableDialogState
   Future<void> _finish() async {
     ref.invalidate(profileTwoFactorStatusProvider);
     if (mounted) {
-      Navigator.of(context).pop();
+      closeDesktopModal(context);
     }
   }
 
@@ -444,59 +494,79 @@ class _TwoFactorDisableDialogState
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(l10n.twoFactorDisableHint),
+        const SizedBox(height: 14),
+        TextFormField(
+          key: const Key('profileTwoFactorDisablePasswordField'),
+          controller: _passwordController,
+          obscureText: _obscurePassword,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: l10n.twoFactorEnrollPasswordLabel,
+            prefixIcon: const Icon(Icons.lock_outline_rounded),
+            suffixIcon: IconButton(
+              tooltip: l10n.loginShowPassword,
+              onPressed:
+                  () => setState(() => _obscurePassword = !_obscurePassword),
+              icon: Icon(
+                _obscurePassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          key: const Key('profileTwoFactorDisableCodeField'),
+          controller: _codeController,
+          keyboardType: TextInputType.text,
+          autocorrect: false,
+          decoration: InputDecoration(
+            labelText: l10n.loginTwoFactorCodeLabel,
+            hintText: l10n.loginTwoFactorCodeHint,
+            helperText: l10n.loginTwoFactorUseBackupHint,
+            prefixIcon: const Icon(Icons.pin_outlined),
+          ),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            _error!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
+      ],
+    );
+    if (DesktopSkin.maybeOf(context) != null) {
+      return DesktopDialog(
+        width: 420,
+        title: l10n.profileTwoFactorDisableAction,
+        content: body,
+        actions: [
+          DesktopButton(
+            label: l10n.coreCancel,
+            variant: DesktopButtonVariant.ghost,
+            onPressed: _submitting ? null : () => closeDesktopModal(context),
+          ),
+          DesktopButton(
+            key: const Key('profileTwoFactorDisableButton'),
+            label: l10n.profileTwoFactorDisableConfirm,
+            variant: DesktopButtonVariant.danger,
+            onPressed: _submitting ? null : _submit,
+          ),
+        ],
+      );
+    }
     return AlertDialog(
       title: Text(l10n.profileTwoFactorDisableAction),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 340),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(l10n.twoFactorDisableHint),
-            const SizedBox(height: 14),
-            TextFormField(
-              key: const Key('profileTwoFactorDisablePasswordField'),
-              controller: _passwordController,
-              obscureText: _obscurePassword,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: l10n.twoFactorEnrollPasswordLabel,
-                prefixIcon: const Icon(Icons.lock_outline_rounded),
-                suffixIcon: IconButton(
-                  tooltip: l10n.loginShowPassword,
-                  onPressed:
-                      () =>
-                          setState(() => _obscurePassword = !_obscurePassword),
-                  icon: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              key: const Key('profileTwoFactorDisableCodeField'),
-              controller: _codeController,
-              keyboardType: TextInputType.text,
-              autocorrect: false,
-              decoration: InputDecoration(
-                labelText: l10n.loginTwoFactorCodeLabel,
-                hintText: l10n.loginTwoFactorCodeHint,
-                helperText: l10n.loginTwoFactorUseBackupHint,
-                prefixIcon: const Icon(Icons.pin_outlined),
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ],
-          ],
-        ),
+        child: body,
       ),
       actions: [
         TextButton(
@@ -529,7 +599,7 @@ class _TwoFactorDisableDialogState
         return;
       }
       ref.invalidate(profileTwoFactorStatusProvider);
-      Navigator.of(context).pop();
+      closeDesktopModal(context);
     } catch (error) {
       if (mounted) {
         setState(() => _error = errorReason(error, l10n));

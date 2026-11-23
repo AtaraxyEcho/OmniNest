@@ -100,113 +100,17 @@ class _SubtitlesState extends ConsumerState<_Subtitles> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
     final subtitles = ref.watch(movieSubtitlesProvider(widget.videoItemId));
     final tracks = subtitles.asData?.value ?? const <SubtitleTrack>[];
     if (subtitles.isLoading && tracks.isEmpty) {
-      return const SizedBox(height: 40);
+      return const DesktopSkeletonRows(count: 2, avatar: false);
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (tracks.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 30),
-            child: DesktopEmpty(
-              icon: DesktopIcons.captions,
-              message: l10n.videoNoSubtitlesAvailable,
-              actionLabel: null,
-            ),
-          )
-        else
-          for (var i = 0; i < tracks.length; i++)
-            _SubtitleRow(
-              track: tracks[i],
-              first: i == 0,
-              deleting: _deletingId == tracks[i].id,
-              anyDeleting: _deletingId != null,
-              onDelete: () => unawaited(_delete(tracks[i])),
-            ),
-        const SizedBox(height: 14),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: DesktopButton(
-            label: l10n.videoDetailUploadSubtitle,
-            icon: DesktopIcons.upload,
-            variant: DesktopButtonVariant.soft,
-            busy: _uploading,
-            onPressed: _uploading ? null : () => unawaited(_pickAndUpload()),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SubtitleRow extends StatelessWidget {
-  const _SubtitleRow({
-    required this.track,
-    required this.first,
-    required this.deleting,
-    required this.anyDeleting,
-    required this.onDelete,
-  });
-
-  final SubtitleTrack track;
-  final bool first;
-  final bool deleting;
-  final bool anyDeleting;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final skin = DesktopSkin.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 13),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: skin.line, width: first ? 0 : 1)),
-      ),
-      child: Row(
-        children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 170, maxWidth: 240),
-            child: Text(
-              track.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: DesktopType.rowTitle(skin.text),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              [
-                track.embedded
-                    ? l10n.videoRedesignSubtitleEmbedded
-                    : l10n.videoRedesignSubtitleExternal,
-                track.kind,
-              ].join(' · '),
-              style: DesktopType.caption(skin.text3),
-            ),
-          ),
-          Text(track.language, style: DesktopType.body(skin.text2)),
-          if (!track.embedded) ...[
-            const SizedBox(width: 12),
-            if (deleting)
-              const SizedBox.square(
-                dimension: 28,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            else
-              DesktopIconButton(
-                icon: DesktopIcons.trash,
-                tooltip: l10n.videoDeleteSubtitleTooltip,
-                onPressed: anyDeleting ? null : onDelete,
-              ),
-          ],
-        ],
-      ),
+    return DesktopSubtitlePanel(
+      tracks: tracks,
+      uploading: _uploading,
+      deletingTrackId: _deletingId,
+      onUpload: () => unawaited(_pickAndUpload()),
+      onDelete: _delete,
     );
   }
 }

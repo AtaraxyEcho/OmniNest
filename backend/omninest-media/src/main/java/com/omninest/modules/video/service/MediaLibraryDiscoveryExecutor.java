@@ -393,7 +393,9 @@ public class MediaLibraryDiscoveryExecutor {
         }
 
         private boolean defaultSelected(VideoLibrarySource currentSource, String matchStatus) {
-            if ("UNMATCHED".equals(matchStatus) || "AMBIGUOUS".equals(matchStatus)) {
+            if ("EXISTING".equals(matchStatus)
+                    || "UNMATCHED".equals(matchStatus)
+                    || "AMBIGUOUS".equals(matchStatus)) {
                 return false;
             }
             MediaImportPolicy policy = MediaImportPolicy.valueOf(currentSource.getImportPolicy());

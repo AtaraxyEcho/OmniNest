@@ -23,12 +23,74 @@ public interface MediaScanCandidateRepository extends JpaRepository<MediaScanCan
             Pageable pageable
     );
 
+    @Query("""
+            select c from MediaScanCandidate c
+             where c.ownerUserId = :ownerUserId
+               and c.scanRunId = :scanRunId
+               and (
+                   :scope = 'ALL'
+                   or (:scope = 'PENDING' and c.applyStatus <> 'APPLIED' and c.matchStatus in ('NEW', 'CHANGED'))
+                   or (:scope = 'IMPORTED' and (c.applyStatus = 'APPLIED' or c.matchStatus = 'EXISTING'))
+                   or (:scope = 'ISSUES' and (c.applyStatus = 'FAILED' or c.matchStatus in ('AMBIGUOUS', 'UNMATCHED')))
+               )
+             order by c.groupTitle asc, c.seasonNumber asc, c.episodeNumber asc
+            """)
+    Page<MediaScanCandidate> findScopedCandidates(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("scanRunId") UUID scanRunId,
+            @Param("scope") String scope,
+            Pageable pageable
+    );
+
     Page<MediaScanCandidate> findByOwnerUserIdAndScanRunIdAndGroupIdAndSeasonNumberOrderByEpisodeNumberAsc(
             UUID ownerUserId,
             UUID scanRunId,
             UUID groupId,
             Integer seasonNumber,
             Pageable pageable
+    );
+
+    @Query("""
+            select c from MediaScanCandidate c
+             where c.ownerUserId = :ownerUserId
+               and c.scanRunId = :scanRunId
+               and c.groupId = :groupId
+               and c.seasonNumber = :seasonNumber
+               and (
+                   :scope = 'ALL'
+                   or (:scope = 'PENDING' and c.applyStatus <> 'APPLIED' and c.matchStatus in ('NEW', 'CHANGED'))
+                   or (:scope = 'IMPORTED' and (c.applyStatus = 'APPLIED' or c.matchStatus = 'EXISTING'))
+                   or (:scope = 'ISSUES' and (c.applyStatus = 'FAILED' or c.matchStatus in ('AMBIGUOUS', 'UNMATCHED')))
+               )
+             order by c.episodeNumber asc
+            """)
+    Page<MediaScanCandidate> findScopedSeasonCandidates(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("scanRunId") UUID scanRunId,
+            @Param("groupId") UUID groupId,
+            @Param("seasonNumber") Integer seasonNumber,
+            @Param("scope") String scope,
+            Pageable pageable
+    );
+
+    @Query("""
+            select c from MediaScanCandidate c
+             where c.ownerUserId = :ownerUserId
+               and c.scanRunId = :scanRunId
+               and c.groupId in :groupIds
+               and (
+                   :scope = 'ALL'
+                   or (:scope = 'PENDING' and c.applyStatus <> 'APPLIED' and c.matchStatus in ('NEW', 'CHANGED'))
+                   or (:scope = 'IMPORTED' and (c.applyStatus = 'APPLIED' or c.matchStatus = 'EXISTING'))
+                   or (:scope = 'ISSUES' and (c.applyStatus = 'FAILED' or c.matchStatus in ('AMBIGUOUS', 'UNMATCHED')))
+               )
+             order by c.groupTitle asc, c.relativePath asc
+            """)
+    List<MediaScanCandidate> findScopedCandidatesByGroupIds(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("scanRunId") UUID scanRunId,
+            @Param("groupIds") Collection<UUID> groupIds,
+            @Param("scope") String scope
     );
 
     Page<MediaScanCandidate> findByOwnerUserIdAndScanRunIdAndSelectedTrueAndApplyStatusOrderByRelativePathAsc(
@@ -80,7 +142,8 @@ public interface MediaScanCandidateRepository extends JpaRepository<MediaScanCan
                            min(c.groupTitle) as groupTitle,
                            count(c.id) as candidateCount,
                            sum(case when c.selected = true then 1 else 0 end) as selectedCount,
-                           sum(case when c.matchStatus in ('AMBIGUOUS', 'UNMATCHED') then 1 else 0 end) as issueCount
+                           sum(case when c.matchStatus in ('AMBIGUOUS', 'UNMATCHED') then 1 else 0 end) as issueCount,
+                           sum(case when c.candidateType = 'EPISODE' then 1 else 0 end) as episodeCount
                       from MediaScanCandidate c
                      where c.ownerUserId = :ownerUserId and c.scanRunId = :scanRunId
                      group by c.groupId
@@ -95,6 +158,46 @@ public interface MediaScanCandidateRepository extends JpaRepository<MediaScanCan
     Page<GroupSummary> summarizeGroups(
             @Param("ownerUserId") UUID ownerUserId,
             @Param("scanRunId") UUID scanRunId,
+            Pageable pageable
+    );
+
+    @Query(
+            value = """
+                    select c.groupId as groupId,
+                           min(c.groupTitle) as groupTitle,
+                           count(c.id) as candidateCount,
+                           sum(case when c.selected = true then 1 else 0 end) as selectedCount,
+                           sum(case when c.matchStatus in ('AMBIGUOUS', 'UNMATCHED') then 1 else 0 end) as issueCount,
+                           sum(case when c.candidateType = 'EPISODE' then 1 else 0 end) as episodeCount
+                      from MediaScanCandidate c
+                     where c.ownerUserId = :ownerUserId
+                       and c.scanRunId = :scanRunId
+                       and (
+                           :scope = 'ALL'
+                           or (:scope = 'PENDING' and c.applyStatus <> 'APPLIED' and c.matchStatus in ('NEW', 'CHANGED'))
+                           or (:scope = 'IMPORTED' and (c.applyStatus = 'APPLIED' or c.matchStatus = 'EXISTING'))
+                           or (:scope = 'ISSUES' and (c.applyStatus = 'FAILED' or c.matchStatus in ('AMBIGUOUS', 'UNMATCHED')))
+                       )
+                     group by c.groupId
+                     order by min(c.groupTitle)
+                    """,
+            countQuery = """
+                    select count(distinct c.groupId)
+                      from MediaScanCandidate c
+                     where c.ownerUserId = :ownerUserId
+                       and c.scanRunId = :scanRunId
+                       and (
+                           :scope = 'ALL'
+                           or (:scope = 'PENDING' and c.applyStatus <> 'APPLIED' and c.matchStatus in ('NEW', 'CHANGED'))
+                           or (:scope = 'IMPORTED' and (c.applyStatus = 'APPLIED' or c.matchStatus = 'EXISTING'))
+                           or (:scope = 'ISSUES' and (c.applyStatus = 'FAILED' or c.matchStatus in ('AMBIGUOUS', 'UNMATCHED')))
+                       )
+                    """
+    )
+    Page<GroupSummary> summarizeGroupsByScope(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("scanRunId") UUID scanRunId,
+            @Param("scope") String scope,
             Pageable pageable
     );
 
@@ -116,11 +219,39 @@ public interface MediaScanCandidateRepository extends JpaRepository<MediaScanCan
             @Param("groupId") UUID groupId
     );
 
+    @Query("""
+            select c.seasonNumber as seasonNumber,
+                   count(c.id) as candidateCount,
+                   sum(case when c.selected = true then 1 else 0 end) as selectedCount,
+                   sum(case when c.matchStatus in ('AMBIGUOUS', 'UNMATCHED') then 1 else 0 end) as issueCount
+              from MediaScanCandidate c
+             where c.ownerUserId = :ownerUserId
+               and c.scanRunId = :scanRunId
+               and c.groupId = :groupId
+               and c.seasonNumber is not null
+               and (
+                   :scope = 'ALL'
+                   or (:scope = 'PENDING' and c.applyStatus <> 'APPLIED' and c.matchStatus in ('NEW', 'CHANGED'))
+                   or (:scope = 'IMPORTED' and (c.applyStatus = 'APPLIED' or c.matchStatus = 'EXISTING'))
+                   or (:scope = 'ISSUES' and (c.applyStatus = 'FAILED' or c.matchStatus in ('AMBIGUOUS', 'UNMATCHED')))
+               )
+             group by c.seasonNumber
+             order by c.seasonNumber
+            """)
+    List<SeasonSummary> summarizeSeasonsByScope(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("scanRunId") UUID scanRunId,
+            @Param("groupId") UUID groupId,
+            @Param("scope") String scope
+    );
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             update MediaScanCandidate c
                set c.selected = :selected
-             where c.ownerUserId = :ownerUserId and c.scanRunId = :scanRunId
+             where c.ownerUserId = :ownerUserId
+               and c.scanRunId = :scanRunId
+               and (:selected = false or (c.applyStatus <> 'APPLIED' and c.matchStatus in ('NEW', 'CHANGED')))
             """)
     int updateSelectionForRun(
             @Param("ownerUserId") UUID ownerUserId,
@@ -135,6 +266,7 @@ public interface MediaScanCandidateRepository extends JpaRepository<MediaScanCan
              where c.ownerUserId = :ownerUserId
                and c.scanRunId = :scanRunId
                and c.groupId = :groupId
+               and (:selected = false or (c.applyStatus <> 'APPLIED' and c.matchStatus in ('NEW', 'CHANGED')))
             """)
     int updateSelectionForGroup(
             @Param("ownerUserId") UUID ownerUserId,
@@ -151,6 +283,7 @@ public interface MediaScanCandidateRepository extends JpaRepository<MediaScanCan
                and c.scanRunId = :scanRunId
                and c.groupId = :groupId
                and c.seasonNumber = :seasonNumber
+               and (:selected = false or (c.applyStatus <> 'APPLIED' and c.matchStatus in ('NEW', 'CHANGED')))
             """)
     int updateSelectionForSeason(
             @Param("ownerUserId") UUID ownerUserId,
@@ -216,6 +349,10 @@ public interface MediaScanCandidateRepository extends JpaRepository<MediaScanCan
         long getSelectedCount();
 
         long getIssueCount();
+
+        default long getEpisodeCount() {
+            return getCandidateCount();
+        }
     }
 
     /** 按季度聚合的树节点投影。 */

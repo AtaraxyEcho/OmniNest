@@ -5,6 +5,7 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.media.domain.MetadataStatus;
 import com.omninest.modules.video.domain.MediaType;
 import com.omninest.modules.video.domain.NfoStatus;
+import com.omninest.modules.video.domain.SeriesType;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.modules.task.domain.TaskRecord;
@@ -33,6 +34,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -52,6 +55,13 @@ public class MovieScrapeService {
             TaskStatus.RUNNING.getValue(),
             TaskStatus.RETRY_WAIT.getValue()
     );
+    private static final Pattern PATH_SEASON_DIR = Pattern.compile(
+            "(?i)^(?:season|series|s)[ ._-]*(\\d{1,2})$|^第([一二三四五六七八九十百\\d]+)季$");
+    private static final Set<String> ANIME_PATH_HINTS = Set.of(
+            "anime", "animes", "animation", "cartoon", "cartoons",
+            "动画", "动漫", "番剧", "国漫", "日漫", "新番", "日本动漫", "国产动漫"
+    );
+
     private final FileMetadataQueryService fileMetadataQueryService;
     private final TaskRecordService taskRecordService;
     private final MediaVideoItemRepository videoItemRepository;
@@ -361,13 +371,18 @@ public class MovieScrapeService {
         MediaVideoItem item = new MediaVideoItem();
         item.setOwnerUserId(ownerUserId);
         item.setFileNodeId(file.id());
-        boolean isEpisode = guess.seasonNumber() != null;
+        Integer pathSeason = extractSeasonFromPath(file.normalizedPath());
+        boolean animePath = hasAnimePathHint(file.normalizedPath());
+        boolean isEpisode = guess.seasonNumber() != null || guess.episodeNumber() != null || pathSeason != null;
+        Integer resolvedSeason = isEpisode
+                ? (guess.seasonNumber() != null ? guess.seasonNumber() : (pathSeason != null ? pathSeason : 1))
+                : null;
         item.setMediaType(isEpisode ? MediaType.EPISODE.getValue() : MediaType.MOVIE.getValue());
-        item.setSeasonNumber(guess.seasonNumber());
+        item.setSeasonNumber(resolvedSeason);
         item.setEpisodeNumber(guess.episodeNumber());
         item.setMetadataStatus(MetadataStatus.PENDING.getValue());
         item.setNfoStatus(NfoStatus.DISABLED.getValue());
-        // 剧集在入库时即关联系列，确保去重和分组立即生效
+        // 剧集在入库时即关联系列，确保去重和分组立即生效，并保留 ANIME 类型
         if (isEpisode && guess.title() != null && !guess.title().isBlank()) {
             String seriesTitle = guess.title().trim();
             MediaTvSeries series = seriesMemo.computeIfAbsent(
@@ -379,22 +394,25 @@ public class MovieScrapeService {
                                 MediaTvSeries s = new MediaTvSeries();
                                 s.setOwnerUserId(ownerUserId);
                                 s.setTitle(seriesTitle);
+                                s.setSeriesType(animePath
+                                        ? SeriesType.ANIME.getValue()
+                                        : SeriesType.TV.getValue());
                                 s.setMetadataStatus(MetadataStatus.PENDING.getValue());
                                 return tvSeriesRepository.save(s);
                             }));
             item.setSeriesId(series.getId());
-            if (guess.seasonNumber() != null) {
+            if (resolvedSeason != null) {
                 MediaTvSeason season = seasonMemo.computeIfAbsent(
-                        ownerUserId + "|" + series.getId() + "|" + guess.seasonNumber(),
+                        ownerUserId + "|" + series.getId() + "|" + resolvedSeason,
                         key -> tvSeasonRepository
                                 .findByOwnerUserIdAndSeriesIdAndSeasonNumber(
-                                        ownerUserId, series.getId(), guess.seasonNumber())
+                                        ownerUserId, series.getId(), resolvedSeason)
                                 .orElseGet(() -> {
                                     MediaTvSeason ts = new MediaTvSeason();
                                     ts.setOwnerUserId(ownerUserId);
                                     ts.setSeriesId(series.getId());
-                                    ts.setSeasonNumber(guess.seasonNumber());
-                                    ts.setTitle("第 " + guess.seasonNumber() + " 季");
+                                    ts.setSeasonNumber(resolvedSeason);
+                                    ts.setTitle(resolvedSeason == 0 ? "特别篇" : "第 " + resolvedSeason + " 季");
                                     ts.setEpisodeCount(0);
                                     return tvSeasonRepository.save(ts);
                                 }));
@@ -402,6 +420,70 @@ public class MovieScrapeService {
             }
         }
         return item;
+    }
+
+    private boolean hasAnimePathHint(String normalizedPath) {
+        if (normalizedPath == null || normalizedPath.isBlank()) {
+            return false;
+        }
+        String[] segments = normalizedPath.replace('\\', '/').split("/");
+        for (int i = 0; i < segments.length - 1; i++) {
+            String normalized = segments[i].trim()
+                    .toLowerCase(Locale.ROOT)
+                    .replace('_', ' ')
+                    .replace('-', ' ')
+                    .replaceAll("\\s+", " ");
+            if (ANIME_PATH_HINTS.contains(normalized)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Integer extractSeasonFromPath(String normalizedPath) {
+        if (normalizedPath == null || normalizedPath.isBlank()) {
+            return null;
+        }
+        String[] segments = normalizedPath.replace('\\', '/').split("/");
+        for (int i = segments.length - 2; i >= 0; i--) {
+            String segment = segments[i].trim();
+            if ("specials".equalsIgnoreCase(segment)) {
+                return 0;
+            }
+            Matcher matcher = PATH_SEASON_DIR.matcher(segment);
+            if (matcher.matches()) {
+                if (matcher.group(1) != null) {
+                    return Integer.parseInt(matcher.group(1));
+                }
+                return parseChineseSeasonNumber(matcher.group(2));
+            }
+        }
+        return null;
+    }
+
+    private int parseChineseSeasonNumber(String value) {
+        if (value == null || value.isBlank()) {
+            return 1;
+        }
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException ignored) {
+            return switch (value) {
+                case "一" -> 1;
+                case "二" -> 2;
+                case "三" -> 3;
+                case "四" -> 4;
+                case "五" -> 5;
+                case "六" -> 6;
+                case "七" -> 7;
+                case "八" -> 8;
+                case "九" -> 9;
+                case "十" -> 10;
+                case "十一" -> 11;
+                case "十二" -> 12;
+                default -> 1;
+            };
+        }
     }
 
     private record ScrapeResource(String type, UUID id) {

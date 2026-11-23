@@ -32,6 +32,7 @@ import com.omninest.modules.video.dto.MovieDtos.PlaybackPlanDto;
 import com.omninest.modules.video.dto.MovieDtos.PlaybackProgressRequest;
 import com.omninest.modules.video.dto.MovieDtos.ScrapeCandidateDto;
 import com.omninest.modules.video.dto.MovieDtos.ScrapeRequest;
+import com.omninest.modules.video.dto.MovieDtos.SeriesScrapeRequest;
 import com.omninest.modules.video.dto.MovieDtos.ScrapeTaskDto;
 import com.omninest.modules.video.dto.MovieDtos.SubtitleTrackDto;
 import com.omninest.modules.video.dto.MovieDtos.SubtitleUpdateRequest;
@@ -485,7 +486,7 @@ public class VideoLibraryController {
 
     @Operation(summary = "上传字幕", description = "为指定视频上传字幕文件")
     @PostMapping("/api/v1/video/items/{videoItemId}/subtitles")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAnyAuthority('" + Permissions.MEDIA_WRITE + "','" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
     ApiResponse<SubtitleTrackDto> uploadSubtitle(
             @PathVariable UUID videoItemId,
             @Valid @RequestBody SubtitleUploadRequest request
@@ -495,7 +496,7 @@ public class VideoLibraryController {
 
     @Operation(summary = "更新字幕", description = "更新指定字幕的内容或语言信息")
     @PutMapping("/api/v1/video/subtitles/{subtitleId}")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAnyAuthority('" + Permissions.MEDIA_WRITE + "','" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
     ApiResponse<SubtitleTrackDto> updateSubtitle(
             @PathVariable UUID subtitleId,
             @Valid @RequestBody SubtitleUpdateRequest request
@@ -505,7 +506,7 @@ public class VideoLibraryController {
 
     @Operation(summary = "删除字幕", description = "删除指定的字幕轨道")
     @DeleteMapping("/api/v1/video/subtitles/{subtitleId}")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAnyAuthority('" + Permissions.MEDIA_WRITE + "','" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
     ApiResponse<Void> deleteSubtitle(@PathVariable UUID subtitleId) {
         subtitleManagementService.delete(currentUserContext.requireCurrentUserId(), subtitleId);
         return ApiResponse.success();
@@ -566,10 +567,69 @@ public class VideoLibraryController {
 
     @Operation(summary = "导出 NFO", description = "生成 NFO 内容并落盘为派生资产，同时返回内容供客户端直接保存")
     @PostMapping("/api/v1/video/items/{videoItemId}/nfo")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAnyAuthority('" + Permissions.MEDIA_WRITE + "','" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
     ApiResponse<NfoExportDto> exportNfo(@PathVariable UUID videoItemId) {
         return ApiResponse.success(movieNfoService.export(currentUserContext.requireCurrentUserId(), videoItemId));
     }
+
+    @Operation(summary = "获取剧集/番剧刮削候选", description = "自动选取系列首个有效分集检索元数据候选")
+    @GetMapping("/api/v1/video/series/{seriesId}/scrape/candidates")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    ApiResponse<List<ScrapeCandidateDto>> seriesScrapeCandidates(@PathVariable UUID seriesId) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        UUID fileNodeId = movieLibraryService.resolvePrimarySeriesFileNodeId(userId, seriesId, false);
+        return ApiResponse.success(movieScrapeService.candidates(userId, fileNodeId));
+    }
+
+    @Operation(summary = "创建剧集/番剧刮削任务", description = "自动选取系列首个有效分集提交全系列刮削任务，保留 ANIME 类型不降级")
+    @PostMapping("/api/v1/video/series/{seriesId}/scrape/tasks")
+    @PreAuthorize("hasAnyAuthority('" + Permissions.MEDIA_WRITE + "','" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
+    ApiResponse<ScrapeTaskDto> createSeriesScrapeTask(
+            @PathVariable UUID seriesId,
+            @RequestBody(required = false) SeriesScrapeRequest request
+    ) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        UUID fileNodeId = movieLibraryService.resolvePrimarySeriesFileNodeId(userId, seriesId, true);
+        boolean force = request != null && request.force();
+        String provider = request == null ? null : request.provider();
+        String externalId = request == null ? null : request.externalId();
+        return ApiResponse.success(movieScrapeService.createScrapeTask(
+                userId, fileNodeId, force, provider, externalId));
+    }
+
+    @Operation(summary = "批量探测剧集/番剧分集信息", description = "对该系列下全部有效分集执行 FFprobe 探测")
+    @PostMapping("/api/v1/video/series/{seriesId}/probe")
+    @PreAuthorize("hasAnyAuthority('" + Permissions.MEDIA_WRITE + "','" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
+    ApiResponse<Map<String, Integer>> probeSeries(@PathVariable UUID seriesId) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        if (!rateLimitService.tryAcquire("video:probe:" + userId, 10, Duration.ofMinutes(1))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "探测操作过于频繁，请稍后再试");
+        }
+        List<UUID> itemIds = movieLibraryService.resolveWritableSeriesVideoItemIds(userId, seriesId);
+        int probedCount = 0;
+        for (UUID videoItemId : itemIds) {
+            videoProbeService.probeByVideoItemId(userId, videoItemId);
+            probedCount++;
+        }
+        return ApiResponse.success(Map.of("probedCount", probedCount, "totalCount", itemIds.size()));
+    }
+
+    @Operation(summary = "预览剧集/番剧 NFO", description = "生成并预览标准 <tvshow> NFO 元数据内容")
+    @GetMapping("/api/v1/video/series/{seriesId}/nfo")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    ApiResponse<NfoExportDto> seriesNfoPreview(@PathVariable UUID seriesId) {
+        return ApiResponse.success(movieNfoService.previewSeries(
+                currentUserContext.requireCurrentUserId(), seriesId));
+    }
+
+    @Operation(summary = "导出剧集/番剧 NFO", description = "生成标准 <tvshow> NFO 并落盘为派生资产")
+    @PostMapping("/api/v1/video/series/{seriesId}/nfo")
+    @PreAuthorize("hasAnyAuthority('" + Permissions.MEDIA_WRITE + "','" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
+    ApiResponse<NfoExportDto> exportSeriesNfo(@PathVariable UUID seriesId) {
+        return ApiResponse.success(movieNfoService.exportSeries(
+                currentUserContext.requireCurrentUserId(), seriesId));
+    }
+
 
     @Operation(summary = "获取任务列表", description = "返回当前用户影视相关任务列表（转码、刮削、扫描等）")
     @GetMapping("/api/v1/video/tasks")

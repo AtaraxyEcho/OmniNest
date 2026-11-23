@@ -37,11 +37,16 @@ mixin FileApiBrowse on FileApiBase {
     return parseFileNodeResponse(response.data);
   }
 
-  Future<List<FileNode>> listFiles({String? parentId, String? category}) async {
+  Future<List<FileNode>> listFiles({
+    String? parentId,
+    String? category,
+    bool onlyFolders = false,
+  }) async {
     // 非分页遗留入口（全局搜索兜底等）按后端分页上限取近似全量首页。
     final page = await listFilesPage(
       parentId: parentId,
       category: category,
+      onlyFolders: onlyFolders,
       size: 200,
     );
     prewarmCoverUrls(page.items);
@@ -104,6 +109,7 @@ mixin FileApiBrowse on FileApiBase {
   Future<FileNodePage> listFilesPage({
     String? parentId,
     String? category,
+    bool onlyFolders = false,
     int page = 0,
     int size = 10,
   }) async {
@@ -113,6 +119,7 @@ mixin FileApiBrowse on FileApiBase {
         if (parentId != null) 'parentId': parentId,
         if (category != null && category.isNotEmpty && category != 'all')
           'category': category,
+        if (onlyFolders) 'onlyFolders': true,
         'page': page,
         'size': size,
       },

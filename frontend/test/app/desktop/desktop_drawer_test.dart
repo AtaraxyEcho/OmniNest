@@ -136,4 +136,20 @@ void main() {
     expect(find.text('Edit metadata'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('点击左侧遮罩可关闭右侧抽屉', (tester) async {
+    await pumpHost(
+      tester,
+      const DesktopDrawerFrame(title: 'Edit metadata', child: Text('body')),
+    );
+
+    expect(find.text('Edit metadata'), findsOneWidget);
+
+    // 点击窗口左侧遮罩区域（抽屉停靠在右侧 440px，左侧完全属于遮罩命中区）。
+    await tester.tapAt(const Offset(24, 240));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 360));
+    expect(find.text('Edit metadata'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }

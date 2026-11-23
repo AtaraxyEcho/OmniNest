@@ -528,4 +528,31 @@ public interface MediaVideoItemRepository extends JpaRepository<MediaVideoItem, 
 
         int getMissingConfirmations();
     }
+
+    @Query("""
+            select item.ownerUserId as ownerUserId,
+                   item.fileNodeId as fileNodeId,
+                   coalesce(ref.relativePath, file.normalizedPath) as relativePath,
+                   file.name as fileName
+              from MediaVideoItem item
+              join FileNode file on item.fileNodeId = file.id
+              left join FileContentRef ref on item.fileNodeId = ref.fileNodeId
+             where item.librarySourceId = :librarySourceId
+               and item.sourceVideoItemId is null
+               and file.deleted = false
+            """)
+    List<ReclassifySourceItemProjection> findReclassifyItemsByLibrarySourceId(
+            @Param("librarySourceId") UUID librarySourceId
+    );
+
+    /** 来源原地重归类投影。 */
+    interface ReclassifySourceItemProjection {
+        UUID getOwnerUserId();
+
+        UUID getFileNodeId();
+
+        String getRelativePath();
+
+        String getFileName();
+    }
 }

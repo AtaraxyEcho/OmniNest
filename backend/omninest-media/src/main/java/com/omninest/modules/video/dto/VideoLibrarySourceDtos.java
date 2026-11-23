@@ -99,6 +99,34 @@ public final class VideoLibrarySourceDtos {
     }
 
     /**
+     * 重新归类影视库来源请求。
+     *
+     * @param libraryType 可选的新媒体库类型；为空时沿用当前来源类型重新归类
+     */
+    @Schema(description = "重新归类影视库来源请求")
+    public record ReclassifyVideoLibrarySourceRequest(
+            MediaLibraryType libraryType
+    ) {
+    }
+
+    /**
+     * 重新归类影视库来源响应。
+     *
+     * @param source 更新后的影视库来源
+     * @param processedCount 处理的视频条目总数
+     * @param updatedCount 成功原地重归类的条目数
+     * @param unmatchedCount 未能匹配集号而跳过的条目数
+     */
+    @Schema(description = "重新归类影视库来源结果")
+    public record ReclassifyVideoLibrarySourceDto(
+            VideoLibrarySourceDto source,
+            int processedCount,
+            int updatedCount,
+            int unmatchedCount
+    ) {
+    }
+
+    /**
      * 影视库来源响应。
      *
      * @param id 来源 ID

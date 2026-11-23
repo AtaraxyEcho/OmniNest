@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.api.PageResponse;
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.error.BusinessException;
@@ -68,6 +69,8 @@ class VideoLibrarySourceServiceTest {
     private final MediaLibraryAccessService accessService = mock(MediaLibraryAccessService.class);
     private final MediaLibraryReviewService reviewService = mock(MediaLibraryReviewService.class);
     private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
+    private final LocalMediaLibraryClassifier classifier = mock(LocalMediaLibraryClassifier.class);
+    private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class);
     private final VideoLibrarySourceService service = new VideoLibrarySourceService(
             sourceRepository,
             runRepository,
@@ -81,7 +84,9 @@ class VideoLibrarySourceServiceTest {
             discoveryExecutor,
             accessService,
             reviewService,
-            syncEventService
+            syncEventService,
+            classifier,
+            readThroughCache
     );
 
     @Test
@@ -181,7 +186,7 @@ class VideoLibrarySourceServiceTest {
         existing.setRelativeRoot("Movies");
         when(storageLocationService.requireAccessibleLocation(OWNER_ID, LOCATION_ID)).thenReturn(location);
         when(storageLocationService.listByMountKeyForBusiness("media")).thenReturn(List.of(location));
-        when(sourceRepository.findByStorageLocationId(LOCATION_ID)).thenReturn(List.of(existing));
+        when(sourceRepository.findByStorageLocationIdIn(any())).thenReturn(List.of(existing));
 
         CreateVideoLibrarySourceRequest request = new CreateVideoLibrarySourceRequest(
                 "动作电影",
@@ -209,8 +214,7 @@ class VideoLibrarySourceServiceTest {
                 .thenReturn(rootLocation);
         when(storageLocationService.listByMountKeyForBusiness("media"))
                 .thenReturn(List.of(wizardLocation, rootLocation));
-        when(sourceRepository.findByStorageLocationId(LOCATION_ID)).thenReturn(List.of(existing));
-        when(sourceRepository.findByStorageLocationId(OTHER_LOCATION_ID)).thenReturn(List.of());
+        when(sourceRepository.findByStorageLocationIdIn(any())).thenReturn(List.of(existing));
 
         CreateVideoLibrarySourceRequest request = new CreateVideoLibrarySourceRequest(
                 "直达电影",
@@ -313,8 +317,7 @@ class VideoLibrarySourceServiceTest {
         existing.setRelativeRoot(".");
         when(storageLocationService.listByMountKeyForBusiness("media"))
                 .thenReturn(List.of(wizardLocation, rootLocation));
-        when(sourceRepository.findByStorageLocationId(LOCATION_ID)).thenReturn(List.of(existing));
-        when(sourceRepository.findByStorageLocationId(OTHER_LOCATION_ID)).thenReturn(List.of());
+        when(sourceRepository.findByStorageLocationIdIn(any())).thenReturn(List.of(existing));
 
         CreateVideoLibrarySourceRequest request = new CreateVideoLibrarySourceRequest(
                 "直达电影",
@@ -346,8 +349,7 @@ class VideoLibrarySourceServiceTest {
         existing.setRelativeRoot(".");
         when(storageLocationService.listByMountKeyForBusiness("media"))
                 .thenReturn(List.of(wizardLocation, rootLocation));
-        when(sourceRepository.findByStorageLocationId(LOCATION_ID)).thenReturn(List.of(existing));
-        when(sourceRepository.findByStorageLocationId(OTHER_LOCATION_ID)).thenReturn(List.of());
+        when(sourceRepository.findByStorageLocationIdIn(any())).thenReturn(List.of(existing));
 
         CreateVideoLibrarySourceRequest request = new CreateVideoLibrarySourceRequest(
                 "直达电影",
@@ -514,6 +516,7 @@ class VideoLibrarySourceServiceTest {
         rootSource.setRelativeRoot(".");
         rootSource.setLibraryType(MediaLibraryType.ROOT.name());
         when(sourceRepository.findByStorageLocationId(LOCATION_ID)).thenReturn(List.of(rootSource));
+        when(sourceRepository.findByStorageLocationIdIn(any())).thenReturn(List.of(rootSource));
         when(storageLocationService.listByMountKeyForBusiness("media")).thenReturn(List.of(rootLocation));
 
         assertThatThrownBy(() -> service.provisionMountLibrary(

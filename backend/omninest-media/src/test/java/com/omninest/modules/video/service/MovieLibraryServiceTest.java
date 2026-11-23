@@ -166,13 +166,13 @@ class MovieLibraryServiceTest {
                 .thenReturn(0L);
         when(videoFavoriteRepository.countByOwnerUserId(OWNER_ID)).thenReturn(2L);
         when(watchHistoryRepository.countByOwnerUserId(OWNER_ID)).thenReturn(3L);
-        when(videoCollectionRepository.countByOwnerUserId(OWNER_ID)).thenReturn(1L);
+        when(videoCollectionRepository.countByOwnerUserIdAndCollectionTypeNot(OWNER_ID, "WATCHLIST")).thenReturn(1L);
         when(seriesFavoriteRepository.countByOwnerUserId(OWNER_ID)).thenReturn(1L);
         when(progressService.countIncomplete(OWNER_ID, MediaPlaybackType.VIDEO)).thenReturn(1L);
         when(videoItemRepository.findReadableOriginals(
                 eq(OWNER_ID), eq(false), eq(SpaceType.SHARED), eq(Set.of()), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(movie)));
-        when(progressService.latest(OWNER_ID, MediaPlaybackType.VIDEO)).thenReturn(List.of(progress));
+        when(progressService.latestIncomplete(OWNER_ID, MediaPlaybackType.VIDEO)).thenReturn(List.of(progress));
         // converter 需要通过 movieRepository.findAllById 加载 movie
         when(movieRepository.findAllById(any())).thenReturn(List.of(logicalMovie));
         when(videoItemRepository.findReadableByIds(
@@ -217,7 +217,7 @@ class MovieLibraryServiceTest {
         newer.setDurationSeconds(2000);
         newer.setUpdatedAt(Instant.parse("2026-05-21T10:00:00Z"));
 
-        when(progressService.latest(OWNER_ID, MediaPlaybackType.VIDEO))
+        when(progressService.latestIncomplete(OWNER_ID, MediaPlaybackType.VIDEO))
                 .thenReturn(List.of(older, newer));
         when(mediaLibraryAccessService.visibilityScope(OWNER_ID)).thenReturn(SCOPE);
         when(videoItemRepository.findReadableByIds(

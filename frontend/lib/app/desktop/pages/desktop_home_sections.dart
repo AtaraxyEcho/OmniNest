@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -21,6 +23,8 @@ import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/features/music/music_portal.dart';
 import 'package:omninest/features/reader/reader_dashboard.dart';
 import 'package:omninest/features/video/video_dashboard.dart';
+
+part 'desktop_home_reading_card.dart';
 
 /// 继续观看轨道（样例 `.rail` + `.wide-card`）。
 class DesktopContinueRail extends ConsumerWidget {
@@ -53,19 +57,53 @@ class DesktopContinueRail extends ConsumerWidget {
             ),
       ),
     );
-    final resume = (dashboard?.continueWatching ??
-            const <MovieContinueWatching>[])
-        .where((item) => item.title.trim() != '待识别')
-        .toList(growable: false);
-    final fresh = (dashboard?.recentlyAdded ?? const <MovieVideoItem>[])
-        .where((item) {
-          final status = item.metadataStatus.toUpperCase();
-          if (status == 'FAILED' || status == 'PENDING') {
-            return false;
-          }
-          return item.title.trim() != '待识别';
-        })
-        .toList(growable: false);
+    final seenResume = <String>{};
+    final resumeIds = <String>{};
+    final resumeSeries = <String>{};
+    final resumeMovies = <String>{};
+    final resume = <MovieContinueWatching>[];
+    for (final item
+        in dashboard?.continueWatching ?? const <MovieContinueWatching>[]) {
+      if (item.title.trim().isEmpty) continue;
+      final sid = item.seriesId?.trim();
+      final mid = item.movieId?.trim();
+      final key =
+          (sid != null && sid.isNotEmpty)
+              ? 's:$sid'
+              : (mid != null && mid.isNotEmpty)
+              ? 'm:$mid'
+              : 'v:${item.id}';
+      if (!seenResume.add(key)) continue;
+      resume.add(item);
+      resumeIds.add(item.id);
+      if (sid != null && sid.isNotEmpty) resumeSeries.add(sid);
+      if (mid != null && mid.isNotEmpty) resumeMovies.add(mid);
+    }
+    final seenFresh = <String>{};
+    final fresh = <MovieVideoItem>[];
+    for (final item in dashboard?.recentlyAdded ?? const <MovieVideoItem>[]) {
+      final status = item.metadataStatus.toUpperCase();
+      if (status == 'FAILED' ||
+          status == 'PENDING' ||
+          item.title.trim().isEmpty) {
+        continue;
+      }
+      final sid = item.seriesId?.trim();
+      final mid = item.movieId?.trim();
+      if (resumeIds.contains(item.id) ||
+          (sid != null && resumeSeries.contains(sid)) ||
+          (mid != null && resumeMovies.contains(mid))) {
+        continue;
+      }
+      final key =
+          (sid != null && sid.isNotEmpty)
+              ? 's:$sid'
+              : (mid != null && mid.isNotEmpty)
+              ? 'm:$mid'
+              : 'v:${item.id}';
+      if (!seenFresh.add(key)) continue;
+      fresh.add(item);
+    }
     final Widget content;
     if (resume.isEmpty && fresh.isEmpty) {
       content = DesktopEmpty(
@@ -75,7 +113,9 @@ class DesktopContinueRail extends ConsumerWidget {
         onAction: () => context.go(DesktopRoutes.movies),
       );
     } else {
-      final freshItems = fresh.take(4).toList(growable: false);
+      final freshItems = fresh
+          .take(math.max(0, 4 - resume.length))
+          .toList(growable: false);
       // 样例 `.rail > *`：每张卡按 `--i * 55ms` 各自入场，不是整条轨道一起淡入。
       final entries = <Widget>[
         for (var i = 0; i < resume.length; i++)
@@ -158,31 +198,13 @@ class _ResumeCard extends ConsumerWidget {
       onTap: () => context.push(DesktopRoutes.movieDetail(item.id)),
       onPlay: () => context.push(DesktopRoutes.moviePlay(item.id)),
       onSecondaryTapDown:
-          (details) => ref.read(desktopShellProvider.notifier).openMenu(
+          (details) => _openFilmMenu(
+            context,
+            ref,
+            l10n,
+            item.id,
             details.globalPosition,
-            [
-              DesktopMenuItem(
-                label: l10n.desktopPlay,
-                icon: DesktopIcons.play,
-                onPressed:
-                    () =>
-                        desktopPush(context, DesktopRoutes.moviePlay(item.id)),
-              ),
-              DesktopMenuItem(
-                label: l10n.desktopQuickLook,
-                icon: DesktopIcons.panel,
-                onPressed: showQuickLook,
-              ),
-              DesktopMenuItem(
-                label: l10n.desktopOpenDetails,
-                icon: DesktopIcons.info,
-                onPressed:
-                    () => desktopPush(
-                      context,
-                      DesktopRoutes.movieDetail(item.id),
-                    ),
-              ),
-            ],
+            showQuickLook,
           ),
       playLabel: l10n.desktopPlayTitle(item.title),
       surface: skin,
@@ -198,8 +220,13 @@ class _FreshCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final yearText = item.year.trim();
-    final hasYear = yearText.isNotEmpty && yearText != '待识别';
+    final rawYear =
+        item.releaseDate?.year.toString() ??
+        item.metadata['year']?.toString().trim() ??
+        '';
+    final hasYear =
+        item.metadataStatus.toUpperCase() != 'PENDING' && rawYear.isNotEmpty;
+    final yearText = hasYear ? rawYear : '';
     final genresShort = item.genres.take(2).join(' / ');
     final captionParts = <String>[
       if (hasYear) yearText,
@@ -247,43 +274,54 @@ class _FreshCard extends ConsumerWidget {
           );
     }
 
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
     return _WideCard(
       imageUrl: item.backdropImageUrl ?? item.posterImageUrl,
       title: item.title,
       caption: captionParts.join(' · '),
+      badge: isZh ? '新入库' : 'New',
       onTap: () => context.push(DesktopRoutes.movieDetail(item.id)),
       onPlay: () => context.push(DesktopRoutes.moviePlay(item.id)),
       onSecondaryTapDown:
-          (details) => ref.read(desktopShellProvider.notifier).openMenu(
+          (details) => _openFilmMenu(
+            context,
+            ref,
+            l10n,
+            item.id,
             details.globalPosition,
-            [
-              DesktopMenuItem(
-                label: l10n.desktopPlay,
-                icon: DesktopIcons.play,
-                onPressed:
-                    () =>
-                        desktopPush(context, DesktopRoutes.moviePlay(item.id)),
-              ),
-              DesktopMenuItem(
-                label: l10n.desktopQuickLook,
-                icon: DesktopIcons.panel,
-                onPressed: showQuickLook,
-              ),
-              DesktopMenuItem(
-                label: l10n.desktopOpenDetails,
-                icon: DesktopIcons.info,
-                onPressed:
-                    () => desktopPush(
-                      context,
-                      DesktopRoutes.movieDetail(item.id),
-                    ),
-              ),
-            ],
+            showQuickLook,
           ),
       playLabel: l10n.desktopPlayTitle(item.title),
       surface: DesktopSkin.of(context),
     );
   }
+}
+
+void _openFilmMenu(
+  BuildContext context,
+  WidgetRef ref,
+  AppLocalizations l10n,
+  String videoId,
+  Offset position,
+  VoidCallback showQuickLook,
+) {
+  ref.read(desktopShellProvider.notifier).openMenu(position, [
+    DesktopMenuItem(
+      label: l10n.desktopPlay,
+      icon: DesktopIcons.play,
+      onPressed: () => desktopPush(context, DesktopRoutes.moviePlay(videoId)),
+    ),
+    DesktopMenuItem(
+      label: l10n.desktopQuickLook,
+      icon: DesktopIcons.panel,
+      onPressed: showQuickLook,
+    ),
+    DesktopMenuItem(
+      label: l10n.desktopOpenDetails,
+      icon: DesktopIcons.info,
+      onPressed: () => desktopPush(context, DesktopRoutes.movieDetail(videoId)),
+    ),
+  ]);
 }
 
 class _WideCard extends StatelessWidget {
@@ -297,15 +335,13 @@ class _WideCard extends StatelessWidget {
     required this.playLabel,
     required this.surface,
     this.progress,
+    this.badge,
   });
 
-  final String? imageUrl;
-  final String title;
-  final String caption;
-  final VoidCallback onTap;
-  final VoidCallback onPlay;
+  final String? imageUrl, badge;
+  final String title, caption, playLabel;
+  final VoidCallback onTap, onPlay;
   final GestureTapDownCallback onSecondaryTapDown;
-  final String playLabel;
   final DesktopSkin surface;
   final double? progress;
 
@@ -350,6 +386,28 @@ class _WideCard extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (badge != null && badge!.isNotEmpty)
+                          Positioned(
+                            left: 12,
+                            top: 12,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.56),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.16),
+                                ),
+                              ),
+                              child: Text(
+                                badge!,
+                                style: DesktopType.nano(DesktopPalette.onStage),
+                              ),
+                            ),
+                          ),
                         Positioned(
                           left: 16,
                           right: 70,
@@ -611,187 +669,6 @@ class DesktopListeningRow extends ConsumerWidget {
       regionId: 'home-listening-row',
       hasData: snapshot != null,
       loading: snapshot == null && snapshotAsync.isLoading,
-      skeleton: skeleton,
-      child: content,
-    );
-  }
-}
-
-/// 在读卡（样例 `.reading-card`）。
-class DesktopReadingCard extends ConsumerWidget {
-  const DesktopReadingCard({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final skin = DesktopSkin.of(context);
-    final l10n = AppLocalizations.of(context);
-    final dashboardAsync = ref.watch(readerDashboardProvider);
-    final dashboard = dashboardAsync.asData?.value;
-    final book =
-        (dashboard?.continueReading.isNotEmpty ?? false)
-            ? dashboard!.continueReading.first
-            : (dashboard?.recentItems.isNotEmpty ?? false)
-            ? dashboard!.recentItems.first
-            : null;
-    if (book == null && dashboardAsync.hasError) {
-      return DesktopErrorView(
-        message: errorReason(dashboardAsync.error!, l10n),
-        onRetry: () => ref.invalidate(readerDashboardProvider),
-        minHeightFactor: 0.22,
-      );
-    }
-    final skeleton = Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: skin.panel,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: skin.line),
-      ),
-      child: const Row(
-        children: [
-          SizedBox(
-            width: 116,
-            child: AspectRatio(
-              aspectRatio: 2 / 3,
-              child: DesktopSkeletonBox(radius: 8),
-            ),
-          ),
-          SizedBox(width: 22),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DesktopSkeletonBox(width: 120, height: 10),
-                SizedBox(height: 10),
-                DesktopSkeletonBox(width: 210, height: 22),
-                SizedBox(height: 8),
-                DesktopSkeletonBox(width: 130, height: 12),
-                SizedBox(height: 16),
-                DesktopSkeletonBox(height: 5, radius: 3),
-                SizedBox(height: 18),
-                DesktopSkeletonBox(width: 104, height: 34),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-    final Widget content;
-    if (book == null) {
-      content = DesktopEmpty(
-        message: l10n.desktopHomeEmptyBook,
-        icon: DesktopIcons.book,
-        actionLabel: l10n.desktopOpenReader,
-        onAction: () => context.go(DesktopRoutes.reader),
-      );
-    } else {
-      final progress = (book.progressPercent ?? 0) / 100;
-      final tone = DesktopPalette.bookToneFor(book.id);
-      content = DesktopHover(
-        builder:
-            (context, hovered) => GestureDetector(
-              onTap: () => context.push(DesktopRoutes.bookDetail(book.id)),
-              behavior: HitTestBehavior.opaque,
-              child: AnimatedContainer(
-                duration: MotionToken.reduced(context, MotionToken.normal),
-                curve: MotionToken.curve,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: skin.panel,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: hovered ? skin.line2 : skin.line),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 116,
-                      child: AspectRatio(
-                        aspectRatio: 2 / 3,
-                        child:
-                            book.hasCover
-                                ? DesktopCover(
-                                  url: book.coverUrl,
-                                  kind: DesktopCoverKind.reader,
-                                  readerItemId: book.id,
-                                  fallbackIcon: DesktopIcons.book,
-                                  borderRadius: const BorderRadius.horizontal(
-                                    left: Radius.circular(4),
-                                    right: Radius.circular(10),
-                                  ),
-                                )
-                                : DesktopPaperCover(
-                                  title: book.title,
-                                  author: book.authorName ?? '',
-                                  tone: tone.tone,
-                                  ink: tone.ink,
-                                  compact: true,
-                                ),
-                      ),
-                    ),
-                    const SizedBox(width: 22),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if ((book.currentChapterTitle ?? '').isNotEmpty)
-                            DesktopEyebrow(
-                              l10n.desktopChapterLabel(
-                                book.currentChapterTitle!,
-                              ),
-                            ),
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Text(
-                              book.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: DesktopType.displaySm(skin.text),
-                            ),
-                          ),
-                          if ((book.authorName ?? '').isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Text(
-                                book.authorName!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: DesktopType.dense(skin.text2),
-                              ),
-                            ),
-                          Padding(
-                            padding: const EdgeInsets.only(top: 14, bottom: 16),
-                            child: DesktopProgress(
-                              fraction: progress,
-                              label: l10n.desktopProgressPercent(
-                                (progress * 100).round(),
-                              ),
-                            ),
-                          ),
-                          DesktopButton(
-                            label: l10n.desktopContinue,
-                            icon: DesktopIcons.book,
-                            variant: DesktopButtonVariant.soft,
-                            onPressed:
-                                () => context.push(
-                                  DesktopRoutes.bookDetail(book.id),
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-      );
-    }
-    return DesktopSkeletonSwitcher(
-      regionId: 'home-reading-card',
-      hasData: dashboard != null,
-      loading: book == null && dashboardAsync.isLoading,
       skeleton: skeleton,
       child: content,
     );
