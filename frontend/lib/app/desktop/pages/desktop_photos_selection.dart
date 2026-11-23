@@ -73,290 +73,296 @@ class _PhotoTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final skin = DesktopSkin.of(context);
-    return DesktopHover(
-      builder: (context, hovered) {
-        final radius = selected || dragging ? 12.0 : 10.0;
-        final content = AnimatedContainer(
-          duration: DesktopMotion.of(context, DesktopMotion.soft),
-          decoration: BoxDecoration(
-            color:
-                selected
-                    ? skin.accentWash(0.18)
-                    : dragging
-                    ? Color.lerp(skin.raise2, skin.accent, 0.16)
-                    : skin.raise2,
-            borderRadius: BorderRadius.circular(radius),
-            border:
-                dragging
-                    ? Border.all(
-                      color: skin.accent.withValues(alpha: 0.5),
-                      width: 1.5,
-                    )
-                    : null,
-            boxShadow:
-                pressing
-                    ? [
-                      BoxShadow(
-                        color: skin.accent.withValues(alpha: 0.7),
-                        blurRadius: 0,
-                        spreadRadius: 3,
-                      ),
-                    ]
-                    : !selected && hovered && !dragging
-                    ? [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.55),
-                        offset: const Offset(0, 14),
-                        blurRadius: 32,
-                        spreadRadius: -14,
-                      ),
-                    ]
-                    : const <BoxShadow>[],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(radius),
-            child: AnimatedScale(
-              scale:
-                  pressing ? (selected && selectionActive ? 0.955 : 0.975) : 1,
-              duration: DesktopMotion.of(
-                context,
-                DesktopMotion.photoReorderPressScale,
-              ),
-              curve: DesktopMotion.photoReorderPressCurve,
-              child: GestureDetector(
-                onTap: onTap == null ? null : () => onTap!(photo),
-                onSecondaryTapUp:
-                    onSecondaryTap == null
-                        ? null
-                        : (details) =>
-                            onSecondaryTap!(photo, details.globalPosition),
-                child: SizedBox(
-                  height: height,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // 关键修复：dragging true -> false 时 0ms 瞬时恢复 opacity: 1.0，
-                      // 与下一帧销毁幽灵 Overlay 无缝衔接，彻底消除 350ms 半透明空洞。
-                      AnimatedOpacity(
-                        opacity: dragging ? 0.22 : 1.0,
-                        duration:
-                            dragging
-                                ? DesktopMotion.of(
-                                  context,
-                                  DesktopMotion.photoReorderSourceFade,
-                                )
-                                : Duration.zero,
-                        alwaysIncludeSemantics: true,
-                        child: AnimatedScale(
-                          scale:
+    final radius = selected || dragging ? 12.0 : 10.0;
+    return DesktopPhotoAnchor(
+      photo: photo,
+      borderRadius: radius,
+      child: DesktopHover(
+        builder: (context, hovered) {
+          final content = AnimatedContainer(
+            duration: DesktopMotion.of(context, DesktopMotion.soft),
+            decoration: BoxDecoration(
+              color:
+                  selected
+                      ? skin.accentWash(0.18)
+                      : dragging
+                      ? Color.lerp(skin.raise2, skin.accent, 0.16)
+                      : skin.raise2,
+              borderRadius: BorderRadius.circular(radius),
+              border:
+                  dragging
+                      ? Border.all(
+                        color: skin.accent.withValues(alpha: 0.5),
+                        width: 1.5,
+                      )
+                      : null,
+              boxShadow:
+                  pressing
+                      ? [
+                        BoxShadow(
+                          color: skin.accent.withValues(alpha: 0.7),
+                          blurRadius: 0,
+                          spreadRadius: 3,
+                        ),
+                      ]
+                      : !selected && hovered && !dragging
+                      ? [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          offset: const Offset(0, 14),
+                          blurRadius: 32,
+                          spreadRadius: -14,
+                        ),
+                      ]
+                      : const <BoxShadow>[],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(radius),
+              child: AnimatedScale(
+                scale:
+                    pressing
+                        ? (selected && selectionActive ? 0.955 : 0.975)
+                        : 1,
+                duration: DesktopMotion.of(
+                  context,
+                  DesktopMotion.photoReorderPressScale,
+                ),
+                curve: DesktopMotion.photoReorderPressCurve,
+                child: GestureDetector(
+                  onTap: onTap == null ? null : () => onTap!(photo),
+                  onSecondaryTapUp:
+                      onSecondaryTap == null
+                          ? null
+                          : (details) =>
+                              onSecondaryTap!(photo, details.globalPosition),
+                  child: SizedBox(
+                    height: height,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // 关键修复：dragging true -> false 时 0ms 瞬时恢复 opacity: 1.0，
+                        // 与下一帧销毁幽灵 Overlay 无缝衔接，彻底消除 350ms 半透明空洞。
+                        AnimatedOpacity(
+                          opacity: dragging ? 0.22 : 1.0,
+                          duration:
+                              dragging
+                                  ? DesktopMotion.of(
+                                    context,
+                                    DesktopMotion.photoReorderSourceFade,
+                                  )
+                                  : Duration.zero,
+                          alwaysIncludeSemantics: true,
+                          child: AnimatedScale(
+                            scale:
+                                pressing
+                                    ? 1
+                                    : dragging
+                                    ? 1
+                                    : selected
+                                    ? (hovered ? 0.92 : 0.90)
+                                    : reordering
+                                    ? 0.97
+                                    : hovered
+                                    ? (selectionActive ? 1.03 : 1.05)
+                                    : 1,
+                            duration: DesktopMotion.of(
+                              context,
                               pressing
-                                  ? 1
-                                  : dragging
-                                  ? 1
-                                  : selected
-                                  ? (hovered ? 0.92 : 0.90)
-                                  : reordering
-                                  ? 0.97
-                                  : hovered
-                                  ? (selectionActive ? 1.03 : 1.05)
-                                  : 1,
-                          duration: DesktopMotion.of(
-                            context,
-                            pressing
-                                ? DesktopMotion.photoReorderPressScale
-                                : DesktopMotion.photoTileImageHover,
-                          ),
-                          curve:
-                              pressing
-                                  ? DesktopMotion.photoReorderPressCurve
-                                  : DesktopMotion.ease,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(
-                              selected ? 9 : 10,
+                                  ? DesktopMotion.photoReorderPressScale
+                                  : DesktopMotion.photoTileImageHover,
                             ),
-                            child: ColorFiltered(
-                              colorFilter: ColorFilter.matrix(
-                                desktopColorMatrix(
-                                  brightness: pressing ? 1.06 : 1,
-                                ),
+                            curve:
+                                pressing
+                                    ? DesktopMotion.photoReorderPressCurve
+                                    : DesktopMotion.ease,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(
+                                selected ? 9 : 10,
                               ),
-                              child: DesktopCover(
-                                url: photo.coverUrl,
-                                kind: DesktopCoverKind.network,
-                                fallbackIcon: DesktopIcons.image,
-                                cacheKey: 'desktop-photo-${photo.id}',
+                              child: ColorFiltered(
+                                colorFilter: ColorFilter.matrix(
+                                  desktopColorMatrix(
+                                    brightness: pressing ? 1.06 : 1,
+                                  ),
+                                ),
+                                child: DesktopCover(
+                                  url: photo.coverUrl,
+                                  kind: DesktopCoverKind.network,
+                                  fallbackIcon: DesktopIcons.image,
+                                  cacheKey: 'desktop-photo-${photo.id}',
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      if (!dragging)
-                        Positioned.fill(
-                          child: IgnorePointer(
+                        if (!dragging)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: AnimatedOpacity(
+                                opacity: selected || hovered ? 1 : 0,
+                                duration: DesktopMotion.of(
+                                  context,
+                                  DesktopMotion.soft,
+                                ),
+                                alwaysIncludeSemantics: true,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    gradient:
+                                        selected
+                                            ? LinearGradient(
+                                              begin: Alignment.topCenter,
+                                              end: Alignment.bottomCenter,
+                                              colors: [
+                                                Color.lerp(
+                                                  Colors.black.withValues(
+                                                    alpha: 0.28,
+                                                  ),
+                                                  skin.accent,
+                                                  0.22,
+                                                )!,
+                                                Colors.transparent,
+                                              ],
+                                              stops: const [0, 0.38],
+                                            )
+                                            : const LinearGradient(
+                                              begin: Alignment.topCenter,
+                                              end: Alignment.bottomCenter,
+                                              colors: [
+                                                Color(0x59000000),
+                                                Colors.transparent,
+                                                Colors.transparent,
+                                                Color(0x80000000),
+                                              ],
+                                              stops: [0, 0.35, 0.65, 1],
+                                            ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (showCaption && !dragging)
+                          // 样例 `.ph-cap`：标题只在悬停时淡入，右下留给收藏心。
+                          Positioned(
+                            left: 12,
+                            right: 36,
+                            bottom: 10,
                             child: AnimatedOpacity(
-                              opacity: selected || hovered ? 1 : 0,
                               duration: DesktopMotion.of(
                                 context,
                                 DesktopMotion.soft,
                               ),
+                              opacity: hovered ? 1 : 0,
                               alwaysIncludeSemantics: true,
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient:
-                                      selected
-                                          ? LinearGradient(
-                                            begin: Alignment.topCenter,
-                                            end: Alignment.bottomCenter,
-                                            colors: [
-                                              Color.lerp(
-                                                Colors.black.withValues(
-                                                  alpha: 0.28,
-                                                ),
-                                                skin.accent,
-                                                0.22,
-                                              )!,
-                                              Colors.transparent,
-                                            ],
-                                            stops: const [0, 0.38],
-                                          )
-                                          : const LinearGradient(
-                                            begin: Alignment.topCenter,
-                                            end: Alignment.bottomCenter,
-                                            colors: [
-                                              Color(0x59000000),
-                                              Colors.transparent,
-                                              Colors.transparent,
-                                              Color(0x80000000),
-                                            ],
-                                            stops: [0, 0.35, 0.65, 1],
-                                          ),
+                              child: Text(
+                                photo.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: DesktopType.caption(Colors.white),
+                              ),
+                            ),
+                          ),
+                        if (showFavorite && photo.favorite && !dragging)
+                          // 样例 `.ph .fav`：右下角白色心形。
+                          Positioned(
+                            right: 10,
+                            bottom: 10,
+                            child: Icon(
+                              DesktopIcons.heart,
+                              size: 15,
+                              color: Colors.white,
+                              shadows: const [
+                                Shadow(blurRadius: 4, color: Colors.black54),
+                              ],
+                            ),
+                          ),
+                        if (selected && !dragging)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: CustomPaint(
+                                key: ValueKey<String>(
+                                  'desktop-photo-selected-ring-${photo.id}',
+                                ),
+                                painter: _PhotoSelectionRingPainter(
+                                  accent: skin.accent,
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      if (showCaption && !dragging)
-                        // 样例 `.ph-cap`：标题只在悬停时淡入，右下留给收藏心。
-                        Positioned(
-                          left: 12,
-                          right: 36,
-                          bottom: 10,
-                          child: AnimatedOpacity(
-                            duration: DesktopMotion.of(
-                              context,
-                              DesktopMotion.soft,
-                            ),
-                            opacity: hovered ? 1 : 0,
-                            alwaysIncludeSemantics: true,
-                            child: Text(
-                              photo.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: DesktopType.caption(Colors.white),
+                        if (showSelectionControls && !dragging)
+                          Positioned(
+                            top: 10,
+                            left: 10,
+                            child: _SelectCheck(
+                              selected: selected,
+                              visible: hovered || selected || selectionActive,
+                              onTap:
+                                  onToggleSelect == null
+                                      ? null
+                                      : () => onToggleSelect!(photo),
                             ),
                           ),
-                        ),
-                      if (showFavorite && photo.favorite && !dragging)
-                        // 样例 `.ph .fav`：右下角白色心形。
-                        Positioned(
-                          right: 10,
-                          bottom: 10,
-                          child: Icon(
-                            DesktopIcons.heart,
-                            size: 15,
-                            color: Colors.white,
-                            shadows: const [
-                              Shadow(blurRadius: 4, color: Colors.black54),
-                            ],
-                          ),
-                        ),
-                      if (selected && !dragging)
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: CustomPaint(
-                              key: ValueKey<String>(
-                                'desktop-photo-selected-ring-${photo.id}',
+                        if (onInspect != null && !dragging)
+                          Positioned(
+                            top: 10,
+                            right: 10,
+                            child: AnimatedOpacity(
+                              opacity: hovered ? 1 : 0,
+                              duration: DesktopMotion.of(
+                                context,
+                                DesktopMotion.fast,
                               ),
-                              painter: _PhotoSelectionRingPainter(
-                                accent: skin.accent,
-                              ),
-                            ),
-                          ),
-                        ),
-                      if (showSelectionControls && !dragging)
-                        Positioned(
-                          top: 10,
-                          left: 10,
-                          child: _SelectCheck(
-                            selected: selected,
-                            visible: hovered || selected || selectionActive,
-                            onTap:
-                                onToggleSelect == null
-                                    ? null
-                                    : () => onToggleSelect!(photo),
-                          ),
-                        ),
-                      if (onInspect != null && !dragging)
-                        Positioned(
-                          top: 10,
-                          right: 10,
-                          child: AnimatedOpacity(
-                            opacity: hovered ? 1 : 0,
-                            duration: DesktopMotion.of(
-                              context,
-                              DesktopMotion.fast,
-                            ),
-                            alwaysIncludeSemantics: true,
-                            child: IgnorePointer(
-                              ignoring: !hovered,
-                              child: Tooltip(
-                                message:
-                                    AppLocalizations.of(
-                                      context,
-                                    ).desktopOpenDetails,
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: () => onInspect!(photo),
-                                  child: Container(
-                                    width: 24,
-                                    height: 24,
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.48,
-                                      ),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.35,
+                              alwaysIncludeSemantics: true,
+                              child: IgnorePointer(
+                                ignoring: !hovered,
+                                child: Tooltip(
+                                  message:
+                                      AppLocalizations.of(
+                                        context,
+                                      ).desktopOpenDetails,
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () => onInspect!(photo),
+                                    child: Container(
+                                      width: 24,
+                                      height: 24,
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.48,
+                                        ),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.35,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    child: const Icon(
-                                      DesktopIcons.info,
-                                      size: 13,
-                                      color: Colors.white,
+                                      child: const Icon(
+                                        DesktopIcons.info,
+                                        size: 13,
+                                        color: Colors.white,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        );
-        // 移除 ValueKey<bool>(landed)，用稳定节点轻微缩放提示落位，绝不触发子树销毁重建闪烁。
-        return AnimatedScale(
-          scale: landed && !pressing ? 0.985 : 1.0,
-          duration: DesktopMotion.of(context, DesktopMotion.soft),
-          curve: DesktopMotion.riseCurve,
-          child: content,
-        );
-      },
+          );
+          // 移除 ValueKey<bool>(landed)，用稳定节点轻微缩放提示落位，绝不触发子树销毁重建闪烁。
+          return AnimatedScale(
+            scale: landed && !pressing ? 0.985 : 1.0,
+            duration: DesktopMotion.of(context, DesktopMotion.soft),
+            curve: DesktopMotion.riseCurve,
+            child: content,
+          );
+        },
+      ),
     );
   }
 }

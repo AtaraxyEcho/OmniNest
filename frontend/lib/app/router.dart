@@ -19,6 +19,7 @@ import 'package:omninest/app/desktop/pages/desktop_book_detail_page.dart';
 import 'package:omninest/app/desktop/pages/desktop_splash_page.dart';
 import 'package:omninest/app/desktop/pages/desktop_settings_page.dart';
 import 'package:omninest/app/desktop/pages/desktop_setup_page.dart';
+import 'package:omninest/app/desktop/desktop_photo_transition.dart';
 import 'package:omninest/app/desktop/pages/desktop_photo_viewer_page.dart';
 import 'package:omninest/app/desktop/pages/desktop_photos_page.dart';
 import 'package:omninest/app/theme/desktop/desktop_motion.dart';
@@ -85,6 +86,8 @@ import 'package:omninest/features/video/presentation/pages/series_detail_page.da
 import 'package:omninest/core/window/desktop_close_action.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_form.dart';
 export 'package:omninest/app/route/auth_gate.dart';
+
+part 'router_desktop_transitions.dart';
 
 /// 根 Navigator 键：复用 `desktopCloseNavigatorKey`，确保窗口关闭确认弹窗与
 /// 沉浸式全窗路由均挂载在桌面工作区壳层之上的同一根导航器中。
@@ -544,6 +547,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
         duration: DesktopMotion.photoViewerEnter,
         parentNavigatorKey: rootNavigatorKey,
+        photoTransitionIdBuilder: (state) => state.pathParameters['photoId']!,
       ),
       _desktopViewerRoute(
         '/photos/:photoId/edit',
@@ -751,113 +755,6 @@ Widget buildReaderItemRoute(GoRouterState state) {
     mobile: MobileHostedRoute(
       child: ReaderItemDetailPage(itemId: state.pathParameters['itemId']!),
     ),
-  );
-}
-
-/// 音乐沉浸播放页专属上滑淡入（500ms）与下滑淡出（320ms）。
-GoRoute _desktopNowPlayingRoute(
-  String path,
-  Widget Function(GoRouterState state) builder, {
-  GlobalKey<NavigatorState>? parentNavigatorKey,
-}) {
-  return GoRoute(
-    path: path,
-    parentNavigatorKey: parentNavigatorKey,
-    pageBuilder: (context, state) {
-      final child = routeSurface(path, builder(state));
-      if (!_isDesktopRouteContext(context)) {
-        return NoTransitionPage<void>(key: state.pageKey, child: child);
-      }
-      return CustomTransitionPage<void>(
-        key: state.pageKey,
-        transitionDuration: DesktopMotion.nowPlayingIn,
-        reverseTransitionDuration: DesktopMotion.nowPlayingOut,
-        child: DesktopImmersiveOverlay(
-          path: state.uri.toString(),
-          child: child,
-        ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
-            return child;
-          }
-          final curved = CurvedAnimation(
-            parent: animation,
-            curve: DesktopMotion.ease,
-            reverseCurve: DesktopMotion.exitCurve,
-          );
-          return FadeTransition(
-            opacity: curved,
-            alwaysIncludeSemantics: true,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.06),
-                end: Offset.zero,
-              ).animate(curved),
-              child: ScaleTransition(
-                scale: Tween<double>(begin: 0.97, end: 1.0).animate(curved),
-                child: child,
-              ),
-            ),
-          );
-        },
-      );
-    },
-  );
-}
-
-Page<void> _immersiveTransitionPage(
-  BuildContext context,
-  GoRouterState state,
-  Widget child, {
-  required Duration duration,
-}) {
-  final wrapped =
-      _isDesktopRouteContext(context)
-          ? DesktopImmersiveOverlay(path: state.uri.toString(), child: child)
-          : child;
-  return CustomTransitionPage<void>(
-    key: state.pageKey,
-    transitionDuration: duration,
-    reverseTransitionDuration: duration,
-    child: wrapped,
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
-        return child;
-      }
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: DesktopMotion.ease,
-        reverseCurve: DesktopMotion.exitCurve,
-      );
-      return FadeTransition(
-        opacity: curved,
-        alwaysIncludeSemantics: true,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.985, end: 1.0).animate(curved),
-          child: child,
-        ),
-      );
-    },
-  );
-}
-
-/// 全局查看器（Video / Reader / Comic / PhotoViewer）的柔和缩放淡入淡出路由。
-GoRoute _desktopViewerRoute(
-  String path,
-  Widget Function(GoRouterState state) builder, {
-  required Duration duration,
-  GlobalKey<NavigatorState>? parentNavigatorKey,
-}) {
-  return GoRoute(
-    path: path,
-    parentNavigatorKey: parentNavigatorKey,
-    pageBuilder:
-        (context, state) => _immersiveTransitionPage(
-          context,
-          state,
-          routeSurface(path, builder(state)),
-          duration: duration,
-        ),
   );
 }
 
